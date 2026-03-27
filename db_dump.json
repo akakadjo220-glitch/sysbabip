@@ -1,0 +1,130 @@
+{
+  "trx": [
+    {
+      "id": "a9babdb1-27c7-489c-8b3d-801e06204274",
+      "created_at": "2026-03-15T15:54:14.037029+00:00",
+      "event_id": "ae85f549-6a82-4f67-acd9-7eb2e0fa9202",
+      "user_id": null,
+      "guest_email": "akacharle2@gmail.com",
+      "guest_name": "Charles",
+      "amount": 200,
+      "currency": "XOF",
+      "method": "paystack_card",
+      "status": "completed",
+      "buyer_location": null,
+      "affiliate_code": null,
+      "agent_id": null,
+      "is_cash": false,
+      "tickets": [
+        {
+          "ticket_type": "1318f2f7-09a0-4d5f-83fd-bbba230f4806",
+          "ticket_type_id": null
+        }
+      ]
+    },
+    {
+      "id": "3197ec2c-f356-424e-be19-8a3e1f38bc9d",
+      "created_at": "2026-03-15T00:00:18.578428+00:00",
+      "event_id": "ae85f549-6a82-4f67-acd9-7eb2e0fa9202",
+      "user_id": null,
+      "guest_email": "essentieldugout@gmail.com",
+      "guest_name": "Aka",
+      "amount": 200,
+      "currency": "XOF",
+      "method": "paystack_card",
+      "status": "completed",
+      "buyer_location": null,
+      "affiliate_code": null,
+      "agent_id": null,
+      "is_cash": false,
+      "tickets": []
+    },
+    {
+      "id": "750e85da-f933-4263-b2fe-52bef99105d2",
+      "created_at": "2026-03-14T15:10:09.114589+00:00",
+      "event_id": "ae85f549-6a82-4f67-acd9-7eb2e0fa9202",
+      "user_id": null,
+      "guest_email": "patnkoffi@gmail.com",
+      "guest_name": "Pat Koffi",
+      "amount": 200,
+      "currency": "XOF",
+      "method": "paystack_card",
+      "status": "completed",
+      "buyer_location": {
+        "lat": 5.3536,
+        "lng": -4.0012,
+        "city": "Abidjan",
+        "country": "Ivory Coast"
+      },
+      "affiliate_code": null,
+      "agent_id": null,
+      "is_cash": false,
+      "tickets": []
+    },
+    {
+      "id": "269e61e6-5fbd-49a2-aeab-9d2f4633a4a0",
+      "created_at": "2026-03-12T16:46:59.539134+00:00",
+      "event_id": "ae85f549-6a82-4f67-acd9-7eb2e0fa9202",
+      "user_id": null,
+      "guest_email": "brestonpack@gmail.com",
+      "guest_name": "Guest User",
+      "amount": 200,
+      "currency": "XOF",
+      "method": "paystack_card",
+      "status": "completed",
+      "buyer_location": null,
+      "affiliate_code": null,
+      "agent_id": null,
+      "is_cash": false,
+      "tickets": []
+    },
+    {
+      "id": "6fb7e895-37e5-4cee-84da-143d66837bdc",
+      "created_at": "2026-03-12T14:29:03.479741+00:00",
+      "event_id": "ae85f549-6a82-4f67-acd9-7eb2e0fa9202",
+      "user_id": null,
+      "guest_email": "brestonpack@gmail.com",
+      "guest_name": "Guest User",
+      "amount": 200,
+      "currency": "XOF",
+      "method": "paystack_card",
+      "status": "completed",
+      "buyer_location": null,
+      "affiliate_code": null,
+      "agent_id": null,
+      "is_cash": false,
+      "tickets": []
+    },
+    {
+      "id": "08200938-b391-4317-82ae-ba31f30458c9",
+      "created_at": "2026-03-12T13:59:49.351286+00:00",
+      "event_id": "ae85f549-6a82-4f67-acd9-7eb2e0fa9202",
+      "user_id": null,
+      "guest_email": "akakadjo220@gmail.com",
+      "guest_name": "Guest User",
+      "amount": 200,
+      "currency": "XOF",
+      "method": "paystack_card",
+      "status": "completed",
+      "buyer_location": null,
+      "affiliate_code": null,
+      "agent_id": null,
+      "is_cash": false,
+      "tickets": []
+    }
+  ],
+  "tt": [
+    {
+      "id": "7943f856-3142-443b-81ae-040edde78d1e",
+      "event_id": "ae85f549-6a82-4f67-acd9-7eb2e0fa9202",
+      "name": "Early Bird",
+      "price": 200,
+      "quantity": 200,
+      "sold": 0,
+      "type": "standard",
+      "features": [
+        "Tarif réduit exclusif"
+      ]
+    }
+  ]
+}

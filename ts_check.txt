@@ -1,0 +1,1 @@
+﻿views/EventDetails.tsx(314,75): error TS2339: Property 'catch' does not exist on type 'PromiseLike<void>'.

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Babipass - La Billetterie de Demain</title>
+  <link rel="icon" type="image/png" href="https://supabasekong-l4cw40oks4kso84ko44ogkkw.188.241.58.227.sslip.io/storage/v1/object/public/events/babipass.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      /* IE and Edge */
+      scrollbar-width: none;
+      /* Firefox */
+    }
+
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .glass-card {
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .animate-float {
+      animation: float 6s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0% {
+        transform: translateY(0px);
+      }
+
+      50% {
+        transform: translateY(-10px);
+      }
+
+      100% {
+        transform: translateY(0px);
+      }
+    }
+
+    /* Ken Burns Effect for Flags */
+    .animate-ken-burns {
+      animation: kenBurns 20s ease-in-out infinite alternate;
+    }
+
+    @keyframes kenBurns {
+      0% {
+        transform: scale(1) translate(0, 0);
+      }
+
+      50% {
+        transform: scale(1.1) translate(-2%, 1%);
+      }
+
+      100% {
+        transform: scale(1.2) translate(2%, -1%);
+      }
+    }
+
+    /* Animation Shims for tailwindcss-animate compatibility */
+    .animate-in {
+      animation-duration: 0.7s;
+      animation-fill-mode: both;
+      animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .fade-in {
+      animation-name: fadeIn;
+    }
+
+    .slide-in-from-bottom-4 {
+      --tw-enter-translate-y: 1rem;
+      animation-name: slideInBottom;
+    }
+
+    .slide-in-from-bottom-10 {
+      --tw-enter-translate-y: 2.5rem;
+      animation-name: slideInBottom;
+    }
+
+    .slide-in-from-top-10 {
+      --tw-enter-translate-y: -2.5rem;
+      animation-name: slideInTop;
+    }
+
+    .slide-in-from-right-4 {
+      --tw-enter-translate-x: 1rem;
+      animation-name: slideInRight;
+    }
+
+    .zoom-in {
+      --tw-enter-scale: 0.95;
+      animation-name: zoomIn;
+    }
+
+    /* Advanced Breathtaking Animations */
+    .animate-glow-pulse {
+      animation: glowPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    @keyframes glowPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 15px 2px rgba(249, 115, 22, 0.4), 0 0 5px 0px rgba(249, 115, 22, 0.2);
+        opacity: 1;
+      }
+
+      50% {
+        box-shadow: 0 0 35px 5px rgba(249, 115, 22, 0.8), 0 0 10px 2px rgba(252, 211, 77, 0.6);
+        opacity: 0.8;
+      }
+    }
+
+    .shimmer-text {
+      background-size: 200% auto;
+      animation: shimmer 3s linear infinite;
+    }
+
+    @keyframes shimmer {
+      to {
+        background-position: 200% center;
+      }
+    }
+
+    /* 3D Tilt Effect on Hover (apply a generic perspective class to parent) */
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+
+    .preserve-3d {
+      transform-style: preserve-3d;
+    }
+
+    .hover-3d-tilt {
+      transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    .hover-3d-tilt:hover {
+      transform: rotateX(5deg) rotateY(-5deg) scale3d(1.02, 1.02, 1.02);
+      box-shadow: 20px 20px 60px rgba(0, 0, 0, 0.5), -1px -1px 20px rgba(249, 115, 22, 0.3);
+      z-index: 10;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideInBottom {
+      from {
+        transform: translateY(var(--tw-enter-translate-y));
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideInTop {
+      from {
+        transform: translateY(var(--tw-enter-translate-y));
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideInRight {
+      from {
+        transform: translateX(var(--tw-enter-translate-x));
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes zoomIn {
+      from {
+        transform: scale(var(--tw-enter-scale));
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    /* Ad Carousel Progress Bar */
+    .animate-progress-bar {
+      animation-name: progressBar;
+      width: 0%;
+    }
+
+    @keyframes progressBar {
+      from { width: 0%; }
+      to { width: 100%; }
+    }
+
+    .slide-in-from-right-8 {
+      --tw-enter-translate-x: 2rem;
+      animation-name: slideInRight;
+    }
+
+    .slide-in-from-top-2 {
+      --tw-enter-translate-y: -0.5rem;
+      animation-name: slideInTop;
+    }
+
+    .fill-mode-both {
+      animation-fill-mode: both;
+    }
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0?dev",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?dev",
+    "react-dom": "https://esm.sh/react-dom@18.2.0?dev",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "lucide-react": "https://esm.sh/lucide-react@0.292.0?dev",
+    "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom&dev",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.23.1?external=react,react-dom&dev",
+    "@remix-run/router": "https://esm.sh/@remix-run/router@1.16.1?dev",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3",
+    "react-helmet-async": "https://esm.sh/react-helmet-async@2.0.5?external=react,react-dom&dev"
+  }
+}
+</script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>

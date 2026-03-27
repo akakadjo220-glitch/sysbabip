@@ -1,0 +1,7 @@
+{
+  "name": "AfriTix - EventOS",
+  "description": "La plateforme de billetterie événementielle nouvelle génération pour l'Afrique francophone. Gestion complète, paiements mobiles et analytics.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

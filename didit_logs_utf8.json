@@ -1,0 +1,264 @@
+{
+  "timestamp": "2026-03-21T19:49:50.021Z",
+  "body": {
+    "created_at": 1774117962,
+    "decision": {
+      "aml_screenings": null,
+      "callback": "https://afritix.com",
+      "contact_details": null,
+      "created_at": "2026-03-21T18:32:42.023792Z",
+      "database_validations": null,
+      "email_verifications": null,
+      "expected_details": null,
+      "face_matches": [
+        {
+          "node_id": "feature_face_match",
+          "score": 97.04,
+          "source_image": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/face-match/f8b03839-7b7e-4435-b3a8-0c5549517af3/source.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=96c668ffe844e0c7dc49d87a209d3dd8815ca24d7268770d470b8ba6f3855b71",
+          "source_image_session_id": null,
+          "status": "Approved",
+          "target_image": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/face-match/f8b03839-7b7e-4435-b3a8-0c5549517af3/target.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=47245d352ec860bc764952f19b4ca8456d9334ab8b364cafcf57e73b33615558",
+          "warnings": []
+        }
+      ],
+      "features": [
+        "ID_VERIFICATION",
+        "LIVENESS",
+        "FACE_MATCH",
+        "IP_ANALYSIS"
+      ],
+      "id_verifications": [
+        {
+          "address": null,
+          "age": 30,
+          "back_image": null,
+          "back_image_camera_front": null,
+          "back_image_camera_front_face_match_score": null,
+          "back_image_quality_score": null,
+          "back_video": null,
+          "date_of_birth": "1996-02-06",
+          "date_of_issue": null,
+          "document_number": "25AD00042",
+          "document_type": "Passport",
+          "expiration_date": "2031-02-23",
+          "extra_fields": {
+            "first_surname": "Aka"
+          },
+          "extra_files": [],
+          "first_name": "Kadjo Frederic Charles",
+          "formatted_address": null,
+          "front_image": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/ocr/dfeb1efe-9ab2-484d-8063-76b164282b2f-front_image-18f5f5a5-6c28-4baf-93aa-3b4c318a53b7.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=f6eb68d341ac1134cb269f21c8bea2040bcb99274f44222baf27b555fc06e873",
+          "front_image_camera_front": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/ocr/dfeb1efe-9ab2-484d-8063-76b164282b2f-front_image_camera_front-9b18fc9d-4f98-4b17-bfc9-0e13c9b99b0a.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=6137dd67f2d5161949b3e56605cadf12c55c1c270074c2e70b3982cd826da692",
+          "front_image_camera_front_face_match_score": null,
+          "front_image_quality_score": {
+            "brightness_issue": "ok",
+            "brightness_score": 92.9,
+            "focus_score": 100,
+            "is_document_fully_visible": true,
+            "overall_score": 90.1,
+            "resolution_score": 68.9
+          },
+          "front_video": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/ocr/dfeb1efe-9ab2-484d-8063-76b164282b2f-front_video-efa88f39-4507-46d5-8a22-f09a3175ec72.webm?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=5a1f3f8b099496e2b45f2a97210661c5f1ada3e797381de9aa6d8b22b71e34e2",
+          "full_back_image": null,
+          "full_front_image": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/ocr/dfeb1efe-9ab2-484d-8063-76b164282b2f-full_front_image-54415181-fe21-478b-bb67-0ffc3f3fa9f1.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=c5adc5115e9e4de7c7910d12df3d59f9a3a76bc4c3821e9774e1a56c06e6a11a",
+          "full_name": "Kadjo Frederic Charles Aka",
+          "gender": "M",
+          "issuing_state": "CIV",
+          "issuing_state_name": "Cote d'Ivoire",
+          "last_name": "Aka",
+          "marital_status": "UNKNOWN",
+          "matches": [
+            {
+              "api_service": null,
+              "front_image_url": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/ocr/bccd117b-8e8b-425a-89c1-404f9b0373c9-front_image-57e0e25d-472b-4e3b-b77e-9831ddc42b75.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=5db77a1b89a2de54cd6f888689d2153069b29f411af0a7df7590c5a2d4ecc08c",
+              "is_blocklisted": false,
+              "session_id": "bccd117b-8e8b-425a-89c1-404f9b0373c9",
+              "session_number": 12,
+              "status": "Approved",
+              "user_details": {
+                "document_number": "25AD00042",
+                "document_type": "P",
+                "name": "Kadjo Frederic Charles Aka"
+              },
+              "vendor_data": null,
+              "verification_date": "2026-03-21T01:17:05Z"
+            }
+          ],
+          "nationality": "CIV",
+          "node_id": "feature_ocr",
+          "parsed_address": null,
+          "personal_number": null,
+          "place_of_birth": null,
+          "portrait_image": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/ocr/dfeb1efe-9ab2-484d-8063-76b164282b2f-portrait_image-79b24537-5139-4bd4-899b-dd1e58f26717.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=6fcc64d591f811e288aca4fa363996b87b28fc7245529c8b19ea1540efceb6a6",
+          "status": "Declined",
+          "warnings": [
+            {
+              "additional_data": {
+                "api_service": null,
+                "duplicated_session_id": "bccd117b-8e8b-425a-89c1-404f9b0373c9",
+                "duplicated_session_number": 12
+              },
+              "feature": "ID_VERIFICATION",
+              "log_type": "error",
+              "long_description": "The system identified a potential duplicate user with previously approved documents from another session, requiring further investigation.",
+              "node_id": "feature_ocr",
+              "risk": "POSSIBLE_DUPLICATED_USER",
+              "short_description": "Possible duplicated approved user from other session"
+            }
+          ]
+        }
+      ],
+      "ip_analyses": [
+        {
+          "browser_family": "Chrome",
+          "device_brand": null,
+          "device_fingerprint": "didit-fp-b7618da061ce3cef",
+          "device_model": null,
+          "id_document": {
+            "distance_from_ip": null,
+            "distance_from_poa_document": null,
+            "location": null
+          },
+          "ip": {
+            "distance_from_id_document": null,
+            "distance_from_poa_document": null,
+            "location": {
+              "latitude": 5.353600025177002,
+              "longitude": -4.001200199127197
+            }
+          },
+          "ip_address": "160.154.76.199",
+          "ip_city": "Abidjan",
+          "ip_country": "Ivory Coast",
+          "ip_country_code": "CI",
+          "ip_state": "Abidjan",
+          "is_data_center": false,
+          "is_vpn_or_tor": false,
+          "isp": "Orange Côte d'Ivoire",
+          "latitude": 5.353600025177002,
+          "longitude": -4.001200199127197,
+          "node_id": "feature_ip_analysis",
+          "organization": "Orange Côte d'Ivoire",
+          "os_family": "Windows",
+          "platform": "desktop",
+          "poa_document": {
+            "distance_from_id_document": null,
+            "distance_from_ip": null,
+            "location": null
+          },
+          "status": "Approved",
+          "time_zone": "Africa/Abidjan",
+          "time_zone_offset": "+0000",
+          "warnings": []
+        },
+        {
+          "browser_family": "Chrome Mobile",
+          "device_brand": "Generic_Android",
+          "device_fingerprint": "didit-fp-479a284d1384163c",
+          "device_model": "K",
+          "id_document": {
+            "distance_from_ip": null,
+            "distance_from_poa_document": null,
+            "location": null
+          },
+          "ip": {
+            "distance_from_id_document": null,
+            "distance_from_poa_document": null,
+            "location": {
+              "latitude": 5.353600025177002,
+              "longitude": -4.001200199127197
+            }
+          },
+          "ip_address": "160.154.145.133",
+          "ip_city": "Abidjan",
+          "ip_country": "Ivory Coast",
+          "ip_country_code": "CI",
+          "ip_state": "Abidjan",
+          "is_data_center": false,
+          "is_vpn_or_tor": false,
+          "isp": "Orange Côte d'Ivoire",
+          "latitude": 5.353600025177002,
+          "longitude": -4.001200199127197,
+          "node_id": "feature_ip_analysis",
+          "organization": "Data Mobile Oci Tdd",
+          "os_family": "Android",
+          "platform": "mobile",
+          "poa_document": {
+            "distance_from_id_document": null,
+            "distance_from_ip": null,
+            "location": null
+          },
+          "status": "Approved",
+          "time_zone": "Africa/Abidjan",
+          "time_zone_offset": "+0000",
+          "warnings": []
+        }
+      ],
+      "liveness_checks": [
+        {
+          "age_estimation": 41.64,
+          "face_luminance": 27.35,
+          "face_quality": 100,
+          "matches": [
+            {
+              "api_service": null,
+              "is_blocklisted": false,
+              "match_image_url": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/face/d4b9f456-3706-42f4-a3d8-3574942ad95a/reference_image.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=ce4f9ac81f737c752ddb44813ac4e72a5165d27767940bbc33edc88850dc9ead",
+              "session_id": "bccd117b-8e8b-425a-89c1-404f9b0373c9",
+              "session_number": 12,
+              "similarity_percentage": 75.91171860694885,
+              "status": "Approved",
+              "user_details": {
+                "document_number": "25AD00042",
+                "document_type": "P",
+                "full_name": "Kadjo Frederic Charles Aka"
+              },
+              "vendor_data": null,
+              "verification_date": "2026-03-21T01:17:05Z"
+            }
+          ],
+          "method": "PASSIVE",
+          "node_id": "feature_liveness",
+          "reference_image": "https://service-didit-verification-production-a1c5f9b8.s3.amazonaws.com/face/f8b03839-7b7e-4435-b3a8-0c5549517af3/reference_image.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIAUH6QTJHNXAETNVLK%2F20260321%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20260321T194949Z&X-Amz-Expires=14400&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEIz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMSJHMEUCIQCHJPRaOjWlDjXw%2BYDmO9eLC6T5wxmPe64OlaYS2MLf7gIgXKEeR3MzdKJIT5awycAvii9OvDFcIS4rUtl6IZrx10Eq4QMIVRAAGgwyOTE5NTgzNzY5MjMiDGYjT4MYVWsh85pPtiq%2BA%2FlEnfTmSd9%2FMkL944P76kAzCYu6fpOlCxggJR5HWcVjqyLJgspACfvRG0YPw9beUb0Zc0YL5E9MGsHl22ERNuugdqhD%2Fuk5khvqJZASJhaB%2Bxq8X%2BKZgUPU7m5wwUL2fQNinhCHrd%2BNWeTcUIFHDp7XwH5HgpZ8sMiyQ%2F9AJzifsbcOtw5e%2FmZ1V6tvI9vLB3Vo8MamtphQ8vJeu%2BfqopTAxT%2BInQ4IFyTRyrDETQrTWVaQZDSJql5nK%2BJps%2FOZPRcOjfL2E%2BBZsArQnjHziZpA1uldsUZZcHdt2YzgHrNZmpxGDABqfPJhRm0Gl8Iqig9OCGS9hDrT0kNWmY5PgNdlWqr0cW4CTR%2FSjSiCcB0niwQC48W4MhGlo%2FrxaLFWoUQX0%2BBH2Gd%2BUhv%2F2UiTlQWEqwY7VFaUTKpTo9fgWfPgLKVfijMHD3zhBH1jTBjjQx%2B%2BOH0%2Bqi10ZSlg%2FRrTymTjWt%2FMBCsrXKVmhqDGHsTBFC5IPHSqO%2FclAM9DkUjHJxn%2F13la9prZ4Ylo5WcNKC%2FEsQiGXX5IHmckK%2B8OQN6pMG1E2mgoKVdy7yCPzduXUCQP5wJsciuX2YKIZttOMKbp%2B80GOqUBT20SQe9DbQ5t%2BlxnAOe45H6eL4DBq%2BIvR5mWtipuXO8dIOvja%2FGqV9Fs7coI2Jqjb4GR2teATsqj4wzpGvyKgSL9uyj4Mgz0tn2py2w3jVKS%2BUJbMkzWQlfvqJveyJJi3hIA0E7fFg%2BN8%2FB0%2FBz7ZvPMnXzJmKoSnbA4iPALMcU5RMpKl8KjTCevcbXbSpPNq3YOd2HsW5IrpSCnu7t1Cmxt02hj&X-Amz-Signature=5f98129f09283f2aac374d82551aba9b2a14a87946119303a8a47a270af996fd",
+          "score": 100,
+          "status": "Approved",
+          "video_url": null,
+          "warnings": [
+            {
+              "additional_data": {
+                "api_service": null,
+                "duplicated_session_id": "bccd117b-8e8b-425a-89c1-404f9b0373c9",
+                "duplicated_session_number": 12
+              },
+              "feature": "LIVENESS",
+              "log_type": "information",
+              "long_description": "The system identified a duplicated face from another approved session, requiring further investigation.",
+              "node_id": "feature_liveness",
+              "risk": "DUPLICATED_FACE",
+              "short_description": "Duplicated face from other approved session"
+            }
+          ]
+        }
+      ],
+      "metadata": null,
+      "nfc_verifications": null,
+      "phone_verifications": null,
+      "poa_verifications": null,
+      "questionnaire_responses": null,
+      "reviews": [],
+      "session_id": "dfeb1efe-9ab2-484d-8063-76b164282b2f",
+      "session_number": 14,
+      "session_url": "https://verify.didit.me/session/W0KBPXlIeKXE",
+      "status": "Declined",
+      "vendor_data": "29c9a3f5-0da5-4252-bed4-d5860473326c",
+      "workflow_id": "8fa09204-b88d-442d-ad51-98757f60e0fb"
+    },
+    "session_id": "dfeb1efe-9ab2-484d-8063-76b164282b2f",
+    "status": "Declined",
+    "timestamp": 1774122589,
+    "vendor_data": "29c9a3f5-0da5-4252-bed4-d5860473326c",
+    "webhook_type": "status.updated",
+    "workflow_id": "8fa09204-b88d-442d-ad51-98757f60e0fb",
+    "workflow_version": 1
+  }
+}

@@ -1,0 +1,25 @@
+﻿components/MapPicker.tsx(72,17): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: InteractiveMapProps): InteractiveMap', gave the following error.
+    Type '{ children: Element[]; onMove: (evt: any) => void; mapboxAccessToken: string; mapStyle: string; onClick: (evt: any) => void; interactiveLayerIds: undefined[]; cursor: string; longitude: number; ... 4 more ...; ref: RefObject<...>; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<InteractiveMap> & Readonly<InteractiveMapProps>'.
+      Property 'onMove' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<InteractiveMap> & Readonly<InteractiveMapProps>'.
+  Overload 2 of 2, '(props: InteractiveMapProps, context: any): InteractiveMap', gave the following error.
+    Type '{ children: Element[]; onMove: (evt: any) => void; mapboxAccessToken: string; mapStyle: string; onClick: (evt: any) => void; interactiveLayerIds: undefined[]; cursor: string; longitude: number; ... 4 more ...; ref: RefObject<...>; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<InteractiveMap> & Readonly<InteractiveMapProps>'.
+      Property 'onMove' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<InteractiveMap> & Readonly<InteractiveMapProps>'.
+components/MapPicker.tsx(79,36): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: NavigationControlProps): NavigationControl', gave the following error.
+    Type '{ position: string; showCompass: false; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<NavigationControl> & Readonly<NavigationControlProps>'.
+      Property 'position' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<NavigationControl> & Readonly<NavigationControlProps>'.
+  Overload 2 of 2, '(props: NavigationControlProps, context: any): NavigationControl', gave the following error.
+    Type '{ position: string; showCompass: false; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<NavigationControl> & Readonly<NavigationControlProps>'.
+      Property 'position' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<NavigationControl> & Readonly<NavigationControlProps>'.
+components/MapPicker.tsx(85,25): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: MarkerProps): Marker', gave the following error.
+    Type '{ children: Element; longitude: number; latitude: number; anchor: string; draggable: true; onDragEnd: (e: DragEvent) => void; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<Marker> & Readonly<MarkerProps>'.
+      Property 'anchor' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<Marker> & Readonly<MarkerProps>'.
+  Overload 2 of 2, '(props: MarkerProps, context: any): Marker', gave the following error.
+    Type '{ children: Element; longitude: number; latitude: number; anchor: string; draggable: true; onDragEnd: (e: DragEvent) => void; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<Marker> & Readonly<MarkerProps>'.
+      Property 'anchor' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<Marker> & Readonly<MarkerProps>'.
+components/MapPicker.tsx(88,55): error TS2551: Property 'lat' does not exist on type '[number, number]'. Did you mean 'flat'?
+components/MapPicker.tsx(88,74): error TS2339: Property 'lng' does not exist on type '[number, number]'.
+components/MapPicker.tsx(89,62): error TS2551: Property 'lat' does not exist on type '[number, number]'. Did you mean 'flat'?
+components/MapPicker.tsx(89,81): error TS2339: Property 'lng' does not exist on type '[number, number]'.
