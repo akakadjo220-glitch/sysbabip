@@ -51,7 +51,7 @@ export const PublicChatWidget = () => {
     try {
       let pageContext = `Le visiteur est sur la page: ${document.title} (${window.location.pathname})`;
       
-      const response = await fetch('/api/chat', {
+      const response = await fetch('https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
