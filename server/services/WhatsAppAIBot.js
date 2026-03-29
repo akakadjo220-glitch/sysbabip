@@ -65,7 +65,7 @@ async function getBabipassContext() {
     const { data: events, error } = await supabase
         .from('events')
         .select(`
-            id, title, city, location, event_date_start, event_date_end, description, status, ai_context,
+            id, slug, title, city, location, event_date_start, event_date_end, description, status, ai_context,
             ticket_types (id, name, price, capacity, sold)
         `)
         .eq('status', 'published')
@@ -102,7 +102,8 @@ async function getBabipassContext() {
         } else {
             context += `- Aucun billet configuré pour le moment.\n`;
         }
-        context += `Lien pour acheter: https://babipass.com/e/${e.id}\n\n`;
+        const linkPath = e.slug ? e.slug : e.id;
+        context += `Lien exact pour cet événement : https://babipass.com/event/${linkPath}\n\n`;
     });
 
     return context;
@@ -220,7 +221,8 @@ RÈGLES IMPORTANTES:
 2. Si le visiteur est sur la page d'un événement, mentionne s'il reste peu de places.
 3. Ne propose JAMAIS de réductions imaginaires.
 4. Les paiements se font par Wave, Orange Money, MTN MoMo, Moov, ou Carte Bancaire directement sur la page.
-5. CONTACT SUPPORT : Si l'utilisateur pose une question complexe ou hors contexte, a un problème urgent, demande à parler à un humain, ou si tu n'as pas la réponse, redirige-le vers notre équipe de support humain : ${supportContactStr}.
+5. Lorsque tu partages un lien vers un événement, utilise EXACTEMENT le "Lien exact pour cet événement" fourni dans tes données. N'invente jamais de lien et ne modifie pas le format de l'URL !
+6. CONTACT SUPPORT : Si l'utilisateur pose une question complexe ou hors contexte, a un problème urgent, demande à parler à un humain, ou si tu n'as pas la réponse, redirige-le vers notre équipe de support humain : ${supportContactStr}.
 
 DONNÉES EN TEMPS RÉEL (BASE DE DONNÉES BABIPASS) :
 ${catalogData}`;
