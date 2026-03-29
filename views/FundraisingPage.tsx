@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Heart, Users, Target, Calendar, ArrowLeft, Loader2, CheckCircle, CreditCard, Phone, Shield } from 'lucide-react';
+import { Heart, Users, Calendar, ArrowLeft, Loader2, CheckCircle, CreditCard, Phone, Shield } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { formatCurrency } from '../constants';
 import { SEO } from '../components/SEO';
@@ -17,11 +17,10 @@ export const FundraisingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Contribution form
-  const [step, setStep] = useState<'form' | 'card_details' | 'success'>('form');
+  const [step, setStep] = useState<'form' | 'success'>('form');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ name: '', email: '', phone: '', amount: '', method: 'WAVE' });
-  const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '' });
 
   const paymentMethods = [
     { id: 'WAVE', label: 'Wave', emoji: '🌊' },
@@ -60,87 +59,95 @@ export const FundraisingPage: React.FC = () => {
     load();
   }, [slug]);
 
+  // ── Enregistre la contribution après paiement confirmé ──────────────────
+  const recordContribution = async (transactionRef: string, paymentMethod: string) => {
+    const amount = parseFloat(form.amount);
+    const rawRate = await getPlatformSetting('default_fundraising_commission_rate');
+    const rate = rawRate !== null ? Number(rawRate) / 100 : 0.05;
+    const platform_fee = Math.round(amount * rate);
+    const net_amount = amount - platform_fee;
+    const emailToUse = form.email || null;
+
+    const { error: insErr } = await supabase.from('fundraising_contributions').insert([{
+      campaign_id: campaign.id,
+      contributor_name: form.name || 'Anonyme',
+      contributor_email: emailToUse,
+      amount,
+      platform_fee,
+      net_amount,
+      payment_method: paymentMethod,
+      transaction_ref: transactionRef
+    }]);
+    if (insErr) throw insErr;
+    setStep('success');
+  };
+
+  // ── Carte bancaire → Paystack Popup (sécurisé, aucune donnée CB côté client) ──
+  const handlePaystackCard = async () => {
+    const amount = parseFloat(form.amount);
+    if (!amount || amount <= 0) { setError('Veuillez saisir un montant valide.'); return; }
+    setError('');
+
+    let config: any;
+    try {
+      config = await PaystackService.getConfig();
+      if (!config?.publicKey?.startsWith('pk_')) throw new Error('Clé Paystack invalide.');
+    } catch (configErr: any) {
+      setError("Configuration Paystack manquante. Contactez l'administrateur.");
+      return;
+    }
+
+    if (!(window as any).PaystackPop) {
+      setError('SDK Paystack non chargé. Rafraîchissez la page.');
+      return;
+    }
+
+    const handler = (window as any).PaystackPop.setup({
+      key: config.publicKey,
+      email: form.email || 'contributeur@babipass.com',
+      amount: Math.round(amount * 100), // Paystack uses smallest currency unit
+      currency: campaign.currency || 'XOF',
+      ref: 'babifund_' + Date.now(),
+      callback: async (response: any) => {
+        if (response.status === 'success') {
+          try {
+            await recordContribution(response.reference, 'CB');
+          } catch (err: any) {
+            setError(err.message || 'Paiement validé, mais erreur de sauvegarde.');
+          }
+        } else {
+          setError('Paiement annulé ou échoué.');
+        }
+      },
+      onClose: () => { /* User closed the popup, do nothing */ }
+    });
+    handler.openIframe();
+  };
+
+  // ── Mobile Money → PawaPay USSD Push ────────────────────────────────────
   const handleContribute = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(form.amount);
     if (!amount || amount <= 0) { setError('Veuillez saisir un montant valide.'); return; }
-    
+
     if (form.method === 'CB') {
-      setStep('card_details');
+      await handlePaystackCard();
       return;
     }
-    
-    if (!form.phone && form.method !== 'CB') {
+
+    if (!form.phone) {
       setError('Mode Mobile Money sélectionné : le numéro de téléphone est obligatoire.');
       return;
     }
 
     setSubmitting(true);
     setError('');
-
     try {
-      const rawRate = await getPlatformSetting('default_fundraising_commission_rate');
-      const rate = rawRate !== null ? Number(rawRate) / 100 : 0.05;
-      const platform_fee = Math.round(amount * rate);
-      const net_amount = amount - platform_fee;
-
-      // 1. Process Payment
       const { success, pawaId } = await PawaPayService.requestUSSDPush(form.phone, amount, form.method);
       if (!success) throw new Error('Échec du paiement Mobile Money');
-
-      // 2. Validate in DB
-      const { error: insErr } = await supabase.from('fundraising_contributions').insert([{
-        campaign_id: campaign.id,
-        contributor_name: form.name || 'Anonyme',
-        contributor_email: form.email || null,
-        amount,
-        platform_fee,
-        net_amount,
-        payment_method: form.method,
-        transaction_ref: pawaId
-      }]);
-      if (insErr) throw insErr;
-      
-      setStep('success');
+      await recordContribution(pawaId, form.method);
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la contribution.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCardPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(form.amount);
-    setSubmitting(true);
-    setError('');
-
-    try {
-      const rawRate = await getPlatformSetting('default_fundraising_commission_rate');
-      const rate = rawRate !== null ? Number(rawRate) / 100 : 0.05;
-      const platform_fee = Math.round(amount * rate);
-      const net_amount = amount - platform_fee;
-
-      const emailToUse = form.email || 'guest@afritix.com';
-      const { success, transactionId } = await PaystackService.processCardPayment(cardDetails, amount, emailToUse);
-      if (!success) throw new Error('Transaction bancaire refusée.');
-
-      const { error: insErr } = await supabase.from('fundraising_contributions').insert([{
-        campaign_id: campaign.id,
-        contributor_name: form.name || 'Anonyme',
-        contributor_email: emailToUse,
-        amount,
-        platform_fee,
-        net_amount,
-        payment_method: 'CB',
-        transaction_ref: transactionId
-      }]);
-      if (insErr) throw insErr;
-      
-      setStep('success');
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la contribution.');
-      setStep('form');
     } finally {
       setSubmitting(false);
     }
@@ -343,42 +350,9 @@ export const FundraisingPage: React.FC = () => {
                     className="w-full bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {submitting ? <Loader2 size={18} className="animate-spin" /> : <Heart size={18} />}
-                    {form.method === 'CB' ? 'Suivant (Carte)' : (submitting ? 'Paiement en cours...' : 'Payer via Mobile Money')}
+                    {form.method === 'CB' ? 'Payer par Carte Bancaire' : (submitting ? 'Paiement en cours...' : 'Payer via Mobile Money')}
                   </button>
-                  <p className="text-xs text-slate-500 text-center">Paiement sécurisé via Babipass</p>
-                </form>
-              ) : step === 'card_details' ? (
-                <form onSubmit={handleCardPayment} className="space-y-4 animate-in slide-in-from-right-4">
-                  <button type="button" onClick={() => setStep('form')} className="text-sm font-bold text-slate-400 hover:text-white flex items-center gap-1 mb-4">
-                    <ArrowLeft size={16} /> Retour
-                  </button>
-                  <h2 className="text-xl font-black mb-4 flex items-center gap-2"><CreditCard size={20} className="text-blue-400" /> Carte Bancaire</h2>
-                  
-                  {error && <div className="bg-red-500/10 border border-red-500/40 text-red-400 text-sm p-3 rounded-xl mb-4">{error}</div>}
-                  
-                  <div className="p-4 bg-slate-800 rounded-xl mb-4 text-center">
-                    <p className="text-sm text-slate-400">Montant à payer</p>
-                    <p className="text-2xl font-black">{formatCurrency(parseFloat(form.amount || '0'), campaign.currency)}</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-1">Numéro de carte</label>
-                    <input type="text" placeholder="0000 0000 0000 0000" maxLength={19} required value={cardDetails.number} onChange={e => setCardDetails({...cardDetails, number: e.target.value})} className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-300 mb-1">Expiration</label>
-                      <input type="text" placeholder="MM/YY" maxLength={5} required value={cardDetails.expiry} onChange={e => setCardDetails({...cardDetails, expiry: e.target.value})} className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-300 mb-1">CVC</label>
-                      <input type="text" placeholder="123" maxLength={4} required value={cardDetails.cvv} onChange={e => setCardDetails({...cardDetails, cvv: e.target.value})} className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-1 focus:ring-blue-500" />
-                    </div>
-                  </div>
-                  <button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg flex justify-center items-center mt-6 disabled:opacity-50">
-                    {submitting ? <Loader2 size={20} className="animate-spin" /> : 'Payer maintenant'}
-                  </button>
-                  <p className="text-xs text-center text-slate-500 mt-4 flex items-center justify-center gap-1"><Shield size={12}/> Paiement sécurisé via Paystack</p>
+                  <p className="text-xs text-slate-500 text-center flex items-center justify-center gap-1"><Shield size={11}/> Paiement 100% sécurisé</p>
                 </form>
               ) : null}
             </div>
