@@ -89,7 +89,7 @@ export const PublicMap = ({ events }: { events: any[] }) => {
                               className="relative flex flex-col items-center group z-50 cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/event/${event.id}`);
+                                navigate(`/event/${event.slug || event.id}`);
                               }}
                             >
                                 {/* Mini Carte de l'événement (comme sur EventDetails) */}
