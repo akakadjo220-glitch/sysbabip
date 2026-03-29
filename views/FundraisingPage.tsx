@@ -108,13 +108,11 @@ export const FundraisingPage: React.FC = () => {
       amount: Math.round(amount * 100), // Paystack uses smallest currency unit
       currency: campaign.currency || 'XOF',
       ref: 'babifund_' + Date.now(),
-      callback: async (response: any) => {
+      callback: function(response: any) {
         if (response.status === 'success') {
-          try {
-            await recordContribution(response.reference, 'CB');
-          } catch (err: any) {
+          recordContribution(response.reference, 'CB').catch((err: any) => {
             setError(err.message || 'Paiement validé, mais erreur de sauvegarde.');
-          }
+          });
         } else {
           setError('Paiement annulé ou échoué.');
         }
