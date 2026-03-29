@@ -34,7 +34,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <header className="fixed top-0 left-0 right-0 z-40 px-4 md:px-6 py-3 md:py-4 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex justify-between items-center max-w-7xl mx-auto">
           <Link to="/" className="group flex items-center gap-2">
-            <div className="w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
               <img src="https://supabasekong-l4cw40oks4kso84ko44ogkkw.188.241.58.227.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">

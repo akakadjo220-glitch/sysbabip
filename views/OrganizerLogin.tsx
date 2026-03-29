@@ -246,7 +246,7 @@ export const OrganizerLogin = () => {
                 <div className="w-full max-w-md space-y-8 animate-in slide-in-from-right-8 fade-in duration-500">
 
                     <div className="flex flex-col items-center mb-2">
-                        <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg shadow-orange-500/20 mb-3">
+                        <div className="w-28 h-28 md:w-24 md:h-24 rounded-2xl overflow-hidden shadow-lg shadow-orange-500/20 mb-3">
                             <img src="https://supabasekong-l4cw40oks4kso84ko44ogkkw.188.241.58.227.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass" className="w-full h-full object-contain" />
                         </div>
                         <h2 className="text-3xl font-bold text-white mb-1">
