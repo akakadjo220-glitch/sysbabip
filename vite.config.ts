@@ -30,6 +30,12 @@ export default defineConfig(({ mode }) => {
             changeOrigin: true,
             secure: false
           }
+        },
+        // Override restrictive COEP headers set by basicSsl — required for Paystack popup iframe
+        headers: {
+          'Cross-Origin-Embedder-Policy': 'unsafe-none',
+          'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+          'Cross-Origin-Resource-Policy': 'cross-origin',
         }
       },
       plugins: [react(), basicSsl()],
