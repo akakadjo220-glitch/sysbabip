@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { EmailService } from '../services/EmailService';
+import { WhatsAppService } from '../services/WhatsAppService';
 
 export const OrganizerLogin = () => {
     const [isPhoneMode, setIsPhoneMode] = useState(false);
@@ -27,7 +28,7 @@ export const OrganizerLogin = () => {
 
     const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-    const requestVerification = async (email: string) => {
+    const requestVerification = async (email: string, targetPhone?: string) => {
         const code = generateOTP();
 
         // On supprime tout ancien OTP pour cet email (permet de contourner l'absence de politique UPDATE)
@@ -55,6 +56,14 @@ export const OrganizerLogin = () => {
             await EmailService.sendTicketEmail(email, emailData.subject, emailData.html);
         } catch (e) {
             console.error("Échec de l'envoi d'email via le service", e);
+        }
+
+        // 3. Envoi WhatsApp en parallèle si un numéro est disponible
+        if (targetPhone) {
+            const waMessage = `🔐 *Babipass - Code de vérification*\n\nVotre code OTP est : *${code}*\n\nCe code expire dans 10 minutes. Ne le partagez jamais.`;
+            WhatsAppService.sendMessage(targetPhone, waMessage).catch(err =>
+                console.warn('[WA OTP] Envoi WhatsApp échoué (non bloquant):', err)
+            );
         }
 
         return code;
@@ -137,9 +146,10 @@ export const OrganizerLogin = () => {
 
         try {
             const formattedIdentifier = isPhoneMode ? `${identifier}@organizer.afritix.local` : identifier;
-            await requestVerification(formattedIdentifier);
+            // Passe le numéro de téléphone pour l'envoi WA si mode téléphone
+            await requestVerification(formattedIdentifier, isPhoneMode ? identifier : undefined);
             setResetStep(true);
-            setSuccessMsg("Code de réinitialisation envoyé ! Vérifiez vos messages.");
+            setSuccessMsg("Code de réinitialisation envoyé ! Vérifiez vos messages WhatsApp ou email.");
         } catch (err: any) {
             setError(err.message || "Erreur lors de l'envoi du code.");
         } finally {
@@ -193,8 +203,8 @@ export const OrganizerLogin = () => {
             const formattedIdentifier = isPhoneMode ? `${identifier}@organizer.afritix.local` : identifier;
 
             if (isSignUp) {
-                // Étape 1: Au lieu de signUp directement, demander vérification email
-                await requestVerification(formattedIdentifier);
+                // Étape 1: Au lieu de signUp directement, demander vérification email (+ WhatsApp si mode téléphone)
+                await requestVerification(formattedIdentifier, isPhoneMode ? identifier : undefined);
                 setOtpStep(true);
             } else {
                 // Connexion standards (SignInWithPassword)
