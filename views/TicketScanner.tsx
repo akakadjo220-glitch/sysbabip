@@ -1,62 +1,199 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Camera, CheckCircle, XCircle, RefreshCw, Wifi, WifiOff, Radio, Loader2, KeyRound } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Camera, CheckCircle, XCircle, RefreshCw, RefreshCcw, Wifi, WifiOff, Radio, Loader2, KeyRound, Cloud, CloudOff, Download } from 'lucide-react';
 import { verifyTicket, TicketPayload } from '../utils/crypto';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../supabaseClient';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
+const PENDING_SYNCS_KEY = 'babipass_pending_syncs';      // Offline queue
+const LOCAL_SCANS_KEY   = 'afriTix_local_scans';          // Already-scanned IDs
+const TICKET_CACHE_KEY  = 'babipass_ticket_cache';        // Pre-fetched ticket statuses
+const CACHE_TTL_MS      = 6 * 60 * 60 * 1000;            // 6 hours cache
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type ScanResult = 'idle' | 'success' | 'error';
-type ScanMode = 'qr' | 'nfc';
+type ScanMode   = 'qr' | 'nfc';
 
-// ─── Main Scanner Component ───────────────────────────────────────────────────
+interface PendingSync {
+  ticketId: string;
+  scannedAt: string;
+}
+
+interface TicketCacheEntry {
+  status: 'valid' | 'used' | 'revoked';
+  fetchedAt: number;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Returns the offline sync queue from localStorage */
+const getPendingSyncs = (): PendingSync[] => {
+  try { return JSON.parse(localStorage.getItem(PENDING_SYNCS_KEY) || '[]'); }
+  catch { return []; }
+};
+
+/** Adds a ticket to the offline sync queue */
+const addPendingSync = (ticketId: string) => {
+  const queue = getPendingSyncs();
+  if (!queue.find(p => p.ticketId === ticketId)) {
+    queue.push({ ticketId, scannedAt: new Date().toISOString() });
+    localStorage.setItem(PENDING_SYNCS_KEY, JSON.stringify(queue));
+  }
+};
+
+/** Returns the local scans map */
+const getLocalScans = (): Record<string, string> => {
+  try { return JSON.parse(localStorage.getItem(LOCAL_SCANS_KEY) || '{}'); }
+  catch { return {}; }
+};
+
+/** Marks a ticket as scanned locally */
+const markLocalScan = (ticketId: string) => {
+  const scans = getLocalScans();
+  scans[ticketId] = new Date().toISOString();
+  localStorage.setItem(LOCAL_SCANS_KEY, JSON.stringify(scans));
+};
+
+/** Returns cached ticket status (null if stale/missing) */
+const getCachedStatus = (ticketId: string): 'valid' | 'used' | 'revoked' | null => {
+  try {
+    const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(TICKET_CACHE_KEY) || '{}');
+    const entry = cache[ticketId];
+    if (!entry) return null;
+    if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) return null; // stale
+    return entry.status;
+  } catch { return null; }
+};
+
+/** Writes a ticket status to cache */
+const setCachedStatus = (ticketId: string, status: 'valid' | 'used' | 'revoked') => {
+  try {
+    const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(TICKET_CACHE_KEY) || '{}');
+    cache[ticketId] = { status, fetchedAt: Date.now() };
+    localStorage.setItem(TICKET_CACHE_KEY, JSON.stringify(cache));
+  } catch { /* ignore storage errors */ }
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export const TicketScanner: React.FC = () => {
-  const [result, setResult] = useState<ScanResult>('idle');
-  const [cameraActive, setCameraActive] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [scanMode, setScanMode] = useState<ScanMode>('qr');
-  const [manualToken, setManualToken] = useState('');
+  const [result, setResult]               = useState<ScanResult>('idle');
+  const [cameraActive, setCameraActive]   = useState(false);
+  const [scanning, setScanning]           = useState(false);
+  const [isOnline, setIsOnline]           = useState(navigator.onLine);
+  const [scanMode, setScanMode]           = useState<ScanMode>('qr');
+  const [manualToken, setManualToken]     = useState('');
   const [scannedPayload, setScannedPayload] = useState<TicketPayload | null>(null);
-  const [errorReason, setErrorReason] = useState('');
-  const [agentName, setAgentName] = useState('Agent');
-  const [scansCount, setScansCount] = useState(0);
-  const [nfcSupported, setNfcSupported] = useState(false);
-  const [nfcStatus, setNfcStatus] = useState('');
+  const [errorReason, setErrorReason]     = useState('');
+  const [agentName, setAgentName]         = useState('Agent');
+  const [scansCount, setScansCount]       = useState(0);
+  const [pendingCount, setPendingCount]   = useState(0);
+  const [nfcSupported, setNfcSupported]   = useState(false);
+  const [nfcStatus, setNfcStatus]         = useState('');
+  const [syncing, setSyncing]             = useState(false);
+  const [cacheSize, setCacheSize]         = useState(0);
+  const [lastSyncInfo, setLastSyncInfo]   = useState('');
 
   const processTokenRef = useRef<((token: string) => Promise<void>) | null>(null);
 
-  // ─── Init ──────────────────────────────────────────────────────────────────
+  // ─── Refresh UI counters ──────────────────────────────────────────────────
+  const refreshCounters = useCallback(() => {
+    const scans = getLocalScans();
+    setScansCount(Object.keys(scans).length);
+    const pending = getPendingSyncs();
+    setPendingCount(pending.length);
+    try {
+      const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(TICKET_CACHE_KEY) || '{}');
+      setCacheSize(Object.keys(cache).length);
+    } catch { setCacheSize(0); }
+  }, []);
 
+  // ─── Auto-sync queue when back online ────────────────────────────────────
+  const flushPendingSyncs = useCallback(async () => {
+    const queue = getPendingSyncs();
+    if (queue.length === 0) return;
+
+    setSyncing(true);
+    const failed: PendingSync[] = [];
+
+    for (const item of queue) {
+      try {
+        const { error } = await supabase
+          .from('tickets')
+          .update({ status: 'used' })
+          .eq('id', item.ticketId);
+        if (error) {
+          failed.push(item);
+        } else {
+          // Update cache
+          setCachedStatus(item.ticketId, 'used');
+        }
+      } catch {
+        failed.push(item);
+      }
+    }
+
+    localStorage.setItem(PENDING_SYNCS_KEY, JSON.stringify(failed));
+    const synced = queue.length - failed.length;
+    if (synced > 0) {
+      setLastSyncInfo(`✅ ${synced} billet(s) synchronisé(s) avec le serveur`);
+    }
+    setSyncing(false);
+    refreshCounters();
+  }, [refreshCounters]);
+
+  // ─── Pre-cache tickets for an event (organizer-initiated) ────────────────
+  const preCacheEventTickets = useCallback(async () => {
+    if (!isOnline) return;
+    setSyncing(true);
+    try {
+      // Fetch all valid tickets (limited to recent events)
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('id, status')
+        .in('status', ['valid', 'used', 'revoked'])
+        .limit(5000);
+
+      if (data && !error) {
+        const cache: Record<string, TicketCacheEntry> = {};
+        const now = Date.now();
+        for (const t of data) {
+          cache[t.id] = { status: t.status, fetchedAt: now };
+        }
+        localStorage.setItem(TICKET_CACHE_KEY, JSON.stringify(cache));
+        setLastSyncInfo(`📥 ${data.length} billet(s) mis en cache pour utilisation hors-ligne`);
+        refreshCounters();
+      }
+    } catch (e) {
+      console.error('Pre-cache failed:', e);
+    }
+    setSyncing(false);
+  }, [isOnline, refreshCounters]);
+
+  // ─── Init ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    // Agent name from localStorage
     const stored = localStorage.getItem('afritix_current_agent');
     if (stored) {
       try { setAgentName(JSON.parse(stored).name || 'Agent'); } catch (_) {}
     }
+    refreshCounters();
+    setNfcSupported('NDEFReader' in window);
 
-    // Count local scans
-    const local = JSON.parse(localStorage.getItem('afriTix_local_scans') || '{}');
-    setScansCount(Object.keys(local).length);
-
-    // Online/offline tracking
-    const onOnline = () => setIsOnline(true);
+    const onOnline = () => {
+      setIsOnline(true);
+      // Auto-flush queue when reconnecting
+      setTimeout(() => flushPendingSyncs(), 500);
+    };
     const onOffline = () => setIsOnline(false);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
-
-    // Check Web NFC support
-    setNfcSupported('NDEFReader' in window);
-
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, []);
+  }, [refreshCounters, flushPendingSyncs]);
 
-  // ─── Camera (QR) ──────────────────────────────────────────────────────────
-
+  // ─── Camera (QR) ────────────────────────────────────────────────────────
   useEffect(() => {
     let html5QrCode: Html5Qrcode | null = null;
     let mounted = true;
@@ -91,20 +228,16 @@ export const TicketScanner: React.FC = () => {
     };
   }, [cameraActive]);
 
-  // ─── NFC (Web NFC API) ────────────────────────────────────────────────────
-
+  // ─── NFC ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (scanMode !== 'nfc' || !nfcSupported) return;
-
-    let reader: any;
     let active = true;
 
     (async () => {
       try {
-        reader = new (window as any).NDEFReader();
+        const reader = new (window as any).NDEFReader();
         await reader.scan();
-        setNfcStatus('En attente d\'un badge NFC...');
-
+        setNfcStatus("En attente d'un badge NFC...");
         reader.addEventListener('reading', ({ message }: any) => {
           if (!active) return;
           for (const record of message.records) {
@@ -116,46 +249,36 @@ export const TicketScanner: React.FC = () => {
             }
           }
           setResult('error');
-          setErrorReason('Badge NFC sans données de billet reconnues.');
-        });
-
-        reader.addEventListener('readingerror', () => {
-          setNfcStatus('Erreur lecture NFC.');
+          setErrorReason('Badge NFC sans données de billet reconnu.');
         });
       } catch (err: any) {
-        console.error('NFC error:', err);
         setNfcStatus(`NFC non accessible: ${err.message}`);
       }
     })();
 
-    return () => {
-      active = false;
-      // NDEFReader doesn't have an explicit stop, but we flag as inactive
-    };
+    return () => { active = false; };
   }, [scanMode, nfcSupported]);
 
-  // ─── Core Token Processing ────────────────────────────────────────────────
-
-  const processToken = async (token: string) => {
+  // ─── Core Token Processing (Offline-First) ───────────────────────────────
+  const processToken = useCallback(async (token: string) => {
     if (scanning) return;
     setScanning(true);
     setCameraActive(false);
-
     await new Promise(r => setTimeout(r, 400));
 
     try {
       let ticketId: string | null = null;
       let payload: TicketPayload | null = null;
 
-      // 1. Try cryptographic verification first (works for HTTPS-generated tickets)
+      // ── Step 1: Cryptographic verification (works 100% offline) ──────────
       const cryptoResult = await verifyTicket(token);
-
       if (cryptoResult.valid && cryptoResult.payload) {
-        // Crypto signature is valid
         ticketId = cryptoResult.payload.tId;
-        payload = cryptoResult.payload;
-      } else {
-        // 2. Fallback: try to find ticket in Supabase by qr_code (handles HTTP-generated fallback tickets)
+        payload  = cryptoResult.payload;
+      }
+
+      // ── Step 2: Fallback — lookup by QR code in Supabase (requires online) ──
+      if (!ticketId && isOnline) {
         const { data: ticketByQr } = await supabase
           .from('tickets')
           .select('id, status, guest_name, ticket_type, event_id')
@@ -164,14 +287,15 @@ export const TicketScanner: React.FC = () => {
 
         if (ticketByQr) {
           ticketId = ticketByQr.id;
-          // Reconstruct a minimal payload for the success screen
-          payload = {
+          payload  = {
             tId: ticketByQr.id,
             eId: ticketByQr.event_id || '',
             type: ticketByQr.ticket_type || 'Standard',
             usr: ticketByQr.guest_name || 'Participant',
             iat: Date.now(),
           };
+          // Cache the status for offline use later
+          setCachedStatus(ticketByQr.id, ticketByQr.status);
         }
       }
 
@@ -182,30 +306,8 @@ export const TicketScanner: React.FC = () => {
         return;
       }
 
-      // 3. Check Supabase for revocation and validity
-      const { data: ticketData, error: ticketError } = await supabase
-        .from('tickets')
-        .select('id, status')
-        .eq('id', ticketId)
-        .maybeSingle();
-
-      if (!ticketError && ticketData) {
-        if (ticketData.status === 'revoked') {
-          setResult('error');
-          setErrorReason("Ce billet a été révoqué ou annulé par l'organisateur.");
-          setScanning(false);
-          return;
-        }
-        if (ticketData.status === 'used') {
-          setResult('error');
-          setErrorReason('Billet déjà utilisé ! Accès refusé.');
-          setScanning(false);
-          return;
-        }
-      }
-
-      // 4. Local double-scan protection
-      const localScans: Record<string, string> = JSON.parse(localStorage.getItem('afriTix_local_scans') || '{}');
+      // ── Step 3: Double-scan check (local — always works offline) ─────────
+      const localScans = getLocalScans();
       if (localScans[ticketId]) {
         setResult('error');
         setErrorReason('Billet déjà scanné dans cette session !');
@@ -213,16 +315,67 @@ export const TicketScanner: React.FC = () => {
         return;
       }
 
-      // 5. Mark as used in Supabase (best-effort)
-      await supabase.from('tickets').update({ status: 'used' }).eq('id', ticketId);
+      // ── Step 4: Revocation check — try cache first, then Supabase ────────
+      // 4a. Check local pre-fetched cache
+      const cachedStatus = getCachedStatus(ticketId);
+      if (cachedStatus === 'revoked') {
+        setResult('error');
+        setErrorReason("Ce billet a été révoqué ou annulé par l'organisateur.");
+        setScanning(false);
+        return;
+      }
+      if (cachedStatus === 'used') {
+        setResult('error');
+        setErrorReason('Billet déjà utilisé ! Accès refusé.');
+        setScanning(false);
+        return;
+      }
 
-      // 6. Mark locally
-      localScans[ticketId] = new Date().toISOString();
-      localStorage.setItem('afriTix_local_scans', JSON.stringify(localScans));
-      setScansCount(Object.keys(localScans).length);
+      // 4b. If online, verify against Supabase (most authoritative)
+      if (isOnline) {
+        const { data: ticketData, error: ticketError } = await supabase
+          .from('tickets')
+          .select('id, status')
+          .eq('id', ticketId)
+          .maybeSingle();
+
+        if (!ticketError && ticketData) {
+          // Update cache with real value
+          setCachedStatus(ticketId, ticketData.status);
+
+          if (ticketData.status === 'revoked') {
+            setResult('error');
+            setErrorReason("Ce billet a été révoqué ou annulé par l'organisateur.");
+            setScanning(false);
+            return;
+          }
+          if (ticketData.status === 'used') {
+            setResult('error');
+            setErrorReason('Billet déjà utilisé ! Accès refusé.');
+            setScanning(false);
+            return;
+          }
+        }
+      }
+      // If offline AND no cache entry → trust crypto signature, continue
+
+      // ── Step 5: Mark as USED ─────────────────────────────────────────────
+      // Always mark locally first (instant, zero latency)
+      markLocalScan(ticketId);
+      setCachedStatus(ticketId, 'used');
+
+      if (isOnline) {
+        // Online: mark in Supabase immediately
+        await supabase.from('tickets').update({ status: 'used' }).eq('id', ticketId);
+      } else {
+        // Offline: queue for sync when reconnecting
+        addPendingSync(ticketId);
+      }
 
       setScannedPayload(payload);
       setResult('success');
+      refreshCounters();
+
     } catch (err) {
       console.error('processToken error:', err);
       setResult('error');
@@ -230,14 +383,13 @@ export const TicketScanner: React.FC = () => {
     }
 
     setScanning(false);
-  };
+  }, [scanning, isOnline, refreshCounters]);
 
   useEffect(() => {
     processTokenRef.current = processToken;
   });
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
-
+  // ─── Handlers ────────────────────────────────────────────────────────────
   const reset = () => {
     setResult('idle');
     setManualToken('');
@@ -252,12 +404,11 @@ export const TicketScanner: React.FC = () => {
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
-
   return (
-    <div className="max-w-md mx-auto h-[calc(100vh-140px)] flex flex-col">
+    <div className="max-w-md mx-auto flex flex-col gap-3 pb-8">
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4">
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-white">Contrôle d'accès</h2>
           <p className="text-slate-400 text-sm">📱 {agentName} • {scansCount} scan{scansCount !== 1 ? 's' : ''}</p>
@@ -271,8 +422,50 @@ export const TicketScanner: React.FC = () => {
         </div>
       </div>
 
-      {/* Mode Toggle */}
-      <div className="flex bg-slate-800 p-1 rounded-xl mb-4 border border-slate-700 w-max mx-auto">
+      {/* ── Offline / Sync Status Bar ─────────────────────────────────────── */}
+      {(pendingCount > 0 || syncing || lastSyncInfo) && (
+        <div className={`flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border ${syncing
+          ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+          : pendingCount > 0
+          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+        }`}>
+          <span className="flex items-center gap-2">
+            {syncing ? (
+              <><Loader2 size={12} className="animate-spin" /> Synchronisation en cours...</>
+            ) : pendingCount > 0 ? (
+              <><CloudOff size={12} /> {pendingCount} scan(s) en attente de sync</>
+            ) : (
+              <><Cloud size={12} /> {lastSyncInfo}</>
+            )}
+          </span>
+          {isOnline && pendingCount > 0 && !syncing && (
+            <button
+              onClick={flushPendingSyncs}
+              className="ml-2 underline text-xs hover:opacity-80"
+            >
+              Sync now
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Offline Pre-cache button (only online) ───────────────────────── */}
+      {isOnline && (
+        <button
+          onClick={preCacheEventTickets}
+          disabled={syncing}
+          className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl text-xs font-bold text-slate-300 transition-all disabled:opacity-50"
+        >
+          {syncing ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          {cacheSize > 0
+            ? `Mettre à jour le cache hors-ligne (${cacheSize} billets)`
+            : 'Télécharger les billets pour utilisation hors-ligne'}
+        </button>
+      )}
+
+      {/* ── Mode Toggle ──────────────────────────────────────────────────── */}
+      <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 w-max mx-auto">
         <button
           onClick={() => { setScanMode('qr'); reset(); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${scanMode === 'qr' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
@@ -287,10 +480,10 @@ export const TicketScanner: React.FC = () => {
         </button>
       </div>
 
-      {/* Scanner area */}
-      <div className="flex-1 relative rounded-3xl overflow-hidden bg-black shadow-2xl border-4 border-slate-800">
+      {/* ── Scanner Area ─────────────────────────────────────────────────── */}
+      <div className="relative rounded-3xl overflow-hidden bg-black shadow-2xl border-4 border-slate-800" style={{ minHeight: 380 }}>
 
-        {/* ── NFC Mode ── */}
+        {/* NFC Mode */}
         {scanMode === 'nfc' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-slate-900">
             {!nfcSupported ? (
@@ -300,7 +493,7 @@ export const TicketScanner: React.FC = () => {
                 </div>
                 <h3 className="text-xl font-bold text-white">NFC non supporté</h3>
                 <p className="text-slate-400 text-sm max-w-xs mx-auto">
-                  Ce navigateur ne supporte pas la Web NFC API. Utilisez Chrome sur Android ou un lecteur NFC externe.
+                  Utilisez Chrome sur Android ou un lecteur NFC externe.
                 </p>
               </div>
             ) : result === 'idle' ? (
@@ -315,22 +508,20 @@ export const TicketScanner: React.FC = () => {
                 </div>
               </div>
             ) : result === 'success' ? (
-              <SuccessScreen payload={scannedPayload} onReset={reset} />
+              <SuccessScreen payload={scannedPayload} onReset={reset} isOffline={!isOnline} />
             ) : (
               <ErrorScreen reason={errorReason} onReset={reset} />
             )}
           </div>
         )}
 
-        {/* ── QR Mode ── */}
+        {/* QR Mode */}
         {scanMode === 'qr' && (
           <>
             {/* Camera active */}
             {cameraActive && result === 'idle' && (
               <>
                 <div id="qr-reader" className="absolute inset-0 w-full h-full [&>video]:object-cover opacity-80 z-0" />
-
-                {/* Overlay */}
                 <div className="absolute inset-0 z-10 flex flex-col">
                   <div className="flex-1 bg-black/50" />
                   <div className="flex h-64">
@@ -342,12 +533,10 @@ export const TicketScanner: React.FC = () => {
                   </div>
                   <div className="flex-1 bg-black/50 flex items-center justify-center">
                     <p className="text-white font-medium bg-black/40 px-4 py-2 rounded-full backdrop-blur-md text-sm">
-                      Placez le QR Code dans le cadre
+                      {!isOnline ? '📴 Mode hors-ligne — QR signé uniquement' : 'Placez le QR Code dans le cadre'}
                     </p>
                   </div>
                 </div>
-
-                {/* Manual input overlay */}
                 <div className="absolute top-4 left-4 right-4 z-20">
                   <form onSubmit={handleManualSubmit} className="flex gap-2">
                     <input
@@ -366,7 +555,6 @@ export const TicketScanner: React.FC = () => {
                     </button>
                   </form>
                 </div>
-
                 <button
                   onClick={() => setCameraActive(false)}
                   className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 bg-slate-800 text-white px-6 py-2 rounded-full font-bold shadow-lg border border-slate-700"
@@ -396,7 +584,7 @@ export const TicketScanner: React.FC = () => {
                       <Camera size={20} /> Lancer la Caméra
                     </button>
 
-                    {/* Manual entry */}
+                    {/* Manual token entry */}
                     <div className="w-full bg-slate-800/50 border border-slate-700 p-4 rounded-xl text-left">
                       <p className="text-xs text-slate-400 mb-2 uppercase font-bold tracking-wider flex items-center gap-1">
                         <KeyRound size={12} /> Saisie manuelle du token
@@ -420,9 +608,12 @@ export const TicketScanner: React.FC = () => {
                     </div>
 
                     {!isOnline && (
-                      <div className="w-full p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-center">
-                        <p className="text-red-400 text-xs font-semibold">
-                          ⚠️ Hors-ligne — La vérification Supabase est désactivée. Seule la signature cryptographique sera validée.
+                      <div className="w-full p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center">
+                        <p className="text-amber-400 text-xs font-semibold">
+                          📴 Hors-ligne — Seule la signature cryptographique est vérifiée.<br />
+                          {cacheSize > 0
+                            ? `${cacheSize} billet(s) en cache local disponible(s).`
+                            : 'Aucun cache billet. Connectez-vous pour télécharger le cache.'}
                         </p>
                       </div>
                     )}
@@ -431,10 +622,9 @@ export const TicketScanner: React.FC = () => {
               </div>
             )}
 
-            {/* Result screens */}
             {result === 'success' && (
               <div className="absolute inset-0 flex items-center justify-center bg-slate-900 p-6">
-                <SuccessScreen payload={scannedPayload} onReset={reset} />
+                <SuccessScreen payload={scannedPayload} onReset={reset} isOffline={!isOnline} />
               </div>
             )}
             {result === 'error' && (
@@ -465,7 +655,7 @@ export const TicketScanner: React.FC = () => {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const SuccessScreen: React.FC<{ payload: TicketPayload | null; onReset: () => void }> = ({ payload, onReset }) => (
+const SuccessScreen: React.FC<{ payload: TicketPayload | null; onReset: () => void; isOffline: boolean }> = ({ payload, onReset, isOffline }) => (
   <div className="text-center space-y-6 animate-in zoom-in duration-300 w-full">
     <div className="w-32 h-32 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto border-4 border-emerald-500 relative">
       <div className="absolute inset-0 bg-emerald-500/20 rounded-full animate-ping" />
@@ -476,6 +666,11 @@ const SuccessScreen: React.FC<{ payload: TicketPayload | null; onReset: () => vo
       <p className="text-emerald-400 font-medium text-lg mt-2">{payload?.usr || 'Participant'}</p>
       <p className="text-slate-400 mt-1">Catégorie : {payload?.type || 'Standard'}</p>
       <p className="text-slate-500 text-xs mt-1 font-mono">{payload?.tId}</p>
+      {isOffline && (
+        <p className="mt-3 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 inline-block">
+          📴 Mode hors-ligne — Sync automatique à la reconnexion
+        </p>
+      )}
     </div>
     <button
       onClick={onReset}
