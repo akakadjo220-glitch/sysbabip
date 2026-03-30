@@ -169,15 +169,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // 3. Déclencher le fetch de profil HORS du lock GoTrue
                     setPendingUserId(session.user.id);
                 } else {
-                    // Pas de session
-                    if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
-                        setUser(null);
-                        setRole(UserRole.GUEST);
-                        localStorage.removeItem('afritix_user_role');
-                        localStorage.removeItem('afritix_current_agent');
-                        setPendingUserId(null);
+                        // Pas de session Supabase
+                        if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+                            // Ne pas effacer le rôle STAFF (agents authentifiés via RPC, sans session Supabase)
+                            const savedRole = localStorage.getItem('afritix_user_role') as UserRole;
+                            const isAgentSession = savedRole === UserRole.STAFF && localStorage.getItem('afritix_current_agent');
+
+                            if (!isAgentSession) {
+                                setUser(null);
+                                setRole(UserRole.GUEST);
+                                localStorage.removeItem('afritix_user_role');
+                                localStorage.removeItem('afritix_current_agent');
+                            }
+                            // Si c'est un agent, on garde son rôle STAFF même sans session Supabase
+                            setPendingUserId(null);
+                        }
                     }
-                }
 
                 // Libérer authLoading ici : on a au minimum le rôle localStorage/metadata
                 setAuthLoading(false);
