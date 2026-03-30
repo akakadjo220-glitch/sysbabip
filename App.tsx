@@ -29,10 +29,20 @@ const ProtectedRoute = ({ children, allowedRoles, fallbackPath = "/organizer/log
     );
   }
 
-  // Si pas d'utilisateur connecté ou si le rôle n'est pas autorisé
-  if (!user || !allowedRoles.includes(role)) {
+  // Les agents STAFF s'authentifient via RPC (pas Supabase Auth) — ils n'ont pas de user Supabase.
+  // On vérifie leur rôle via localStorage + la présence de la session agent.
+  const isStaffAgent = role === UserRole.STAFF && !!localStorage.getItem('afritix_current_agent');
+
+  // Pour les autres rôles : exiger la session Supabase ET le bon rôle
+  if (!isStaffAgent && (!user || !allowedRoles.includes(role))) {
     return <Navigate to={fallbackPath} replace />;
   }
+
+  // Pour les agents : exiger uniquement le bon rôle dans allowedRoles
+  if (isStaffAgent && !allowedRoles.includes(role)) {
+    return <Navigate to={fallbackPath} replace />;
+  }
+
   return <>{children}</>;
 };
 
