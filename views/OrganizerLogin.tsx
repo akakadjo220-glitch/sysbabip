@@ -14,6 +14,7 @@ export const OrganizerLogin = () => {
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [countryCode, setCountryCode] = useState('+225');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -25,6 +26,9 @@ export const OrganizerLogin = () => {
 
     const navigate = useNavigate();
     const { user, handleLogout, setRole } = useAuth();
+
+    const getFullPhone = (val: string) => `${countryCode}${val}`;
+    const getFormattedIdentifier = () => isPhoneMode ? `${getFullPhone(identifier)}@organizer.babipass.local` : identifier;
 
     const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -75,7 +79,7 @@ export const OrganizerLogin = () => {
         setError('');
 
         try {
-            const formattedIdentifier = isPhoneMode ? `${identifier}@organizer.afritix.local` : identifier;
+            const formattedIdentifier = getFormattedIdentifier();
 
             // Dans une vraie app, on vérifie contre la base de données. 
             // Ici pour le mock UX on vérifie si ça existe dans auth_otps côté db
@@ -104,8 +108,8 @@ export const OrganizerLogin = () => {
                 await supabase.from('profiles').upsert([{
                     id: authData.user.id,
                     email: formattedIdentifier,
-                    name: isPhoneMode ? identifier : identifier.split('@')[0],
-                    phone: isPhoneMode ? identifier : phoneNumber,
+                    name: isPhoneMode ? getFullPhone(identifier) : identifier.split('@')[0],
+                    phone: isPhoneMode ? getFullPhone(identifier) : getFullPhone(phoneNumber),
                     role: 'ORGANIZER',
                     status: 'pending' // L'organisateur doit être approuvé
                 }], { onConflict: 'id' });
@@ -145,9 +149,9 @@ export const OrganizerLogin = () => {
         setSuccessMsg('');
 
         try {
-            const formattedIdentifier = isPhoneMode ? `${identifier}@organizer.afritix.local` : identifier;
+            const formattedIdentifier = getFormattedIdentifier();
             // Passe le numéro de téléphone pour l'envoi WA si mode téléphone
-            await requestVerification(formattedIdentifier, isPhoneMode ? identifier : undefined);
+            await requestVerification(formattedIdentifier, isPhoneMode ? getFullPhone(identifier) : undefined);
             setResetStep(true);
             setSuccessMsg("Code de réinitialisation envoyé ! Vérifiez vos messages WhatsApp ou email.");
         } catch (err: any) {
@@ -163,7 +167,7 @@ export const OrganizerLogin = () => {
         setError('');
 
         try {
-            const formattedIdentifier = isPhoneMode ? `${identifier}@organizer.afritix.local` : identifier;
+            const formattedIdentifier = getFormattedIdentifier();
 
             const res = await fetch('https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/auth/reset-password', {
                 method: 'POST',
@@ -200,11 +204,11 @@ export const OrganizerLogin = () => {
         setError('');
 
         try {
-            const formattedIdentifier = isPhoneMode ? `${identifier}@organizer.afritix.local` : identifier;
+            const formattedIdentifier = getFormattedIdentifier();
 
             if (isSignUp) {
                 // Étape 1: Au lieu de signUp directement, demander vérification email (+ WhatsApp si mode téléphone)
-                await requestVerification(formattedIdentifier, isPhoneMode ? identifier : undefined);
+                await requestVerification(formattedIdentifier, isPhoneMode ? getFullPhone(identifier) : getFullPhone(phoneNumber));
                 setOtpStep(true);
             } else {
                 // Connexion standards (SignInWithPassword)
@@ -303,15 +307,45 @@ export const OrganizerLogin = () => {
                                         {isPhoneMode ? "Numéro WhatsApp" : "Adresse Email"}
                                     </label>
                                     <div className="relative">
-                                        {isPhoneMode ? <Phone className="absolute left-4 top-3.5 text-slate-500" size={20} /> : <Mail className="absolute left-4 top-3.5 text-slate-500" size={20} />}
-                                        <input
-                                            type={isPhoneMode ? "tel" : "email"}
-                                            value={identifier}
-                                            onChange={(e) => setIdentifier(e.target.value)}
-                                            placeholder={isPhoneMode ? "+225 01 23 45 67" : "organisateur@afritix.com"}
-                                            className="w-full bg-slate-900/60 border border-slate-700 rounded-xl pl-12 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
-                                            required
-                                        />
+                                        {!isPhoneMode && <Mail className="absolute left-4 top-3.5 text-slate-500" size={20} />}
+                                        {isPhoneMode ? (
+                                            <div className="flex w-full">
+                                                <select
+                                                    value={countryCode}
+                                                    onChange={(e) => setCountryCode(e.target.value)}
+                                                    className="bg-slate-900/60 border border-slate-700 rounded-l-xl pl-3 pr-8 py-3 text-slate-300 focus:outline-none focus:border-orange-500 transition-all border-r-0 cursor-pointer text-sm w-[100px]"
+                                                >
+                                                    <option value="+225">+225 🇨🇮</option>
+                                                    <option value="+33">+33 🇫🇷</option>
+                                                    <option value="+221">+221 🇸🇳</option>
+                                                    <option value="+228">+228 🇹🇬</option>
+                                                    <option value="+226">+226 🇧🇫</option>
+                                                    <option value="+237">+237 🇨🇲</option>
+                                                    <option value="+243">+243 🇨🇩</option>
+                                                    <option value="+223">+223 🇲🇱</option>
+                                                    <option value="+229">+229 🇧🇯</option>
+                                                    <option value="+1">+1 🇺🇸</option>
+                                                    <option value="+44">+44 🇬🇧</option>
+                                                </select>
+                                                <input
+                                                    type="tel"
+                                                    value={identifier}
+                                                    onChange={(e) => setIdentifier(e.target.value.replace(/^0+/, ''))} // Auto-enlever 0 initial
+                                                    placeholder="01 23 45 67"
+                                                    className="flex-1 w-full bg-slate-900/60 border border-slate-700 rounded-r-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
+                                                    required
+                                                />
+                                            </div>
+                                        ) : (
+                                            <input
+                                                type="email"
+                                                value={identifier}
+                                                onChange={(e) => setIdentifier(e.target.value)}
+                                                placeholder="organisateur@afritix.com"
+                                                className="w-full bg-slate-900/60 border border-slate-700 rounded-xl pl-12 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
+                                                required
+                                            />
+                                        )}
                                     </div>
                                 </div>
 
@@ -320,14 +354,30 @@ export const OrganizerLogin = () => {
                                         <label className="block text-sm font-medium text-slate-300 mb-2">
                                             Numéro WhatsApp / Téléphone
                                         </label>
-                                        <div className="relative">
-                                            <Phone className="absolute left-4 top-3.5 text-slate-500" size={20} />
+                                        <div className="relative flex w-full">
+                                            <select
+                                                value={countryCode}
+                                                onChange={(e) => setCountryCode(e.target.value)}
+                                                className="bg-slate-900/60 border border-slate-700 rounded-l-xl pl-3 pr-8 py-3 text-slate-300 focus:outline-none focus:border-orange-500 transition-all border-r-0 cursor-pointer text-sm w-[100px]"
+                                            >
+                                                <option value="+225">+225 🇨🇮</option>
+                                                <option value="+33">+33 🇫🇷</option>
+                                                <option value="+221">+221 🇸🇳</option>
+                                                <option value="+228">+228 🇹🇬</option>
+                                                <option value="+226">+226 🇧🇫</option>
+                                                <option value="+237">+237 🇨🇲</option>
+                                                <option value="+243">+243 🇨🇩</option>
+                                                <option value="+223">+223 🇲🇱</option>
+                                                <option value="+229">+229 🇧🇯</option>
+                                                <option value="+1">+1 🇺🇸</option>
+                                                <option value="+44">+44 🇬🇧</option>
+                                            </select>
                                             <input
                                                 type="tel"
                                                 value={phoneNumber}
-                                                onChange={(e) => setPhoneNumber(e.target.value)}
-                                                placeholder="+225 01 23 45 67"
-                                                className="w-full bg-slate-900/60 border border-slate-700 rounded-xl pl-12 pr-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
+                                                onChange={(e) => setPhoneNumber(e.target.value.replace(/^0+/, ''))} // Auto-enlever 0 initial
+                                                placeholder="01 23 45 67"
+                                                className="flex-1 w-full bg-slate-900/60 border border-slate-700 rounded-r-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
                                                 required
                                             />
                                         </div>
@@ -422,7 +472,7 @@ export const OrganizerLogin = () => {
                                         disabled={loading}
                                         onClick={async () => {
                                             setLoading(true);
-                                            const formattedIdentifier = isPhoneMode ? `${identifier}@organizer.afritix.local` : identifier;
+                                            const formattedIdentifier = getFormattedIdentifier();
                                             await requestVerification(formattedIdentifier);
                                             setSuccessMsg("Nouveau code envoyé !");
                                             setLoading(false);
