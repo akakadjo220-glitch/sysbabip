@@ -17,18 +17,27 @@ export const AmbassadorWidget: React.FC<AmbassadorWidgetProps> = ({ eventId, com
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
-  // S'il n'est pas connecté ou pas USER, ne pas montrer de bouton (ou montrer un call to action pour se connecter)
-  if (!user || role === UserRole.GUEST) {
+  if (!user || role !== UserRole.AMBASSADOR) {
     return (
-      <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 rounded-2xl p-6 mt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <h4 className="text-xl font-bold text-white flex items-center gap-2">
-            <Gift className="text-indigo-400" />
-            Programme Ambassadeur
+      <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/20 rounded-2xl p-6 mt-8 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mr-6 -mt-6 opacity-10 pointer-events-none">
+          <Gift size={120} />
+        </div>
+        <div className="relative z-10 flex-1">
+          <h4 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300 flex items-center gap-2 mb-2">
+            Devenez Ambassadeur
           </h4>
-          <p className="text-slate-300 mt-1 text-sm">
-            Gagnez de l'argent ({commissionType === 'percentage' ? `${commissionValue}%` : `${commissionValue} FCFA`} par billet) en partageant cet événement ! Connectez-vous pour générer votre lien.
+          <p className="text-slate-300 text-sm leading-relaxed max-w-lg">
+            Gagnez <strong>{commissionType === 'percentage' ? `${commissionValue}%` : `${commissionValue} FCFA`}</strong> sur chaque billet vendu via votre propre lien !
           </p>
+        </div>
+        <div className="relative z-10 shrink-0 w-full md:w-auto mt-2 md:mt-0">
+          <a
+            href={`/ambassador/login?redirect=/event/${eventId}`}
+            className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)]"
+          >
+            Rejoindre le programme <ArrowRight size={18} />
+          </a>
         </div>
       </div>
     );

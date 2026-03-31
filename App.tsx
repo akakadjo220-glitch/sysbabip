@@ -12,6 +12,7 @@ import { OrganizerLogin } from './views/OrganizerLogin';
 import { AgentDashboard } from './views/AgentDashboard';
 import { AdminLogin } from './views/AdminLogin';
 import { AgentLogin } from './views/AgentLogin';
+import { AmbassadorLogin } from './views/AmbassadorLogin';
 import { FundraisingPage } from './views/FundraisingPage';
 import { AmbassadorDashboard } from './views/AmbassadorDashboard';
 import { UserRole } from './types';
@@ -77,12 +78,17 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Marketplace />} />
           <Route path="/event/:slug" element={<EventDetails />} />
           <Route path="/tickets" element={<MyTickets />} />
-          <Route path="/ambassador" element={<AmbassadorDashboard />} />
+          <Route path="/ambassador" element={
+            <ProtectedRoute allowedRoles={[UserRole.AMBASSADOR, UserRole.USER]} fallbackPath="/ambassador/login">
+              <AmbassadorDashboard />
+            </ProtectedRoute>
+          } />
           <Route path="/collecte/:slug" element={<FundraisingPage />} />
 
           <Route path="/organizer/login" element={<OrganizerLogin />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/agent/login" element={<AgentLogin />} />
+          <Route path="/ambassador/login" element={<AmbassadorLogin />} />
 
           <Route path="/organizer" element={
             <ProtectedRoute allowedRoles={[UserRole.ORGANIZER, UserRole.ADMIN]} fallbackPath="/organizer/login">

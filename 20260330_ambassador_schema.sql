@@ -88,3 +88,18 @@ CREATE POLICY "Admins can view all withdrawals"
             WHERE profiles.id = auth.uid() AND profiles.role = 'ADMIN'
         )
     );
+
+-- ==========================================
+-- SUPABASE RPC FUNCTIONS
+-- ==========================================
+
+-- Incrémente les statistiques d'un lien ambassadeur lors d'une vente
+CREATE OR REPLACE FUNCTION increment_ambassador_stats(p_code TEXT, p_sales INT, p_earned NUMERIC)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE public.ambassador_links 
+    SET sales = sales + p_sales, 
+        earned_amount = earned_amount + p_earned
+    WHERE code = p_code;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

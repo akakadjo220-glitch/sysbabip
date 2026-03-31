@@ -642,6 +642,16 @@ export const EventDetails: React.FC = () => {
           </div>
         </div>
 
+        {/* Programme Ambassadeur */}
+        {(event as any).ambassador_enabled && (
+          <div className="mt-8 mb-8">
+            <AmbassadorWidget 
+              eventId={event.id}
+              commissionType={(event as any).ambassador_commission_type || 'percentage'}
+              commissionValue={(event as any).ambassador_commission_value || 10}
+            />
+          </div>
+        )}
 
         {/* Programme & Infos (Post-Ticketing Flow - Neuromarketing) */}
         {event.program && event.program.length > 0 && (

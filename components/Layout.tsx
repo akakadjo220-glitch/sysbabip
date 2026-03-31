@@ -10,7 +10,8 @@ import {
   ShoppingBag,
   Layers,
   X,
-  Ticket
+  Ticket,
+  Gift
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -89,6 +90,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             color="bg-emerald-600"
             active={role === UserRole.STAFF}
             onClick={() => handleSwitch('/scanner')}
+          />
+
+          <FabItem
+            label="Ambassadeur"
+            icon={Gift}
+            color="bg-indigo-600"
+            active={role === UserRole.AMBASSADOR}
+            onClick={() => handleSwitch('/ambassador')}
           />
 
           <FabItem

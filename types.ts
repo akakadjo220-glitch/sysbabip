@@ -2,6 +2,7 @@
 export enum UserRole {
   GUEST = 'GUEST',
   USER = 'USER',
+  AMBASSADOR = 'AMBASSADOR',
   ORGANIZER = 'ORGANIZER',
   ADMIN = 'ADMIN',
   STAFF = 'STAFF'
@@ -125,4 +126,26 @@ export interface PromoCode {
   maxUsage: number;
   expiryDate: string;
   status: 'active' | 'expired';
+}
+
+export interface AmbassadorLink {
+  id: string;
+  created_at: string;
+  user_id: string;
+  event_id: string;
+  code: string;
+  clicks: number;
+  sales: number;
+  earned_amount: number;
+}
+
+export interface AmbassadorWithdrawal {
+  id: string;
+  created_at: string;
+  user_id: string;
+  amount: number;
+  payment_method: string;
+  payment_details: string;
+  status: 'pending' | 'approved' | 'rejected' | 'paid';
+  paid_at?: string;
 }
