@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Phone, ArrowRight, Loader2, Calendar, ShieldCheck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { EmailService } from '../services/EmailService';
 import { WhatsAppService } from '../services/WhatsAppService';
+import { getCountryDialCode } from '../utils/countryCodes';
 
 export const OrganizerLogin = () => {
     const [isPhoneMode, setIsPhoneMode] = useState(false);
@@ -15,6 +16,7 @@ export const OrganizerLogin = () => {
     const [password, setPassword] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [countryCode, setCountryCode] = useState('+225');
+    const [dialOptions, setDialOptions] = useState<{code: string, flag: string, rawCode: string}[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -26,6 +28,45 @@ export const OrganizerLogin = () => {
 
     const navigate = useNavigate();
     const { user, handleLogout, setRole } = useAuth();
+
+    const getFlagEmoji = (countryCode: string) => {
+        try {
+            const codePoints = countryCode
+                .toUpperCase()
+                .split('')
+                .map(char => 127397 + char.charCodeAt(0));
+            return String.fromCodePoint(...codePoints);
+        } catch(e) { return countryCode; }
+    };
+
+    useEffect(() => {
+        const loadCountries = async () => {
+            try {
+                const { data } = await supabase.from('supported_countries').select('name, code').eq('is_active', true).order('name');
+                if (data && data.length > 0) {
+                    const options = await Promise.all(data.map(async (c) => {
+                        const dial = await getCountryDialCode(c.code);
+                        return { code: dial || '+225', flag: getFlagEmoji(c.code), rawCode: c.code };
+                    }));
+                    
+                    // Filter out duplicates (if any) and set dialOptions
+                    const uniqueOptions = options.reduce((acc, current) => {
+                        const x = acc.find((item: any) => item.code === current.code);
+                        if (!x) return acc.concat([current]);
+                        return acc;
+                    }, [] as any[]);
+
+                    setDialOptions(uniqueOptions);
+                    if (uniqueOptions.length > 0 && countryCode === '+225') {
+                        // Keep +225 if it's there as default, or select the first available
+                        const hasDefault = uniqueOptions.find((o: any) => o.code === '+225');
+                        if (!hasDefault) setCountryCode(uniqueOptions[0].code);
+                    }
+                }
+            } catch (err) { console.error("Could not fetch countries for dial codes", err); }
+        };
+        loadCountries();
+    }, []);
 
     const getFullPhone = (val: string) => `${countryCode}${val}`;
     const getFormattedIdentifier = () => isPhoneMode ? `${getFullPhone(identifier)}@organizer.babipass.local` : identifier;
@@ -315,17 +356,11 @@ export const OrganizerLogin = () => {
                                                     onChange={(e) => setCountryCode(e.target.value)}
                                                     className="bg-slate-900/60 border border-slate-700 rounded-l-xl pl-3 pr-8 py-3 text-slate-300 focus:outline-none focus:border-orange-500 transition-all border-r-0 cursor-pointer text-sm w-[100px]"
                                                 >
-                                                    <option value="+225">+225 🇨🇮</option>
-                                                    <option value="+33">+33 🇫🇷</option>
-                                                    <option value="+221">+221 🇸🇳</option>
-                                                    <option value="+228">+228 🇹🇬</option>
-                                                    <option value="+226">+226 🇧🇫</option>
-                                                    <option value="+237">+237 🇨🇲</option>
-                                                    <option value="+243">+243 🇨🇩</option>
-                                                    <option value="+223">+223 🇲🇱</option>
-                                                    <option value="+229">+229 🇧🇯</option>
-                                                    <option value="+1">+1 🇺🇸</option>
-                                                    <option value="+44">+44 🇬🇧</option>
+                                                    {dialOptions.length > 0 ? dialOptions.map(opt => (
+                                                        <option key={opt.code + opt.rawCode + '1'} value={opt.code}>{opt.code} {opt.flag}</option>
+                                                    )) : (
+                                                        <option value="+225">+225 🇨🇮</option>
+                                                    )}
                                                 </select>
                                                 <input
                                                     type="tel"
@@ -360,17 +395,11 @@ export const OrganizerLogin = () => {
                                                 onChange={(e) => setCountryCode(e.target.value)}
                                                 className="bg-slate-900/60 border border-slate-700 rounded-l-xl pl-3 pr-8 py-3 text-slate-300 focus:outline-none focus:border-orange-500 transition-all border-r-0 cursor-pointer text-sm w-[100px]"
                                             >
-                                                <option value="+225">+225 🇨🇮</option>
-                                                <option value="+33">+33 🇫🇷</option>
-                                                <option value="+221">+221 🇸🇳</option>
-                                                <option value="+228">+228 🇹🇬</option>
-                                                <option value="+226">+226 🇧🇫</option>
-                                                <option value="+237">+237 🇨🇲</option>
-                                                <option value="+243">+243 🇨🇩</option>
-                                                <option value="+223">+223 🇲🇱</option>
-                                                <option value="+229">+229 🇧🇯</option>
-                                                <option value="+1">+1 🇺🇸</option>
-                                                <option value="+44">+44 🇬🇧</option>
+                                                {dialOptions.length > 0 ? dialOptions.map(opt => (
+                                                    <option key={opt.code + opt.rawCode + '2'} value={opt.code}>{opt.code} {opt.flag}</option>
+                                                )) : (
+                                                    <option value="+225">+225 🇨🇮</option>
+                                                )}
                                             </select>
                                             <input
                                                 type="tel"
