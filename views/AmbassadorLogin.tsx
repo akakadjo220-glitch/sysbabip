@@ -15,10 +15,6 @@ export const AmbassadorLogin = () => {
     // ---- Mode: signup vs login ----
     const [isSignUp, setIsSignUp] = useState(false);
 
-    // ---- Login only: email or phone toggle ----
-    const [isPhoneMode, setIsPhoneMode] = useState(false);
-
-    // ---- Shared fields ----
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
@@ -26,10 +22,6 @@ export const AmbassadorLogin = () => {
     // ---- Sign-up: phone number (obligatoire) ----
     const [signupPhone, setSignupPhone] = useState('');
     const [signupCountryCode, setSignupCountryCode] = useState('+225');
-
-    // ---- Login: phone mode ----
-    const [loginPhone, setLoginPhone] = useState('');
-    const [loginCountryCode, setLoginCountryCode] = useState('+225');
 
     // ---- Country dial codes ----
     const [dialOptions, setDialOptions] = useState<{code: string, flag: string, rawCode: string}[]>([]);
@@ -76,12 +68,7 @@ export const AmbassadorLogin = () => {
         }
     }, [user]);
 
-    // Build full phone for login
-    const getFullLoginPhone = () => {
-        let p = loginPhone.replace(/\D/g, '');
-        if (p.startsWith('0')) p = p.substring(1);
-        return `${loginCountryCode}${p}`;
-    };
+    }, [user]);
 
     // Build full phone for signup (stored on profile)
     const getFullSignupPhone = () => {
@@ -152,27 +139,6 @@ export const AmbassadorLogin = () => {
 
         try {
             let loginEmail = email.trim().toLowerCase();
-
-            if (isPhoneMode) {
-                const fullPhone = getFullLoginPhone();
-                const noPlus = fullPhone.replace('+', '');
-                const raw = loginPhone.trim();
-                const noCountry = raw.replace(/^0+/, '');
-
-                const { data: profiles } = await supabase
-                    .from('profiles')
-                    .select('email, role')
-                    .or(`email.like.%${noPlus}%,email.like.%${raw}%,email.like.%${noCountry}%`)
-                    .limit(1);
-
-                if (!profiles || profiles.length === 0) {
-                    throw new Error("Aucun compte trouvé avec ce numéro.");
-                }
-                if (profiles[0].role === 'ORGANIZER') {
-                    throw new Error("Les comptes Organisateur ne peuvent pas être Ambassadeur.");
-                }
-                loginEmail = profiles[0].email;
-            }
 
             const { data, error: signInError } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
             if (signInError) throw signInError;
@@ -440,70 +406,23 @@ export const AmbassadorLogin = () => {
                     {/* ── LOGIN FORM ── */}
                     {!isSignUp && (
                         <div>
-                            {/* Email / Phone toggle for LOGIN */}
-                            <div className="bg-slate-900/50 p-1.5 rounded-xl flex mb-6 border border-white/5">
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsPhoneMode(false); setError(''); }}
-                                    className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${!isPhoneMode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    Email
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsPhoneMode(true); setError(''); }}
-                                    className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${isPhoneMode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    Téléphone
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleLogin} className="space-y-5 animate-in fade-in">
                                 {/* Email field */}
-                                {!isPhoneMode && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-300 mb-1.5">Adresse Email</label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                                <Mail className="h-5 w-5 text-slate-500" />
-                                            </div>
-                                            <input
-                                                type="email"
-                                                required
-                                                value={email}
-                                                onChange={e => setEmail(e.target.value)}
-                                                className="w-full pl-11 bg-slate-900/50 border border-white/10 rounded-xl h-12 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-600"
-                                                placeholder="vous@email.com"
-                                            />
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-1.5">Adresse Email</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                            <Mail className="h-5 w-5 text-slate-500" />
                                         </div>
+                                        <input
+                                            type="email"
+                                            required
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            className="w-full pl-11 bg-slate-900/50 border border-white/10 rounded-xl h-12 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-600"
+                                            placeholder="vous@email.com"
+                                        />
                                     </div>
-                                )}
-
-                                {/* Phone field (login only) */}
-                                {isPhoneMode && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-300 mb-1.5">Numéro de téléphone</label>
-                                        <div className="flex w-full h-12">
-                                            <select
-                                                value={loginCountryCode}
-                                                onChange={e => setLoginCountryCode(e.target.value)}
-                                                className="bg-slate-900/60 border border-slate-700 rounded-l-xl pl-3 pr-2 text-slate-300 focus:outline-none focus:border-indigo-500 border-r-0 cursor-pointer text-sm w-[110px]"
-                                            >
-                                                {dialOptions.length > 0 ? dialOptions.map(opt => (
-                                                    <option key={opt.code + opt.rawCode} value={opt.code}>{opt.flag} {opt.code}</option>
-                                                )) : <option value="+225">🇨🇮 +225</option>}
-                                            </select>
-                                            <input
-                                                type="tel"
-                                                required
-                                                value={loginPhone}
-                                                onChange={e => setLoginPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                                                className="flex-1 bg-slate-900/50 border border-white/10 border-l-0 rounded-r-xl px-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-600 font-mono tracking-wider"
-                                                placeholder="0708090000"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
+                                </div>
 
                                 {/* Password */}
                                 <div>
