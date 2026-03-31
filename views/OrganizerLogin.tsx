@@ -68,7 +68,7 @@ export const OrganizerLogin = () => {
         loadCountries();
     }, []);
 
-    const getFullPhone = (val: string) => `${countryCode}${val}`;
+    const getFullPhone = (val: string) => `${countryCode}${val.replace(/^0+/, '')}`; // Strip leading 0 when combining with country code
     const getFormattedIdentifier = () => isPhoneMode ? `${getFullPhone(identifier)}@organizer.babipass.local` : identifier;
 
     const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -365,8 +365,8 @@ export const OrganizerLogin = () => {
                                                 <input
                                                     type="tel"
                                                     value={identifier}
-                                                    onChange={(e) => setIdentifier(e.target.value.replace(/^0+/, ''))} // Auto-enlever 0 initial
-                                                    placeholder="01 23 45 67"
+                                                    onChange={(e) => setIdentifier(e.target.value)}
+                                                    placeholder="0777 00 00 00"
                                                     className="flex-1 w-full bg-slate-900/60 border border-slate-700 rounded-r-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
                                                     required
                                                 />
@@ -404,8 +404,8 @@ export const OrganizerLogin = () => {
                                             <input
                                                 type="tel"
                                                 value={phoneNumber}
-                                                onChange={(e) => setPhoneNumber(e.target.value.replace(/^0+/, ''))} // Auto-enlever 0 initial
-                                                placeholder="01 23 45 67"
+                                                onChange={(e) => setPhoneNumber(e.target.value)}
+                                                placeholder="0777 00 00 00"
                                                 className="flex-1 w-full bg-slate-900/60 border border-slate-700 rounded-r-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
                                                 required
                                             />
