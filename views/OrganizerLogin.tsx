@@ -105,10 +105,16 @@ export const OrganizerLogin = () => {
 
         // 3. Envoi WhatsApp en parallèle si un numéro est disponible
         if (targetPhone) {
+            const cleanTarget = targetPhone.replace(/\s/g, ''); // Enlève les espaces éventuels
+            console.log(`[WA OTP] Tentative d'envoi vers : ${cleanTarget}`);
             const waMessage = `🔐 *Babipass - Code de vérification*\n\nVotre code OTP est : *${code}*\n\nCe code expire dans 10 minutes. Ne le partagez jamais.`;
-            WhatsAppService.sendMessage(targetPhone, waMessage).catch(err =>
-                console.warn('[WA OTP] Envoi WhatsApp échoué (non bloquant):', err)
-            );
+            const waResult = await WhatsAppService.sendMessage(cleanTarget, waMessage).catch(err => {
+                console.warn('[WA OTP] Envoi WhatsApp échoué (non bloquant):', err);
+                return { success: false, error: err.message };
+            });
+            console.log('[WA OTP] Résultat:', waResult);
+        } else {
+            console.warn('[WA OTP] Aucun numéro fourni, envoi WhatsApp ignoré.');
         }
 
         return code;
