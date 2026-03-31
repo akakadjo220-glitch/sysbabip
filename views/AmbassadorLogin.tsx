@@ -68,8 +68,6 @@ export const AmbassadorLogin = () => {
         }
     }, [user]);
 
-    }, [user]);
-
     // Build full phone for signup (stored on profile)
     const getFullSignupPhone = () => {
         let p = signupPhone.replace(/\D/g, '');
@@ -406,6 +404,7 @@ export const AmbassadorLogin = () => {
                     {/* ── LOGIN FORM ── */}
                     {!isSignUp && (
                         <div>
+                            <form onSubmit={handleLogin} className="space-y-5 animate-in fade-in">
                                 {/* Email field */}
                                 <div>
                                     <label className="block text-sm font-bold text-slate-300 mb-1.5">Adresse Email</label>
