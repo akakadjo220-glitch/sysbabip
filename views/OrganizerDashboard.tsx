@@ -3020,6 +3020,7 @@ const PhysicalTicketsView = ({ events, transactions, addToast }: any) => {
             email: user?.email || 'organizer@afritix.com',
             amount: Math.round(amountToPay * 100),
             currency: 'XOF',
+            channels: ['card', 'mobile_money'],
             ref: 'comm_phy_' + Math.floor((Math.random() * 1000000000) + 1),
             callback: function (res: any) {
               reference = res.reference;

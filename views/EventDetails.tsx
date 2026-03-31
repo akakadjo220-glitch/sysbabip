@@ -1380,6 +1380,7 @@ const CheckoutModal: React.FC<{
         email: contactValue || 'user@afritix.com',
         amount: Math.round(amountToPay * 100), // Paystack attend des centimes (entier)
         currency: 'XOF',
+        channels: ['card', 'mobile_money'],
         ref: 'afritix_' + Math.floor((Math.random() * 1000000000) + 1),
         callback: function (response: any) {
           if (response.status === 'success') {
@@ -1728,8 +1729,8 @@ const CheckoutModal: React.FC<{
                           <CreditCard size={20} />
                         </div>
                         <div className="text-left">
-                          <p className="text-white font-bold group-hover:text-indigo-300 transition-colors">Carte Bancaire (Paystack)</p>
-                          <p className="text-xs text-slate-500">Visa, Mastercard</p>
+                          <p className="text-white font-bold group-hover:text-indigo-300 transition-colors">Carte / Mobile Money (Paystack)</p>
+                          <p className="text-xs text-slate-500">Visa, Mastercard, Mobile Money</p>
                         </div>
                       </div>
                       <div className="w-5 h-5 rounded-full border-2 border-slate-600 group-hover:border-indigo-500"></div>
