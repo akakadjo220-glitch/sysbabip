@@ -68,7 +68,7 @@ export const OrganizerLogin = () => {
         loadCountries();
     }, []);
 
-    const getFullPhone = (val: string) => `${countryCode}${val.replace(/^0+/, '')}`; // Strip leading 0 when combining with country code
+    const getFullPhone = (val: string) => `${countryCode}${val}`; // Pas de suppression du 0 : +2250544246972 est le bon format CI
     const getFormattedIdentifier = () => isPhoneMode ? `${getFullPhone(identifier)}@organizer.babipass.local` : identifier;
 
     const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
