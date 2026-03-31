@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Gift, Wallet, TrendingUp, History, Copy, CheckCircle, CreditCard, Loader2 } from 'lucide-react';
+import { Gift, Wallet, TrendingUp, History, Copy, CheckCircle, CreditCard, Loader2, LogOut } from 'lucide-react';
 import { formatCurrency } from '../constants';
 import { UserRole } from '../types';
 
@@ -124,6 +124,18 @@ export const AmbassadorDashboard = () => {
           </h1>
           <p className="text-slate-400 mt-2">Gérez vos liens de parrainage et retirez vos gains.</p>
         </div>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            localStorage.removeItem('afritix_user_role');
+            navigate('/');
+            window.location.reload();
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 hover:bg-red-500/20 text-slate-300 hover:text-red-400 rounded-xl transition-colors border border-slate-700/50 hover:border-red-500/30 font-medium"
+        >
+          <LogOut size={18} />
+          <span>Se déconnecter</span>
+        </button>
       </div>
 
       {/* --- STAT CARD FINANCIER --- */}
