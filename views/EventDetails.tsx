@@ -161,20 +161,9 @@ export const EventDetails: React.FC = () => {
         // Store in session storage for the checkout process
         sessionStorage.setItem('afritix_ambassador_ref', refCode);
 
-        // Record a click using Supabase RPC if we had it, or directly by reading/updating
+        // Record a click using Supabase RPC to bypass RLS issues cleanly
         try {
-          const { data: linkInfo } = await supabase
-            .from('ambassador_links')
-            .select('id, clicks')
-            .eq('code', refCode)
-            .single();
-
-          if (linkInfo) {
-            await supabase
-              .from('ambassador_links')
-              .update({ clicks: (linkInfo.clicks || 0) + 1 })
-              .eq('id', linkInfo.id);
-          }
+          await supabase.rpc('increment_ambassador_clicks', { p_code: refCode });
         } catch (e) {
           console.error("Erreur lors de l'enregistrement du clic", e);
         }
