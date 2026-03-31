@@ -25,6 +25,7 @@ export const OrganizerLogin = () => {
     const [otpStep, setOtpStep] = useState(false);
     const [otpCode, setOtpCode] = useState('');
     const [resetStep, setResetStep] = useState(false);
+    const [resolvedResetEmail, setResolvedResetEmail] = useState(''); // Email réel trouvé en base lors du reset
 
     const navigate = useNavigate();
     const { user, handleLogout, setRole } = useAuth();
@@ -196,8 +197,36 @@ export const OrganizerLogin = () => {
         setSuccessMsg('');
 
         try {
-            const formattedIdentifier = getFormattedIdentifier();
-            // Passe le numéro de téléphone pour l'envoi WA si mode téléphone
+            let formattedIdentifier: string;
+
+            if (isPhoneMode) {
+                // Chercher le vrai email en base en testant plusieurs formats du numéro
+                const rawInput = identifier.trim();
+                const fullPhone = getFullPhone(rawInput); // ex: +2250544246972
+                const noPlus = fullPhone.replace('+', '');   // ex: 2250544246972
+                const noCountry = rawInput.replace(/^0+/, ''); // ex: 544246972
+
+                // Chercher profile avec email contenant le numéro (sous n'importe quel format)
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('email')
+                    .or(`email.like.%${noPlus}%,email.like.%${rawInput}%,email.like.%${noCountry}%`)
+                    .ilike('email', '%organizer.babipass.local%')
+                    .limit(5);
+
+                if (!profiles || profiles.length === 0) {
+                    throw new Error("Aucun compte trouvé avec ce numéro. Vérifiez votre numéro et l'indicatif sélectionné.");
+                }
+
+                // Prendre l'email le plus proche
+                formattedIdentifier = profiles[0].email;
+                setResolvedResetEmail(profiles[0].email); // Mémoriser pour l'étape de confirmation
+                console.log('[Reset] Compte trouvé :', formattedIdentifier);
+            } else {
+                formattedIdentifier = identifier;
+            }
+
+            // Envoyer le code OTP (WhatsApp + Email)
             await requestVerification(formattedIdentifier, isPhoneMode ? getFullPhone(identifier) : undefined);
             setResetStep(true);
             setSuccessMsg("Code de réinitialisation envoyé ! Vérifiez vos messages WhatsApp ou email.");
@@ -214,7 +243,9 @@ export const OrganizerLogin = () => {
         setError('');
 
         try {
-            const formattedIdentifier = getFormattedIdentifier();
+            // Utiliser l'email réel résolu lors de la demande de reset (évite les incohérences de format)
+            const formattedIdentifier = resolvedResetEmail || getFormattedIdentifier();
+            console.log('[ResetConfirm] Email utilisé:', formattedIdentifier);
 
             const res = await fetch('https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/auth/reset-password', {
                 method: 'POST',
