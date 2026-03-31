@@ -195,7 +195,8 @@ export const OrganizerDashboard: React.FC = () => {
           totalGross: globalStats.totalGross,
           totalNet: globalStats.totalNet,
           totalCommission: globalStats.totalCommission,
-          availableBalance: globalStats.availableBalance
+          availableBalance: globalStats.availableBalance,
+          totalAmbassador: globalStats.totalAmbassador ?? 0
         });
       }
 
@@ -1053,6 +1054,7 @@ const SalesView = ({ stats, eventSales }: any) => {
 
   const totalRevenuBrut = Number(stats?.totalGross || 0);
   const totalCommission = Number(stats?.totalCommission || 0);
+  const totalAmbassador = Number(stats?.totalAmbassador || 0);
   const totalNetAReverser = Number(stats?.totalNet || 0);
 
   const eventSalesList = (eventSales || []).filter((e: any) => Number(e.gross) > 0).map((e: any) => ({
@@ -1072,10 +1074,25 @@ const SalesView = ({ stats, eventSales }: any) => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Revenu Brut" value={formatCurrency(totalRevenuBrut)} trend="Toutes ventes" colorClass="from-slate-700 to-slate-600" />
-        <StatCard title="Commission Babipass" value={formatCurrency(totalCommission)} trend="Commission prélevée" colorClass="from-rose-500 to-rose-600" />
-        <StatCard title="Total à vous reverser" value={formatCurrency(totalNetAReverser)} trend="Votre solde" colorClass="from-emerald-500 to-emerald-600" />
-        <StatCard title="Déjà Transféré" value={formatCurrency(0)} trend="Reversements terminés" colorClass="from-blue-500 to-blue-600" />
+        <StatCard title="Commission Babipass" value={formatCurrency(totalCommission)} trend="Frais plateforme" colorClass="from-rose-500 to-rose-600" />
+        <StatCard title="Commissions Ambassadeurs" value={formatCurrency(totalAmbassador)} trend={totalAmbassador > 0 ? 'Déduit de votre net' : 'Aucune vente ambassadeur'} colorClass="from-indigo-500 to-purple-600" />
+        <StatCard title="Net à reverser" value={formatCurrency(totalNetAReverser)} trend="Après toutes déductions" colorClass="from-emerald-500 to-emerald-600" />
       </div>
+
+      {totalAmbassador > 0 && (
+        <div className="bg-indigo-900/30 border border-indigo-500/30 rounded-2xl px-6 py-4 flex items-start gap-4 shadow-lg">
+          <div className="bg-indigo-500/20 p-2.5 rounded-xl border border-indigo-500/30 shrink-0 mt-0.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+          </div>
+          <div>
+            <p className="text-indigo-300 font-bold text-sm">Programme Ambassadeur actif</p>
+            <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+              <span className="text-white font-semibold">{formatCurrency(totalAmbassador)}</span> de commissions ont été versées à vos ambassadeurs depuis les ventes de tickets.
+              Ces montants sont déjà déduits de votre revenu net ({formatCurrency(totalNetAReverser)}).
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white/5 border border-white/10 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl relative z-20">
         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-slate-900/50">
@@ -1457,8 +1474,9 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
 
         <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
           <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent opacity-50 transition-opacity group-hover:opacity-100" />
-          <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider relative z-10">Commission Babipass</h4>
-          <p className="text-4xl font-extrabold text-rose-400 mt-2 relative z-10">-{formatCurrency(totalGross - totalNet)}</p>
+          <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider relative z-10">Frais plateforme</h4>
+          <p className="text-4xl font-extrabold text-rose-400 mt-2 relative z-10">-{formatCurrency(Number(stats?.totalCommission || 0))}</p>
+          <p className="text-xs text-slate-500 mt-1 relative z-10">Commission Babipass</p>
           <div className="absolute top-6 right-6 p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
             <Activity className="text-rose-400" size={24} />
           </div>
@@ -1468,6 +1486,11 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-50 transition-opacity group-hover:opacity-100" />
           <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider relative z-10">Revenu Net</h4>
           <p className="text-4xl font-extrabold text-emerald-400 mt-2 relative z-10">{formatCurrency(totalNet)}</p>
+          {Number(stats?.totalAmbassador || 0) > 0 && (
+            <p className="text-xs text-indigo-400 mt-1 relative z-10 flex items-center gap-1">
+              <span>dont -{formatCurrency(Number(stats?.totalAmbassador || 0))} ambassadeurs déduits</span>
+            </p>
+          )}
           <div className="absolute top-6 right-6 p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
             <Wallet className="text-emerald-400" size={24} />
           </div>
