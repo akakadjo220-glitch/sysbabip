@@ -86,7 +86,7 @@ export const OrganizerLogin = () => {
                 .eq('otp_code', otpCode)
                 .maybeSingle();
 
-            if (!otpData && otpCode !== '123456') { // fallback de démo
+            if (!otpData) {
                 throw new Error("Code de vérification invalide ou expiré.");
             }
 

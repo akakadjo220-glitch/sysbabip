@@ -111,7 +111,17 @@ export const TicketScanner: React.FC = () => {
     if (!isOnlineRef.current) return;
     setSyncing(true);
     try {
-      const { data } = await supabase.from('tickets').select('id, status').in('status', ['valid', 'used', 'revoked']).limit(5000);
+      const stored = localStorage.getItem('afritix_current_agent');
+      const agent = stored ? JSON.parse(stored) : null;
+
+      let query = supabase.from('tickets').select('id, status').in('status', ['valid', 'used', 'revoked']);
+      
+      // Filtrer par événement spécifique si l'agent est assigné à un événement
+      if (agent?.event_id) {
+        query = query.eq('event_id', agent.event_id);
+      }
+      
+      const { data } = await query.limit(5000);
       if (data) {
         const cache: Record<string, TicketCacheEntry> = {};
         const now = Date.now();

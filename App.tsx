@@ -13,6 +13,7 @@ import { AgentDashboard } from './views/AgentDashboard';
 import { AdminLogin } from './views/AdminLogin';
 import { AgentLogin } from './views/AgentLogin';
 import { FundraisingPage } from './views/FundraisingPage';
+import { AmbassadorDashboard } from './views/AmbassadorDashboard';
 import { UserRole } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PublicChatWidget } from './components/PublicChatWidget';
@@ -76,6 +77,7 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Marketplace />} />
           <Route path="/event/:slug" element={<EventDetails />} />
           <Route path="/tickets" element={<MyTickets />} />
+          <Route path="/ambassador" element={<AmbassadorDashboard />} />
           <Route path="/collecte/:slug" element={<FundraisingPage />} />
 
           <Route path="/organizer/login" element={<OrganizerLogin />} />

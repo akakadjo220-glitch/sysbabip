@@ -66,8 +66,8 @@ export const WhatsAppService = {
                         'Authorization': `Bearer ${waConfig.token}`
                     },
                     body: JSON.stringify({
-                        number: cleanPhone,
-                        message: message,
+                        to: cleanPhone,
+                        text: message,
                         type: 'text'
                     })
                 });
@@ -143,8 +143,8 @@ export const WhatsAppService = {
                         'Authorization': `Bearer ${waConfig.token}`
                     },
                     body: JSON.stringify({
-                        number: cleanPhone,
-                        message: message,
+                        to: cleanPhone,
+                        text: message,
                         media_url: mediaUrl,
                         type: 'media'
                     })

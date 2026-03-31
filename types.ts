@@ -51,6 +51,9 @@ export interface Event {
   commission_rate?: number;
   physical_commission_rate?: number;
   advance_rate?: number;
+  ambassador_enabled?: boolean;
+  ambassador_commission_type?: 'percentage' | 'fixed';
+  ambassador_commission_value?: number;
 }
 
 export interface TicketType {
@@ -72,6 +75,8 @@ export interface Transaction {
   method: 'WAVE' | 'OM' | 'MTN' | 'CB' | 'MOOV';
   status: 'completed' | 'pending' | 'failed' | 'valid';
   refund_status?: 'none' | 'pending' | 'refunded' | 'failed';
+  referralCode?: string;
+  ambassadorCommission?: number;
 }
 
 export interface AnalyticData {

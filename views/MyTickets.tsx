@@ -9,9 +9,11 @@ import QRCode from 'qrcode';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
+import { useNavigate } from 'react-router-dom';
+
 export const MyTickets: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'tickets' | 'affiliate'>('tickets');
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
@@ -48,22 +50,20 @@ export const MyTickets: React.FC = () => {
             Billets stockés localement et chiffrés
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-400">
-          <WifiOff size={12} /> Accessible hors-ligne
+        <div className="flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-400">
+            <WifiOff size={12} /> Accessible hors-ligne
+          </div>
+          <button
+            onClick={() => navigate('/ambassador')}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500 hover:text-white transition-colors text-xs font-bold"
+          >
+            <Share2 size={12} /> Espace Ambassadeur
+          </button>
         </div>
       </div>
 
-      <div className="flex overflow-x-auto space-x-2 bg-slate-900/40 p-1.5 rounded-2xl border border-white/10 w-full md:w-max no-scrollbar relative z-20 shadow-2xl backdrop-blur-lg">
-        <button onClick={() => setActiveTab('tickets')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'tickets' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg border border-orange-400/50' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-          <Ticket size={16} /> Mes Billets
-        </button>
-        <button onClick={() => setActiveTab('affiliate')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'affiliate' ? 'bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-lg border border-fuchsia-500/50' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-          <Users size={16} /> Gagner de l'argent
-        </button>
-      </div>
-
-      {activeTab === 'tickets' ? (
-        loading ? (
+      {loading ? (
           <div className="text-center py-20">
             <RefreshCw className="animate-spin text-orange-500 mx-auto" size={32} />
             <p className="text-slate-500 mt-4">Déchiffrement de votre portefeuille...</p>
@@ -104,9 +104,7 @@ export const MyTickets: React.FC = () => {
             </div>
           </div>
         )
-      ) : (
-        <AffiliateView user={user} />
-      )}
+      }
 
       {showRecoveryModal && (
         <RecoveryModal
@@ -731,161 +729,6 @@ const ResellModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () =>
   );
 };
 
-const AffiliateView = ({ user }: any) => {
-  const [links, setLinks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState<any[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState('');
-
-  useEffect(() => {
-    fetchData();
-  }, [user]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    // Fetch user's affiliate links
-    if (user?.email) {
-      // Pour une vraie app, on utiliserait le user.id Supabase.
-      // Ici l'utilisateur simulé sera "random user" ou le user_id de la db.
-      const { data: linksData } = await supabase.from('affiliate_links').select('*, events(title, slug)').order('created_at', { ascending: false });
-      if (linksData) setLinks(linksData);
-    }
-
-    // Fetch all active events to allow generating link for them
-    const { data: eventsData } = await supabase.from('events').select('id, title').eq('status', 'published');
-    if (eventsData) {
-      setEvents(eventsData);
-      if (eventsData.length > 0) setSelectedEventId(eventsData[0].id);
-    }
-
-    setLoading(false);
-  };
-
-  const handleGenerateLink = async () => {
-    if (!selectedEventId || !user) return;
-
-    // Check real Supabase UID if needed, but for demo we might need to fetch a valid profile ID:
-    const { data: defaultUser } = await supabase.from('profiles').select('id').limit(1).single();
-    if (!defaultUser) { alert("Erreur d'authentification simulée"); return; }
-
-    const uniqueCode = 'AMB' + Math.random().toString(36).substring(2, 8).toUpperCase();
-
-    const { error } = await supabase.from('affiliate_links').insert([{
-      user_id: defaultUser.id,
-      event_id: selectedEventId,
-      unique_code: uniqueCode
-    }]);
-
-    if (!error) {
-      fetchData();
-    } else {
-      console.error(error);
-      alert("Erreur lors de la création du lien.");
-    }
-  };
-
-  if (loading) return <div className="py-20 text-center"><RefreshCw className="animate-spin text-fuchsia-500 mx-auto" /></div>;
-
-  return (
-    <div className="animate-in fade-in duration-500 space-y-6">
-
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-fuchsia-900/60 to-purple-900/60 border border-fuchsia-500/20 p-8 rounded-3xl backdrop-blur-xl shadow-2xl relative overflow-hidden">
-        <div className="absolute -right-10 -top-10 w-40 h-40 bg-fuchsia-500/20 blur-3xl rounded-full pointer-events-none" />
-        <div className="relative z-10 md:flex md:items-center md:justify-between">
-          <div className="max-w-xl">
-            <h3 className="text-2xl font-extrabold text-white flex items-center gap-3 mb-2">
-              <Share2 className="text-fuchsia-400" size={28} /> Programme Ambassadeur
-            </h3>
-            <p className="text-slate-300 text-sm">
-              Gagnez des commissions (Mobile Money ou gratuités) simplement en invitant vos amis aux événements ! Générez un lien unique, partagez-le sur WhatsApp, et soyez rémunéré pour chaque billet vendu grâce à vous.
-            </p>
-          </div>
-          <div className="mt-6 md:mt-0 bg-slate-900/50 p-4 rounded-2xl border border-white/10 flex flex-col items-center justify-center min-w-[200px]">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Gagné</span>
-            <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 to-purple-400">
-              {links.reduce((sum, l) => sum + Number(l.commission_earned), 0)} FCFA
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Generation tool */}
-      <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/10 shadow-xl flex flex-col md:flex-row gap-4 items-end">
-        <div className="flex-1 w-full">
-          <label className="block text-sm font-medium text-slate-300 mb-2">Choisissez l'événement à promouvoir</label>
-          <select
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            className="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 text-white appearance-none outline-none focus:ring-2 focus:ring-fuchsia-500"
-          >
-            {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
-          </select>
-        </div>
-        <button
-          onClick={handleGenerateLink}
-          className="w-full md:w-auto px-6 py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors whitespace-nowrap"
-        >
-          <Plus size={18} /> Générer mon lien
-        </button>
-      </div>
-
-      {/* Limits list */}
-      <div className="space-y-4">
-        <h4 className="text-lg font-bold text-white mb-2">Mes Liens d'Affiliation</h4>
-        {links.length === 0 ? (
-          <p className="text-slate-500 italic bg-slate-900/30 p-6 rounded-2xl border border-white/5 text-center">Vous n'avez généré aucun lien d'affiliation pour le moment.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {links.map((link) => {
-              const shareUrl = `${window.location.origin}/event/${link.events?.slug || link.event_id}?ref=${link.unique_code}`;
-              return (
-                <div key={link.id} className="bg-slate-800/80 p-5 rounded-2xl border border-white/10 flex flex-col justify-between">
-                  <div>
-                    <span className="bg-fuchsia-500/20 text-fuchsia-400 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">
-                      {link.events?.title || 'Événement inconnu'}
-                    </span>
-                    <div className="mt-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-700">
-                      <span className="font-mono text-slate-300 text-sm truncate mr-4">
-                        {shareUrl}
-                      </span>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(shareUrl);
-                          alert("Lien copié dans le presse-papier !");
-                        }}
-                        className="text-fuchsia-400 hover:text-fuchsia-300 shrink-0"
-                        title="Copier le lien"
-                      >
-                        <Copy size={18} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 mt-6">
-                    <div className="bg-slate-900/50 p-2 rounded-xl text-center border border-white/5">
-                      <p className="text-[10px] text-slate-400 uppercase font-bold">Clics</p>
-                      <p className="text-white font-bold">{link.clicks}</p>
-                    </div>
-                    <div className="bg-emerald-900/30 p-2 rounded-xl text-center border border-emerald-500/20">
-                      <p className="text-[10px] text-emerald-400 uppercase font-bold">Ventes</p>
-                      <p className="text-emerald-400 font-bold">{link.sales}</p>
-                    </div>
-                    <div className="bg-fuchsia-900/30 p-2 rounded-xl text-center border border-fuchsia-500/20">
-                      <p className="text-[10px] text-fuchsia-400 uppercase font-bold">Gains (FCFA)</p>
-                      <p className="text-fuchsia-400 font-bold">{link.commission_earned}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-};
 
 // Modal de Récupération de Billets (Multi-appareil)
 const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = ({ onClose, onSuccess }) => {

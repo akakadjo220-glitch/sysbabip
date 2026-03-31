@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download } from 'lucide-react';
+import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift } from 'lucide-react';
 import { formatCurrency, EXCHANGE_RATES } from '../constants';
 import { UserRole, UserProfile, Event } from '../types';
 import { supabase } from '../supabaseClient';
@@ -890,6 +890,113 @@ const CashierManager = () => {
   );
 };
 
+const AmbassadorWithdrawalsManager = ({ addToast }: { addToast: (msg: string, type: 'success' | 'error') => void }) => {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRequests = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('ambassador_withdrawals').select(`
+      *,
+      profiles:user_id (
+        name,
+        email
+      )
+    `).order('created_at', { ascending: false });
+
+    setRequests(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const handleAction = async (id: string, action: string) => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('ambassador_withdrawals').update({ status: action }).eq('id', id);
+
+      if (error) {
+        addToast(`Erreur: ${error.message}`, 'error');
+      } else {
+        addToast(`Statut mis à jour (${action}) !`, 'success');
+        await fetchRequests();
+      }
+    } catch (err: any) {
+      addToast(`Erreur fatale: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="py-8 text-center"><Loader2 className="animate-spin text-indigo-500 mx-auto" /></div>;
+  if (requests.length === 0) return <p className="text-slate-400 text-sm">Aucune demande de retrait ambassadeur.</p>;
+
+  return (
+    <div className="overflow-x-auto relative">
+      <table className="w-full text-left text-sm whitespace-nowrap">
+        <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
+          <tr>
+            <th className="px-6 py-4">Date</th>
+            <th className="px-6 py-4">Ambassadeur</th>
+            <th className="px-6 py-4">Détails (Mobile Money)</th>
+            <th className="px-6 py-4">Montant</th>
+            <th className="px-6 py-4">Statut</th>
+            <th className="px-6 py-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/5">
+          {requests.map((r, i) => (
+            <tr key={r.id || i} className="hover:bg-white/5 transition-colors">
+              <td className="px-6 py-4 text-slate-300">{new Date(r.created_at).toLocaleDateString('fr-FR')}</td>
+              <td className="px-6 py-4 text-white font-medium">
+                {r.profiles?.name || 'Inconnu'}
+                <div className="text-xs text-slate-500">{r.profiles?.email}</div>
+              </td>
+              <td className="px-6 py-4">
+                <span className="font-bold text-slate-300">{r.payment_method}</span>
+                <div className="text-xs text-slate-500 font-mono mt-1">{r.payment_details}</div>
+              </td>
+              <td className="px-6 py-4 text-white font-bold">{formatCurrency(r.amount)}</td>
+              <td className="px-6 py-4">
+                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${r.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' :
+                        r.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                          'bg-amber-500/20 text-amber-400'
+                  }`}>
+                  {r.status === 'paid' ? 'Payé' : r.status === 'rejected' ? 'Rejeté' : 'En Attente'}
+                </span>
+              </td>
+              <td className="px-6 py-4 text-right">
+                <div className="flex justify-end items-center gap-2">
+                  {r.status === 'pending' && (
+                    <>
+                      <button
+                        onClick={() => handleAction(r.id, 'paid')}
+                        className="p-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-lg transition-colors"
+                        title="Marquer comme payé"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleAction(r.id, 'rejected')}
+                        className="p-2 bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white rounded-lg transition-colors"
+                        title="Rejeter"
+                      >
+                        <X size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const FinanceTab = ({ stats, addToast }: any) => {
   const [trxPage, setTrxPage] = useState(1);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -949,6 +1056,16 @@ const FinanceTab = ({ stats, addToast }: any) => {
         </div>
         <div className="p-6">
           <CashAdvanceManager addToast={addToast} />
+        </div>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl relative z-20">
+        <div className="p-6 border-b border-white/10 flex items-center gap-3">
+          <Gift className="text-indigo-400" size={24} />
+          <h3 className="text-lg font-bold text-white">Retraits Ambassadeurs</h3>
+        </div>
+        <div className="p-6">
+          <AmbassadorWithdrawalsManager addToast={addToast} />
         </div>
       </div>
 

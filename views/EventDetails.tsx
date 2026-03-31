@@ -16,6 +16,7 @@ import { IntouchService } from '../services/IntouchService';
 import { PaydunyaService } from '../services/PaydunyaService';
 import { signTicket } from '../utils/crypto';
 import { LazyVideo } from '../components/LazyVideo';
+import { AmbassadorWidget } from '../components/AmbassadorWidget';
 import { SEO } from '../components/SEO';
 import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -150,29 +151,28 @@ export const EventDetails: React.FC = () => {
     fetchResaleListings();
   }, [event]);
 
-  // Handle Affiliate Tracking
+  // Handle Ambassador Tracking
   useEffect(() => {
-    const handleAffiliateRef = async () => {
+    const handleAmbassadorRef = async () => {
       const searchParams = new URLSearchParams(location.search);
       const refCode = searchParams.get('ref');
 
-      if (refCode) {
+      if (refCode && refCode.startsWith('AMB-')) {
         // Store in session storage for the checkout process
-        sessionStorage.setItem('afriTix_affiliate_ref', refCode);
+        sessionStorage.setItem('afritix_ambassador_ref', refCode);
 
         // Record a click using Supabase RPC if we had it, or directly by reading/updating
         try {
-          // Since we might not have the RPC available, we do a simple select/update
           const { data: linkInfo } = await supabase
-            .from('affiliate_links')
+            .from('ambassador_links')
             .select('id, clicks')
-            .eq('unique_code', refCode)
+            .eq('code', refCode)
             .single();
 
           if (linkInfo) {
             await supabase
-              .from('affiliate_links')
-              .update({ clicks: linkInfo.clicks + 1 })
+              .from('ambassador_links')
+              .update({ clicks: (linkInfo.clicks || 0) + 1 })
               .eq('id', linkInfo.id);
           }
         } catch (e) {
@@ -181,7 +181,7 @@ export const EventDetails: React.FC = () => {
       }
     };
 
-    handleAffiliateRef();
+    handleAmbassadorRef();
   }, [location.search]);
 
   // Anti-Fraud State
@@ -500,6 +500,14 @@ export const EventDetails: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {event.ambassador_enabled && (
+                <AmbassadorWidget
+                  eventId={event.id}
+                  commissionType={event.ambassador_commission_type || 'percentage'}
+                  commissionValue={event.ambassador_commission_value || 0}
+                />
+              )}
             </div>
           </div>
 
@@ -1242,6 +1250,17 @@ const CheckoutModal: React.FC<{
       // --- SLOW PATH: Network Calls in Background (Fire and Forget) ---
       (async () => {
         try {
+          // Ambassador Calculation
+          const ambassadorRef = sessionStorage.getItem('afritix_ambassador_ref');
+          let ambCommission = 0;
+          if (ambassadorRef && eventData.ambassador_enabled) {
+              if (eventData.ambassador_commission_type === 'percentage') {
+                  ambCommission = Math.round((amountToPay * (eventData.ambassador_commission_value || 0)) / 100);
+              } else {
+                  ambCommission = eventData.ambassador_commission_value || 0;
+              }
+          }
+
           const { error: trxError, data: trxData } = await supabase.from('transactions').insert([{
             event_id: eventData.id,
             amount: amountToPay,
@@ -1253,7 +1272,9 @@ const CheckoutModal: React.FC<{
             guest_email: contactMethod === 'email' ? contactValue : null,
             buyer_phone: contactMethod === 'wa' ? contactValue : null,
             guest_name: participantName || 'Guest User',
-            buyer_location: buyerLocation
+            buyer_location: buyerLocation,
+            referral_code: ambassadorRef,
+            ambassador_commission: ambCommission
           }]).select().single();
           if (trxError) console.error("Supabase Transaction Error:", trxError);
 
@@ -1279,18 +1300,15 @@ const CheckoutModal: React.FC<{
             if (qty > 0) await supabase.rpc('increment_ticket_type_sold', { tt_id: tId, amount: qty });
           }
 
-          // C. Affiliation Update
-          const affiliateRef = sessionStorage.getItem('afriTix_affiliate_ref');
-          if (affiliateRef) {
-            const affiliateConfig = await getPlatformSetting<{ type: string; value: number }>('affiliate_config');
-            let commission = (amountToPay * 10) / 100;
-            if (affiliateConfig) commission = affiliateConfig.type === 'percentage' ? (amountToPay * affiliateConfig.value) / 100 : affiliateConfig.value;
-            const { data: linkInfo } = await supabase.from('affiliate_links').select('id, sales, commission_earned').eq('unique_code', affiliateRef).single();
-            if (linkInfo) {
-              await supabase.from('affiliate_links')
-                .update({ sales: (linkInfo.sales || 0) + 1, commission_earned: Number(linkInfo.commission_earned || 0) + commission })
-                .eq('id', linkInfo.id);
-            }
+          // C. Ambassador Update
+          if (ambassadorRef && ambCommission > 0) {
+              try {
+                  await supabase.rpc('increment_ambassador_stats', { 
+                      p_code: ambassadorRef, 
+                      p_sales: 1, 
+                      p_earned: ambCommission 
+                  });
+              } catch(e) { console.error("Ambassador increment error", e); }
           }
 
           // D. Email Notification

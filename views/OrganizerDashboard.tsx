@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle } from 'lucide-react';
+import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatCurrency } from '../constants';
@@ -1674,6 +1674,9 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     practicalInfos: { icon: string; title: string; description: string }[];
     supportPhone: string;
     dialCode: string;
+    ambassador_enabled: boolean;
+    ambassador_commission_type: 'percentage' | 'fixed';
+    ambassador_commission_value: number;
   }>(initialData ? {
     id: initialData.id,
     isEdit: true,
@@ -1696,7 +1699,10 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     program: initialData.program || [],
     practicalInfos: initialData.practicalInfos || [],
     supportPhone: initialData.supportPhone || '',
-    dialCode: initialData.dialCode || '+225'
+    dialCode: initialData.dialCode || '+225',
+    ambassador_enabled: initialData.ambassador_enabled || false,
+    ambassador_commission_type: initialData.ambassador_commission_type || 'percentage',
+    ambassador_commission_value: initialData.ambassador_commission_value || 10
   } : {
     title: '', date: '', location: '', city: '', country: '', price: 0, capacity: 1000,
     category: '', image: '', description: '', video: '', gallery: [],
@@ -1708,7 +1714,10 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
       { icon: 'Clock', title: 'Horaires', description: 'Ouverture : 18h00\nDébut : 20h00' }
     ],
     supportPhone: '',
-    dialCode: '+225'
+    dialCode: '+225',
+    ambassador_enabled: false,
+    ambassador_commission_type: 'percentage',
+    ambassador_commission_value: 10
   });
 
   const [countries, setCountries] = useState<{ name: string, code: string }[]>([]);
@@ -1874,6 +1883,42 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                 </div>
                 <p className="text-xs text-emerald-400 mt-1 italic">L'indicatif est déduit automatiquement de votre algorithme international lié au "{form.country}".</p>
               </label>
+
+              {/* Ambassador Program Setup */}
+              <div className="mt-6 p-5 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 rounded-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                  <Gift size={120} />
+                </div>
+                <div className="relative z-10 flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="text-white font-bold flex items-center gap-2">
+                      <Gift className="text-indigo-400" size={18} />
+                      Programme Ambassadeur (Affiliation)
+                    </h4>
+                    <p className="text-slate-400 text-xs mt-1">Permettez à vos fans de vendre vos billets et gagnez en visibilité.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={form.ambassador_enabled} onChange={e => setForm({ ...form, ambassador_enabled: e.target.checked })} />
+                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                  </label>
+                </div>
+                
+                {form.ambassador_enabled && (
+                  <div className="grid grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <label className="block">
+                      <span className="text-slate-300 text-xs font-bold mb-1 block">Type de récompense</span>
+                      <select value={form.ambassador_commission_type} onChange={e => setForm({ ...form, ambassador_commission_type: e.target.value as any })} className="w-full bg-slate-800 border border-indigo-500/30 rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-indigo-500 outline-none">
+                        <option value="percentage">Pourcentage (%)</option>
+                        <option value="fixed">Montant Fixe (FCFA)</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-slate-300 text-xs font-bold mb-1 block">Valeur ({form.ambassador_commission_type === 'percentage' ? '%' : 'FCFA'})</span>
+                      <input type="number" min="0" value={form.ambassador_commission_value} onChange={e => setForm({ ...form, ambassador_commission_value: Number(e.target.value) })} className="w-full bg-slate-800 border border-indigo-500/30 rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-indigo-500 outline-none" placeholder={form.ambassador_commission_type === 'percentage' ? 'Ex: 10' : 'Ex: 1000'} />
+                    </label>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {step === 2 && (
