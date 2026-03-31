@@ -206,12 +206,11 @@ export const OrganizerLogin = () => {
                 const noPlus = fullPhone.replace('+', '');   // ex: 2250544246972
                 const noCountry = rawInput.replace(/^0+/, ''); // ex: 544246972
 
-                // Chercher profile avec email contenant le numéro (sous n'importe quel format)
+                // Chercher profile avec email ou name contenant le numéro (tous domaines acceptés)
                 const { data: profiles } = await supabase
                     .from('profiles')
                     .select('email')
-                    .or(`email.like.%${noPlus}%,email.like.%${rawInput}%,email.like.%${noCountry}%`)
-                    .ilike('email', '%organizer.babipass.local%')
+                    .or(`email.like.%${noPlus}%,email.like.%${rawInput}%,email.like.%${noCountry}%,name.like.%${noPlus}%,name.like.%${rawInput}%`)
                     .limit(5);
 
                 if (!profiles || profiles.length === 0) {
