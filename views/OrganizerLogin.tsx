@@ -269,7 +269,11 @@ export const OrganizerLogin = () => {
             localStorage.setItem('afritix_user_role', 'ORGANIZER');
             setTimeout(() => navigate('/organizer'), 1500);
         } catch (err: any) {
-            setError(err.message || "Code incorrect.");
+            let errorMessage = err.message || "Code incorrect.";
+            if (errorMessage.includes("Invalid login credentials") || errorMessage.includes("Email not confirmed")) {
+                errorMessage = "Identifiants incorrects ou numéro introuvable.";
+            }
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -363,7 +367,11 @@ export const OrganizerLogin = () => {
             }
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Identifiants incorrects. Veuillez réessayer.");
+            let errorMessage = err.message || "Identifiants incorrects. Veuillez réessayer.";
+            if (errorMessage.includes("Invalid login credentials") || errorMessage.includes("Email not confirmed")) {
+                errorMessage = "Identifiants incorrects ou numéro introuvable.";
+            }
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
