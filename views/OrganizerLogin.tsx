@@ -299,9 +299,32 @@ export const OrganizerLogin = () => {
                 await requestVerification(formattedIdentifier, isPhoneMode ? getFullPhone(identifier) : getFullPhone(phoneNumber));
                 setOtpStep(true);
             } else {
-                // Connexion standards (SignInWithPassword)
+                // Connexion : résoudre le vrai email stocké en base si mode téléphone
+                let loginEmail = formattedIdentifier;
+
+                if (isPhoneMode) {
+                    const rawInput = identifier.trim();
+                    const fullPhone = getFullPhone(rawInput);
+                    const noPlus = fullPhone.replace('+', '');
+                    const noCountry = rawInput.replace(/^0+/, '');
+
+                    const { data: profiles } = await supabase
+                        .from('profiles')
+                        .select('email')
+                        .or(`email.like.%${noPlus}%,email.like.%${rawInput}%,email.like.%${noCountry}%,name.like.%${noPlus}%,name.like.%${rawInput}%`)
+                        .limit(1);
+
+                    if (profiles && profiles.length > 0) {
+                        loginEmail = profiles[0].email;
+                        console.log('[Login] Compte trouvé :', loginEmail);
+                    } else {
+                        throw new Error("Aucun compte trouvé avec ce numéro de téléphone.");
+                    }
+                }
+
+                // Connexion avec le vrai email résolu
                 const { data, error } = await supabase.auth.signInWithPassword({
-                    email: formattedIdentifier,
+                    email: loginEmail,
                     password,
                 });
 
