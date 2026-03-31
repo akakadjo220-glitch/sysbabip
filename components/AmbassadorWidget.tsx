@@ -33,7 +33,7 @@ export const AmbassadorWidget: React.FC<AmbassadorWidgetProps> = ({ eventId, com
         </div>
         <div className="relative z-10 shrink-0 w-full md:w-auto mt-2 md:mt-0">
           <a
-            href={`/ambassador/login?redirect=/event/${eventId}`}
+            href={`/ambassador/login?redirect=${encodeURIComponent(window.location.pathname)}`}
             className="flex items-center justify-center gap-2 w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)]"
           >
             Rejoindre le programme <ArrowRight size={18} />
@@ -75,7 +75,7 @@ export const AmbassadorWidget: React.FC<AmbassadorWidgetProps> = ({ eventId, com
         if (insertError) throw insertError;
       }
 
-      setReferralLink(`${window.location.origin}/event/${eventId}?ref=${code}`);
+      setReferralLink(`${window.location.origin}${window.location.pathname}?ref=${code}`);
     } catch (err: any) {
       console.error(err);
       setError("Erreur lors de la génération du lien.");
