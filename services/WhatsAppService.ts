@@ -67,13 +67,14 @@ export const WhatsAppService = {
                     },
                     body: JSON.stringify({
                         to: cleanPhone,
-                        text: message,
-                        type: 'text'
+                        text: message
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error(`WaSender API Error: ${response.statusText}`);
+                    const errBody = await response.text().catch(() => '');
+                    console.error('[WaSender] Erreur:', { to: cleanPhone, status: response.status, body: errBody });
+                    throw new Error(`WaSender API Error: ${response.statusText} | ${errBody}`);
                 }
                 const data = await response.json();
                 console.log('[WaSender API Response]', data);

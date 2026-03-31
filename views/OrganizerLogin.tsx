@@ -254,6 +254,17 @@ export const OrganizerLogin = () => {
             const formattedIdentifier = getFormattedIdentifier();
 
             if (isSignUp) {
+                // Vérifier si ce numéro/email est déjà enregistré
+                const { data: existingProfile } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('email', formattedIdentifier)
+                    .maybeSingle();
+
+                if (existingProfile) {
+                    throw new Error("Ce numéro/email est déjà inscrit. Veuillez vous connecter ou utiliser \"Mot de passe oublié\".");
+                }
+
                 // Étape 1: Au lieu de signUp directement, demander vérification email (+ WhatsApp si mode téléphone)
                 await requestVerification(formattedIdentifier, isPhoneMode ? getFullPhone(identifier) : getFullPhone(phoneNumber));
                 setOtpStep(true);
