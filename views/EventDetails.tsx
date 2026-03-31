@@ -161,11 +161,14 @@ export const EventDetails: React.FC = () => {
         // Store in session storage for the checkout process
         sessionStorage.setItem('afritix_ambassador_ref', refCode);
 
-        // Record a click using Supabase RPC to bypass RLS issues cleanly
-        try {
-          await supabase.rpc('increment_ambassador_clicks', { p_code: refCode });
-        } catch (e) {
-          console.error("Erreur lors de l'enregistrement du clic", e);
+        // Prevent double counting (StrictMode) and spam impressions in the same session
+        if (sessionStorage.getItem('tracked_click_ref') !== refCode) {
+            sessionStorage.setItem('tracked_click_ref', refCode);
+            try {
+              await supabase.rpc('increment_ambassador_clicks', { p_code: refCode });
+            } catch (e) {
+              console.error("Erreur lors de l'enregistrement du clic", e);
+            }
         }
       }
     };
