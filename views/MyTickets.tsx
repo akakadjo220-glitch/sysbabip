@@ -124,7 +124,6 @@ export const MyTickets: React.FC = () => {
 const TicketCard: React.FC<{ ticket: any; onTransferComplete: () => void }> = ({ ticket, onTransferComplete }) => {
   const [showQR, setShowQR] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [showResellModal, setShowResellModal] = useState(false);
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const [qrBase64, setQrBase64] = useState<string>('');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -314,14 +313,7 @@ const TicketCard: React.FC<{ ticket: any; onTransferComplete: () => void }> = ({
               Transférer
             </button>
 
-            {/* Bouton de Revente */}
-            <button
-              onClick={() => setShowResellModal(true)}
-              className="flex-1 py-3 bg-slate-800/80 border border-orange-500/30 hover:bg-orange-600/20 text-orange-400 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group/resell"
-            >
-              <Banknote size={16} className="group-hover/resell:scale-110 transition-transform" />
-              Revendre
-            </button>
+
           </div>
         )}
       </div>
@@ -349,16 +341,7 @@ const TicketCard: React.FC<{ ticket: any; onTransferComplete: () => void }> = ({
         />
       )}
 
-      {showResellModal && (
-        <ResellModal
-          ticket={ticket}
-          onClose={() => setShowResellModal(false)}
-          onSuccess={() => {
-            setShowResellModal(false);
-            onTransferComplete(); // Recharges the local list
-          }}
-        />
-      )}
+
     </div>
   );
 };
@@ -479,43 +462,51 @@ const TransferModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () 
     setStep('processing');
 
     try {
-      // 1. Invalider l'ancien billet localement via le wallet sécurisé (AES-GCM)
+      // 1. Appel RPC Supabase pour transférer le billet en base
+      const { data, error } = await supabase.rpc('transfer_ticket', {
+        p_ticket_id: ticket.id || ticket.qrCode,
+        p_new_name: recipientName,
+        p_new_contact: contactValue
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Erreur lors du transfert.');
+      }
+
+      const newTicketId = data.new_ticket_id;
+
+      // 2. Invalider l'ancien billet localement via le wallet sécurisé (AES-GCM)
       await removeSecureTicket(ticket.id || ticket.qrCode);
 
-      // 2. Créer un nouveau jeton cryptographique pour le nouvel utilisateur
-      const newTicketId = `tix-trsf-${Date.now()}`;
-
-      // Extraction magique de l'Event ID (Dans une vraie DB, on a l'ID exact)
-      const eventIdMatch = ticket.qrCode.split('.'); // très simplifié pour la démo
-
+      // 3. Créer un nouveau jeton cryptographique pour le nouvel utilisateur
       const newSignedToken = await signTicket({
         tId: newTicketId,
-        eId: "event-transfer", // Mock event ID fallback
+        eId: ticket.eventId || ticket.eventName,
         type: ticket.type,
         usr: recipientName
       });
 
-      // 3. Simuler l'envoi au destinataire
-      setTimeout(async () => {
-        // En vrai: L'API envoie le lien magique au destinataire. 
-        // L'expéditeur n'a plus le billet localement.
+      // Mettre à jour le nouveau QR Code généré en base
+      await supabase.from('tickets').update({ qr_code: newSignedToken }).eq('id', newTicketId);
 
-        const transferMessage = `🎟️ *NOUVEAU BILLET* 🎟️\n\nBonjour ${recipientName} !\nUn billet vous a été transféré pour *${ticket.eventName}*.\n\nCe billet est 100% crypté et anti-fraude.`;
-        const mockQrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + newSignedToken;
+      // 4. Notifier le destinataire
+      const transferMessage = `🎟️ *NOUVEAU BILLET* 🎟️\n\nBonjour ${recipientName} !\nUn billet vous a été transféré pour *${ticket.eventName}*.\n\nCe billet est 100% crypté et anti-fraude. Gardez le QR code précieusement ou importez-le dans votre portefeuille.`;
+      const mockQrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(newSignedToken);
 
-        if (contactMethod === 'wa') {
-          console.log(`Transfert WA vers ${contactValue} :`, newSignedToken);
-          WhatsAppService.sendMediaMessage(contactValue, transferMessage, mockQrImageUrl);
-        } else {
-          console.log(`Transfert Email vers ${contactValue} :`, newSignedToken);
-        }
+      if (contactMethod === 'wa') {
+        console.log(`Transfert WA vers ${contactValue}`);
+        await WhatsAppService.sendMediaMessage(contactValue, transferMessage, mockQrImageUrl);
+      } else {
+        console.log(`Transfert Email vers ${contactValue} :`, newSignedToken);
+      }
 
-        setStep('success');
-      }, 1500);
-
-    } catch (err) {
+      setStep('success');
+    } catch (err: any) {
       console.error(err);
-      alert("Erreur réseau durant le transfert. Veuillez réessayer.");
+      alert(err.message || "Erreur lors du transfert. Vérifiez votre connexion ou que le billet est toujours valide.");
       setStep('info');
     }
   };
@@ -615,121 +606,7 @@ const TransferModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () 
   );
 };
 
-// Modal de Revente sur la Marketplace Secondaire
-const ResellModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () => void }> = ({ ticket, onClose, onSuccess }) => {
-  const [step, setStep] = useState<'info' | 'processing' | 'success'>('info');
-  // Default asking price defaults to the fallback price if none is encoded (demo)
-  const defaultPrice = ticket.price || 5000;
-  const [askingPrice, setAskingPrice] = useState<number>(defaultPrice);
 
-  const handleResale = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Protection anti-marché noir (Max 50% markup)
-    if (askingPrice > defaultPrice * 1.5) {
-      alert("Plafonnement de revente : Le prix de revente ne peut excéder de 50% la valeur d'origine pour éviter le marché noir.");
-      return;
-    }
-
-    setStep('processing');
-
-    try {
-      // 1. Invalider l'ancien billet localement via le wallet sécurisé
-      await removeSecureTicket(ticket.id || ticket.qrCode);
-
-      // 2. Add to "Global" resale list (Marketplace simulation)
-      const currentListings = JSON.parse(localStorage.getItem('afriTix_resale_listings') || '[]');
-      currentListings.push({
-        id: `resale-${Date.now()}`,
-        ticket: ticket,
-        askingPrice: Number(askingPrice),
-        originalPrice: defaultPrice,
-        dateListed: new Date().toISOString(),
-        sellerId: 'current-user-uuid' // Simulé
-      });
-      localStorage.setItem('afriTix_resale_listings', JSON.stringify(currentListings));
-
-      // Simulate network request
-      setTimeout(() => {
-        setStep('success');
-      }, 1500);
-
-    } catch (err) {
-      console.error(err);
-      alert("Erreur système durant la mise en vente.");
-      setStep('info');
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-[#1e293b] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white z-10"><X size={20} /></button>
-
-        {step === 'info' && (
-          <div className="p-6">
-            <h3 className="text-xl font-bold text-white mb-2">Revendre mon billet</h3>
-            <p className="text-sm text-slate-400 mb-6 bg-orange-500/10 border border-orange-500/20 p-3 rounded-lg flex items-start gap-2">
-              <Banknote className="text-orange-500 shrink-0 mt-0.5" size={16} />
-              Votre billet sera retiré de votre portefeuille et publié dans la Bourse d'Échange. Vous récupèrerez les fonds (Cash ou Mobile Money) une fois le billet acheté.
-            </p>
-
-            <form onSubmit={handleResale} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Prix de Revente Souhaité (FCFA)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max={defaultPrice * 1.5}
-                  value={askingPrice}
-                  onChange={(e) => setAskingPrice(Number(e.target.value))}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-orange-500 font-bold text-lg"
-                  required
-                />
-                <p className="text-xs text-slate-500 mt-2">
-                  Prix d'origine : {defaultPrice} FCFA. Max autorisé : {defaultPrice * 1.5} FCFA.
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-4 mt-6 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(249,115,22,0.4)] transition-transform hover:scale-105"
-              >
-                Mettre en vente
-              </button>
-            </form>
-          </div>
-        )}
-
-        {step === 'processing' && (
-          <div className="p-12 text-center flex flex-col items-center justify-center min-h-[350px]">
-            <RefreshCw size={48} className="text-orange-500 animate-spin mb-6" />
-            <h3 className="text-xl font-bold text-white mb-2">Signature & Publication...</h3>
-            <p className="text-slate-400 text-sm">Transfert sécurisé du billet vers la Bourse d'Échange.</p>
-          </div>
-        )}
-
-        {step === 'success' && (
-          <div className="p-12 text-center flex flex-col items-center justify-center min-h-[350px]">
-            <div className="w-20 h-20 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mb-6 animate-in zoom-in duration-300">
-              <ShieldCheck size={40} />
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-2">En ligne !</h3>
-            <p className="text-slate-400 text-sm mb-6">Le billet fait désormais partie de la Marketplace Secondaire. Vous serez averti de la vente.</p>
-            <button
-              onClick={onSuccess}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-colors"
-            >
-              Retour
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 
 // Modal de Récupération de Billets (Multi-appareil)
