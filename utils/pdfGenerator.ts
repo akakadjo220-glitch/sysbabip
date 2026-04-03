@@ -109,7 +109,7 @@ export const generateTicketPDF = async (ticket: any) => {
       </div>
 
       <div style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #1e293b;">
-         <p style="margin: 0; font-size: 11px; font-weight: bold; color: #ea580c;">AFRITIX SECURE TICKET</p>
+         <p style="margin: 0; font-size: 11px; font-weight: bold; color: #ea580c;">BABIPASS SECURE TICKET</p>
          <p style="margin: 4px 0 0 0; font-size: 9px; color: #475569;">Billet Cryptographique • Anti-Fraude</p>
       </div>
     </div>
