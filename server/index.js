@@ -184,6 +184,128 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ─── TICKET RECOVERY OTP ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+app.post('/api/auth/ticket-otp', async (req, res) => {
+    try {
+        const { email, ticketCount } = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, error: 'Email requis.' });
+        }
+
+        // 1. Générer OTP à 6 chiffres
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60000).toISOString();
+
+        // 2. Supprimer les anciens OTPs pour cet email (évite les doublons)
+        await supabase.from('auth_otps').delete().eq('email', email.trim().toLowerCase());
+
+        // 3. Enregistrer le nouvel OTP
+        const { error: insertError } = await supabase.from('auth_otps').insert([{
+            email: email.trim().toLowerCase(),
+            otp_code: otpCode,
+            expires_at: expiresAt
+        }]);
+        if (insertError) throw insertError;
+
+        // 4. Récupérer la config SMTP depuis platform_settings
+        const smtpConfig = await getSetting('smtp_config');
+        if (!smtpConfig || !smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
+            return res.status(500).json({ success: false, error: 'Configuration SMTP non configurée.' });
+        }
+
+        // 5. Template email dédié - Récupération de Billets 🎫
+        const count = ticketCount || '?';
+        const htmlBody = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Code de récupération - Babipass</title>
+</head>
+<body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:24px;overflow:hidden;border:1px solid #334155;">
+          <!-- Header orange -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#ea580c 0%,#f59e0b 100%);padding:36px 40px;text-align:center;">
+              <div style="font-size:48px;margin-bottom:12px;">🎫</div>
+              <h1 style="margin:0;color:#fff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">Récupération de Billets</h1>
+              <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">Babipass – Vos billets en sécurité</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px;">
+              <p style="color:#94a3b8;font-size:15px;margin:0 0 16px;">Bonjour,</p>
+              <p style="color:#cbd5e1;font-size:15px;margin:0 0 24px;line-height:1.6;">
+                Une demande de récupération de <strong style="color:#f97316;">${count} billet(s)</strong> a été effectuée pour l'adresse <strong style="color:#f97316;">${email}</strong>.
+              </p>
+              <p style="color:#cbd5e1;font-size:14px;margin:0 0 20px;">Pour confirmer que c'est bien vous, saisissez ce code de vérification à 6 chiffres :</p>
+
+              <!-- OTP Box -->
+              <div style="background:#0f172a;border:2px solid #f97316;border-radius:16px;padding:28px;text-align:center;margin:0 0 28px;">
+                <p style="margin:0 0 8px;color:#64748b;font-size:12px;letter-spacing:2px;text-transform:uppercase;">Code de sécurité</p>
+                <p style="margin:0;font-size:48px;font-weight:900;letter-spacing:12px;color:#f97316;font-family:'Courier New',monospace;">${otpCode}</p>
+                <p style="margin:12px 0 0;color:#64748b;font-size:12px;">⏱ Ce code expire dans <strong>10 minutes</strong></p>
+              </div>
+
+              <!-- Warning -->
+              <div style="background:#7f1d1d22;border:1px solid #dc2626;border-radius:12px;padding:16px 20px;margin:0 0 28px;">
+                <p style="margin:0;color:#fca5a5;font-size:13px;line-height:1.5;">
+                  <strong>⚠️ Attention :</strong> Si vous n'avez pas effectué cette demande, quelqu'un tente peut-être d'accéder à vos billets.
+                  Ignorez cet e-mail et vos billets resteront protégés.
+                </p>
+              </div>
+
+              <p style="color:#64748b;font-size:13px;margin:0;border-top:1px solid #334155;padding-top:24px;">
+                Cet email a été envoyé automatiquement par <strong>Babipass</strong>. Ne répondez pas à ce message.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#0f172a;padding:20px 40px;text-align:center;">
+              <p style="margin:0;color:#475569;font-size:12px;">© 2025 Babipass – Votre billetterie en toute sécurité</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+        const transporter = nodemailer.createTransport({
+            host: smtpConfig.host,
+            port: smtpConfig.port || 465,
+            secure: smtpConfig.port == 465,
+            auth: { user: smtpConfig.user, pass: smtpConfig.pass },
+            tls: { rejectUnauthorized: false }
+        });
+
+        await transporter.sendMail({
+            from: `"Babipass" <${smtpConfig.user}>`,
+            to: email.trim(),
+            subject: `🔐 Votre code de récupération : ${otpCode}`,
+            html: htmlBody,
+        });
+
+        console.log(`[Ticket OTP] Code envoyé à ${email}`);
+        return res.status(200).json({ success: true });
+
+    } catch (err) {
+        console.error('[Ticket OTP] Error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ─── PAYMENT PROXY ENDPOINTS (Keys stay server‑side) ─────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
 
