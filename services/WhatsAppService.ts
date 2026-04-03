@@ -146,8 +146,7 @@ export const WhatsAppService = {
                     body: JSON.stringify({
                         to: cleanPhone,
                         text: message,
-                        media_url: mediaUrl,
-                        type: 'media'
+                        imageUrl: mediaUrl
                     })
                 });
 

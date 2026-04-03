@@ -1379,7 +1379,7 @@ const CheckoutModal: React.FC<{
 
       const handler = (window as any).PaystackPop.setup({
         key: config.publicKey,
-        email: contactValue || 'user@afritix.com',
+        email: contactValue.includes('@') ? contactValue : `user_${Date.now()}@babipass.com`,
         amount: Math.round(amountToPay * 100), // Paystack attend des centimes (entier)
         currency: 'XOF',
         channels: ['card', 'mobile_money'],
@@ -2007,12 +2007,20 @@ const CheckoutModal: React.FC<{
                   : "Votre billet a été sauvegardé de manière sécurisée hors-ligne. Vous pourrez y accéder même sans connexion."}
               </p>
             </div>
-            <button
-              onClick={() => { onClose(true); navigate('/tickets'); }}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-colors"
-            >
-              Voir mes billets
-            </button>
+            <div className="flex gap-4 w-full">
+              <button
+                onClick={() => { onClose(true); navigate('/tickets'); }}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-colors"
+              >
+                Voir mes billets
+              </button>
+              <button
+                onClick={() => { onClose(true); setStep('auth'); }}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-colors border border-slate-700"
+              >
+                Nouveau Billet
+              </button>
+            </div>
           </div>
         )}
       </div>
