@@ -11,6 +11,8 @@ import { useAuth } from '../context/AuthContext';
 
 import { useNavigate } from 'react-router-dom';
 
+const SERVER_URL = 'https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io';
+
 export const MyTickets: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -732,12 +734,14 @@ const ResellModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () =>
 
 // Modal de Récupération de Billets (Multi-appareil)
 const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = ({ onClose, onSuccess }) => {
-  const [step, setStep] = useState<'input' | 'searching' | 'results'>('input');
+  const [step, setStep] = useState<'input' | 'searching' | 'otp' | 'results'>('input');
   const [contactValue, setContactValue] = useState('');
   const [foundCount, setFoundCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [ticketData, setTicketData] = useState<any[]>([]);
 
-  const handleRecover = async (e: React.FormEvent) => {
+  const handleRecoverSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactValue) return;
 
@@ -745,7 +749,20 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
     setError(null);
 
     try {
-      // 1. Rechercher les billets en base de données
+      const searchValue = contactValue.trim();
+      const numOnly = searchValue.replace(/[^0-9]/g, '');
+      let orQuery = `guest_email.eq.${searchValue},guest_email.eq.${searchValue.toLowerCase()}`;
+
+      if (numOnly.length >= 8) {
+         let core = numOnly;
+         if (core.startsWith('225')) core = core.slice(3);
+         else if (core.startsWith('00225')) core = core.slice(5);
+
+         const spacePattern = `${core.slice(0,2)} ${core.slice(2,4)} ${core.slice(4,6)} ${core.slice(6,8)} ${core.slice(8,10)}`.trim();
+         orQuery += `,guest_email.eq.${core},guest_email.eq.${numOnly},guest_email.eq.+225${core},guest_email.eq.${spacePattern}`;
+      }
+
+      // 1. Rechercher les billets en base de données avec OR
       const { data, error: fetchError } = await supabase
         .from('tickets')
         .select(`
@@ -754,14 +771,14 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
             title,
             date,
             location,
-            city,
-            profiles:organizer_id (
-              name,
-              avatar
+              city,
+              profiles:organizer_id (
+                name,
+                avatar
+              )
             )
-          )
-        `)
-        .eq('guest_email', contactValue.trim())
+          `)
+        .or(orQuery)
         .eq('status', 'valid');
 
       if (fetchError) throw fetchError;
@@ -772,12 +789,80 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
         return;
       }
 
-      // 2. Importer chaque billet localement
+      setTicketData(data);
+      setFoundCount(data.length);
+
+      const isEmail = contactValue.includes('@');
+
+      if (isEmail) {
+         // Appeler le backend dédié pour un OTP sécurisé + email "Récupération de Billets"
+         try {
+           await fetch(`${SERVER_URL}/api/auth/ticket-otp`, {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                 email: contactValue.trim().toLowerCase(),
+                 ticketCount: data.length
+               })
+           });
+         } catch (err) {
+           console.error("Email send error", err);
+         }
+      } else {
+         // Pour WhatsApp, générer l'OTP et le stocker localement
+         const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+         try {
+           await supabase.from('auth_otps').insert([{
+              email: contactValue.trim().toLowerCase(),
+              otp_code: generatedOtp,
+              expires_at: new Date(Date.now() + 10 * 60000).toISOString()
+           }]);
+         } catch (e) {
+           console.error("Erreur enregistrement OTP:", e);
+         }
+         
+         const waMsg = `🔐 *Code de Sécurité Babipass*\n\nQuelqu'un tente de récupérer vos ${data.length} billets.\n\nVotre code de vérification est : *${generatedOtp}*\n\nValable 10 minutes.`;
+         const phoneClean = contactValue.replace(/[^0-9]/g, '');
+         WhatsAppService.sendMessage(phoneClean, waMsg);
+      }
+
+      setStep('otp');
+
+    } catch (err) {
+      console.error(err);
+      setError("Erreur système lors de la recherche.");
+      setStep('input');
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode) return;
+    
+    setError(null);
+    setStep('searching'); // Reuse loading screen
+    
+    try {
+      // 1. Vérifier l'OTP
+      const { data: otpRecord, error: otpFetchError } = await supabase
+        .from('auth_otps')
+        .select('*')
+        .eq('email', contactValue.trim().toLowerCase())
+        .eq('otp_code', otpCode)
+        .maybeSingle();
+
+      if (otpFetchError || !otpRecord) {
+        setError("Code incorrect ou expiré. Veuillez réessayer.");
+        setStep('otp');
+        return;
+      }
+
+      // Code validé ! On procède à l'import local
       let imported = 0;
       const currentTickets = await getOfflineTickets();
       const currentIds = new Set(currentTickets.map(t => t.id));
 
-      for (const t of data) {
+      for (const t of ticketData) {
         if (!currentIds.has(t.id)) {
           const offlineTicket = {
             id: t.id,
@@ -797,12 +882,14 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
         }
       }
 
-      setFoundCount(data.length);
+      // Clean up OTP
+      await supabase.from('auth_otps').delete().eq('email', contactValue.trim().toLowerCase());
+
       setStep('results');
-    } catch (err: any) {
-      console.error("Recovery Error:", err);
-      setError("Une erreur est survenue lors de la recherche.");
-      setStep('input');
+    } catch (err) {
+      console.error(err);
+      setError("Erreur système lors du téléchargement des billets.");
+      setStep('otp');
     }
   };
 
@@ -823,7 +910,7 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
               Saisissez l'email ou le numéro WhatsApp utilisé lors de votre achat.
             </p>
 
-            <form onSubmit={handleRecover} className="space-y-4">
+            <form onSubmit={handleRecoverSearch} className="space-y-4">
               <input
                 type="text"
                 value={contactValue}
@@ -844,6 +931,47 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
           <div className="p-16 text-center min-h-[400px] flex flex-col items-center justify-center">
             <RefreshCw size={48} className="text-orange-500 animate-spin mb-6" />
             <h3 className="text-xl font-bold text-white">Recherche en cours...</h3>
+          </div>
+        )}
+
+        {step === 'otp' && (
+          <div className="p-8">
+            <div className="flex flex-col items-center mb-6">
+              <div className="w-16 h-16 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center mb-4">
+                <Lock size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white text-center mb-2">Vérification de Sécurité</h3>
+              <p className="text-sm text-slate-400 text-center">
+                Un code de vérification à 6 chiffres a été envoyé à <b>{contactValue}</b>. Vous avez trouvé {foundCount} billet(s).
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-3 rounded-lg text-sm mb-4 text-center">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ex: 123456"
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-4 text-white text-center text-2xl tracking-[0.5em] font-bold placeholder-slate-600 focus:outline-none focus:border-orange-500"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-4 mt-6 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(249,115,22,0.4)] transition-transform hover:scale-105"
+              >
+                Vérifier et Télécharger
+              </button>
+            </form>
           </div>
         )}
 
