@@ -122,7 +122,10 @@ export const AmbassadorDashboard = () => {
             <Gift className="text-indigo-400" size={32} />
             Espace Ambassadeur
           </h1>
-          <p className="text-slate-400 mt-2">Gérez vos liens de parrainage et retirez vos gains.</p>
+          <div className="mt-2 text-slate-400 flex flex-col gap-1">
+            <p>Gérez vos liens de parrainage et retirez vos gains.</p>
+            {user?.email && <p className="text-indigo-300 font-medium">{user.email}</p>}
+          </div>
         </div>
         <button
           onClick={async () => {

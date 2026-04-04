@@ -160,8 +160,12 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                                     {topAmbassadors.map((amb) => (
                                         <tr key={amb.id} className="hover:bg-white/5 transition-colors">
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-white">{amb.profiles?.name || 'Inconnu (Compte supprimé)'}</div>
-                                                <div className="text-xs text-slate-500">{amb.profiles?.email}</div>
+                                                <div className="font-bold text-white">
+                                                    {amb.profiles?.name || (amb.profiles?.email ? 'Utilisateur sans nom' : 'Inconnu')}
+                                                </div>
+                                                <div className="text-xs text-slate-500">
+                                                    {amb.profiles?.email || `ID: ${amb.user_id.substring(0, 8)}...`}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-slate-300">
                                                 {amb.events?.title || 'Non trouvé'}
@@ -216,8 +220,12 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                                                 {new Date(w.created_at).toLocaleDateString('fr-FR')}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-white">{w.profiles?.name || 'Inconnu (Compte supprimé)'}</div>
-                                                <div className="text-xs text-slate-500">{w.profiles?.email}</div>
+                                                <div className="font-bold text-white">
+                                                    {w.profiles?.name || (w.profiles?.email ? 'Utilisateur sans nom' : 'Inconnu')}
+                                                </div>
+                                                <div className="text-xs text-slate-500">
+                                                    {w.profiles?.email || `ID: ${w.user_id.substring(0, 8)}...`}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 font-bold text-emerald-400">
                                                 {formatCurrency(w.amount)}
