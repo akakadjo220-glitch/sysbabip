@@ -24,7 +24,7 @@ export const AmbassadorLogin = () => {
     const [signupCountryCode, setSignupCountryCode] = useState('+225');
 
     // ---- Country dial codes ----
-    const [dialOptions, setDialOptions] = useState<{code: string, flag: string, rawCode: string}[]>([]);
+    const [dialOptions, setDialOptions] = useState<{ code: string, flag: string, rawCode: string }[]>([]);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -57,7 +57,7 @@ export const AmbassadorLogin = () => {
                     }, [] as any[]);
                     setDialOptions(unique);
                 }
-            } catch {}
+            } catch { }
         };
         fetchCountries();
     }, []);
@@ -190,11 +190,13 @@ export const AmbassadorLogin = () => {
             // Update profile: phone + role + name
             const { data: { user: authedUser } } = await supabase.auth.getUser();
             if (authedUser) {
-                await supabase.from('profiles').update({
+                await supabase.from('profiles').upsert([{
+                    id: authedUser.id,
+                    email: cleanEmail,
                     phone: getFullSignupPhone(),
                     name: fullName.trim() || cleanEmail.split('@')[0],
                     role: 'AMBASSADOR'
-                }).eq('id', authedUser.id);
+                }], { onConflict: 'id' });
             }
 
             // Clean up OTP
