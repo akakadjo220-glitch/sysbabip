@@ -11,9 +11,10 @@ import { getPlatformSettings, clearSettingsCache } from '../utils/platformSettin
 import { getUniqueSlug } from '../utils/slugUtils';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b'];
-type AdminTab = 'overview' | 'users' | 'events' | 'finance' | 'kyb' | 'ads' | 'countries' | 'templates' | 'settings' | 'account' | 'categories' | 'fundraising' | 'refunds';
+type AdminTab = 'overview' | 'users' | 'events' | 'finance' | 'kyb' | 'ads' | 'countries' | 'templates' | 'settings' | 'account' | 'categories' | 'fundraising' | 'refunds' | 'ambassadors';
 
 import { EMAIL_TEMPLATES, EmailTemplateType } from '../constants';
+import { AdminAmbassadorsTab } from './AdminAmbassadorsTab';
 import { VideoUploadField } from '../components/LazyVideo';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -189,6 +190,7 @@ export const AdminDashboard: React.FC = () => {
         {[
           { id: 'overview', icon: Shield, label: "Vue d'ensemble" },
           { id: 'users', icon: Users, label: 'Utilisateurs' },
+          { id: 'ambassadors', icon: Users, label: 'Ambassadeurs' },
           { id: 'events', icon: Calendar, label: 'Événements' },
           { id: 'fundraising', icon: Heart, label: 'Collectes de Fonds' },
           { id: 'finance', icon: CreditCard, label: 'Finance' },
@@ -211,6 +213,7 @@ export const AdminDashboard: React.FC = () => {
       {/* Main Content Area - z-20 for clicks */}
       <div className="relative z-20 block">
         {activeTab === 'overview' && <OverviewTab stats={stats} />}
+        {activeTab === 'ambassadors' && <AdminAmbassadorsTab addToast={addToast} />}
         {activeTab === 'users' && <UsersTab onSave={handleSaveUser} onDelete={handleDeleteUser} onToggleBan={toggleBanUser} onApprove={approveUser} addToast={addToast} />}
         {activeTab === 'events' && <EventsTab onAction={handleEventAction} onSave={handleSaveEvent} addToast={addToast} />}
         {activeTab === 'finance' && <FinanceTab stats={stats} addToast={addToast} />}
