@@ -137,6 +137,7 @@ export const WhatsAppService = {
             } else {
                 console.log(`[WhatsAppService/WaSender] Sending Media to ${cleanPhone} via Instance ${waConfig.instanceId}`);
                 console.log(`[Media Payload]`, { mediaUrl, message });
+                
                 const response = await fetch(`${WASENDER_API_URL}?instance_id=${waConfig.instanceId}`, {
                     method: 'POST',
                     headers: {
@@ -145,13 +146,16 @@ export const WhatsAppService = {
                     },
                     body: JSON.stringify({
                         to: cleanPhone,
-                        text: message,
+                        text: message,      // Standard compatibility
+                        caption: message,   // Many API clones prefer 'caption' for media
                         imageUrl: mediaUrl
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error(`WaSender API Error: ${response.statusText}`);
+                    const errorData = await response.text().catch(() => 'No error body');
+                    console.error('[WaSender Media Error Detail]:', errorData);
+                    throw new Error(`WaSender API Error (${response.status}): ${errorData || response.statusText}`);
                 }
                 const data = await response.json();
                 console.log('[WaSender API Media Response]', data);

@@ -25,7 +25,7 @@ export const PublicChatWidget = () => {
       setMessages([
         { 
           role: 'assistant', 
-          content: "👋 Bonjour ! Je suis l'assistant IA de Babipass.\n\nPosez-moi vos questions sur nos événements en cours, les tarifs ou les parkings. Comment puis-je vous aider ?" 
+          content: "👋 Bonjour ! Je suis l'assistant IA de Babipass.\n\nPosez-moi vos questions sur nos événements en cours, les tarifs ou les parkings. Je peux aussi vous donner les liens de réservation et vous guider avec Google Maps ! Comment puis-je vous aider ?" 
         }
       ]);
     }
@@ -49,14 +49,16 @@ export const PublicChatWidget = () => {
     setIsLoading(true);
 
     try {
-      let pageContext = `Le visiteur est sur la page: ${document.title} (${window.location.pathname})`;
+      // Le serveur backend gère tout le contexte (catalogue, instructions, GPS)
+      // via WhatsAppAIBot.handleWebChatMessage()
+      const pageContext = `Le visiteur est sur la page: ${document.title} (${window.location.pathname})`;
       
       const response = await fetch('https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           messages: newMessages.filter(m => m.role !== 'system'),
-          pageContext: pageContext 
+          pageContext 
         })
       });
 

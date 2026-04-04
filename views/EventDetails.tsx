@@ -1115,38 +1115,39 @@ const CheckoutModal: React.FC<{
     };
     loadToggles();
 
-    // Robustly capture buyer's approximate location via IP with fallbacks
+    // Robustement capturer la localisation approximative via IP avec fallbacks
     const fetchLocation = async () => {
-      try {
-        // Source 1: ipwho.is (très permissif côté CORS)
-        const res1 = await fetch('https://ipwho.is/');
-        const data1 = await res1.json();
-        if (data1.success && data1.latitude) {
-          setBuyerLocation({ lat: data1.latitude, lng: data1.longitude, city: data1.city, country: data1.country });
-          return;
-        }
-      } catch (e) { }
-
-      try {
-        // Source 2: freeipapi
-        const res2 = await fetch('https://freeipapi.com/api/json');
-        const data2 = await res2.json();
-        if (data2.latitude) {
-          setBuyerLocation({ lat: data2.latitude, lng: data2.longitude, city: data2.cityName, country: data2.countryName });
-          return;
-        }
-      } catch (e) { }
-
-      try {
-        // Source 3: ipapi.co (souvent bloqué en 429)
-        const res3 = await fetch('https://ipapi.co/json/');
-        const data3 = await res3.json();
-        if (data3.latitude) {
-          setBuyerLocation({ lat: data3.latitude, lng: data3.longitude, city: data3.city, country: data3.country_name });
-        }
-      } catch (e) {
-        console.log('Location fetch entirely failed or blocked');
+      // Éviter les appels inutiles en local (souvent bloqués/403/CORS)
+      const isLocal = window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' || 
+                    window.location.hostname.startsWith('192.168.');
+      
+      if (isLocal) {
+        console.log('[Location] Local dev detected, geolocation skipped to avoid console clutter.');
+        return;
       }
+
+      try {
+        const res1 = await fetch('https://ipwho.is/');
+        if (res1.ok) {
+          const data1 = await res1.json();
+          if (data1.success && data1.latitude) {
+            setBuyerLocation({ lat: data1.latitude, lng: data1.longitude, city: data1.city, country: data1.country });
+            return;
+          }
+        }
+      } catch (e) { /* silent */ }
+
+      try {
+        const res2 = await fetch('https://freeipapi.com/api/json');
+        if (res2.ok) {
+          const data2 = await res2.json();
+          if (data2.latitude) {
+            setBuyerLocation({ lat: data2.latitude, lng: data2.longitude, city: data2.cityName, country: data2.countryName });
+            return;
+          }
+        }
+      } catch (e) { /* silent */ }
     };
     fetchLocation();
   }, []);
@@ -1184,11 +1185,12 @@ const CheckoutModal: React.FC<{
     }
 
     // Concaténer l'indicatif si c'est un numéro WhatsApp qui ne commence pas déjà par un +
-    let finalContact = contactValue;
-    if (contactMethod === 'wa' && !contactValue.startsWith('+')) {
-      const dialCode = visitorCountry?.dialCode || '+225';
-      finalContact = `${dialCode}${contactValue.replace(/^0+/, '')}`; // Enlève le 0 initial éventuel
-      setContactValue(finalContact); // Met à jour l'état visuel et global
+    let finalContact = contactValue.trim().replace(/\s/g, ''); // Nettoyer les espaces
+    if (contactMethod === 'wa' && !finalContact.startsWith('+')) {
+      const dialCode = (visitorCountry?.dialCode || '+225').replace('+', '');
+      // Pour la CI (10 chiffres), on garde le 0 initial car il fait partie du préfixe opérateur (01, 05, 07, etc.)
+      finalContact = `${dialCode}${finalContact}`;
+      setContactValue(finalContact); 
     }
 
     // Simulation envoi OTP retirée
@@ -2015,7 +2017,10 @@ const CheckoutModal: React.FC<{
                 Voir mes billets
               </button>
               <button
-                onClick={() => { onClose(true); setStep('auth'); }}
+                onClick={() => { 
+                  setParticipantName(''); // Reset participant name
+                  setStep('auth'); // Back to first purchase step
+                }}
                 className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-colors border border-slate-700"
               >
                 Nouveau Billet

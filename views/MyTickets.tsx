@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { getOfflineTickets, removeSecureTicket, saveSecureTicket } from '../utils/offlineStorage';
-import { QrCode, Calendar, MapPin, Ticket, WifiOff, Clock, ShieldCheck, RefreshCw, Send, X, Smartphone, Mail, AlertTriangle, Banknote, Users, Copy, Share2, Plus, Lock, Loader2, User, Download, Search } from 'lucide-react';
+import { QrCode, Calendar, MapPin, Ticket, WifiOff, Clock, ShieldCheck, RefreshCw, Send, X, Smartphone, Mail, AlertTriangle, Banknote, Users, Copy, Share2, Plus, Lock, Loader2, User, Download, Search, Globe } from 'lucide-react';
 import { signTicket } from '../utils/crypto';
-import { formatCurrency } from '../constants';
+import { PAYMENT_ROUTING, formatCurrency } from '../constants';
 import { WhatsAppService } from '../services/WhatsAppService';
 import { generateTicketPDF } from '../utils/pdfGenerator';
 import QRCode from 'qrcode';
@@ -454,19 +454,54 @@ const TransferModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () 
   const [recipientName, setRecipientName] = useState('');
   const [contactMethod, setContactMethod] = useState<'wa' | 'email'>('wa');
   const [contactValue, setContactValue] = useState('');
+  const [visitorCountryCode, setVisitorCountryCode] = useState('CI');
+  const [availableCountries, setAvailableCountries] = useState<any[]>([]);
+  const [loadingCountries, setLoadingCountries] = useState(true);
+
+  // Charger les pays actifs dynamiquement pour le destinataire
+  useEffect(() => {
+    const fetchActiveCountries = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('supported_countries')
+          .select('*')
+          .eq('is_active', true)
+          .order('name');
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setAvailableCountries(data);
+          if (!data.find((c: any) => c.code.toUpperCase() === 'CI')) {
+            setVisitorCountryCode(data[0].code.toUpperCase());
+          }
+        }
+      } catch (err) {
+        setAvailableCountries(Object.values(PAYMENT_ROUTING));
+      } finally {
+        setLoadingCountries(false);
+      }
+    };
+    fetchActiveCountries();
+  }, []);
+
+  const visitorCountry = PAYMENT_ROUTING[visitorCountryCode] || { dialCode: '+225' };
 
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recipientName || !contactValue) return;
-
-    setStep('processing');
+    // 0. Pré-formater le contact du destinataire
+    const searchContact = contactValue.trim().toLowerCase().replace(/\s/g, '');
+    let finalContact = searchContact;
+    if (contactMethod === 'wa') {
+      const dialCode = (visitorCountry?.dialCode || '+225').replace('+', '');
+      finalContact = searchContact.startsWith('+') ? searchContact.replace('+', '') : `${dialCode}${searchContact}`;
+    }
 
     try {
-      // 1. Appel RPC Supabase pour transférer le billet en base
+      // 1. Appel RPC Supabase pour transférer le billet en base (Utiliser finalContact)
       const { data, error } = await supabase.rpc('transfer_ticket', {
         p_ticket_id: ticket.id || ticket.qrCode,
         p_new_name: recipientName,
-        p_new_contact: contactValue
+        p_new_contact: finalContact
       });
 
       if (error) {
@@ -497,10 +532,10 @@ const TransferModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () 
       const mockQrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(newSignedToken);
 
       if (contactMethod === 'wa') {
-        console.log(`Transfert WA vers ${contactValue}`);
-        await WhatsAppService.sendMediaMessage(contactValue, transferMessage, mockQrImageUrl);
+        console.log(`Transfert WA vers ${finalContact}`);
+        await WhatsAppService.sendMediaMessage(finalContact, transferMessage, mockQrImageUrl);
       } else {
-        console.log(`Transfert Email vers ${contactValue} :`, newSignedToken);
+        console.log(`Transfert Email vers ${finalContact} :`, newSignedToken);
       }
 
       setStep('success');
@@ -554,18 +589,52 @@ const TransferModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () 
                 </button>
               </div>
 
+              {contactMethod === 'wa' && (
+                <div className="mb-4 bg-slate-800/30 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
+                  <span className="text-slate-300 text-xs font-bold uppercase tracking-wider">Pays du Destinataire</span>
+                  {loadingCountries ? (
+                    <div className="h-10 flex items-center px-3 bg-slate-900/60 rounded-lg animate-pulse" />
+                  ) : (
+                    <select
+                      value={visitorCountryCode}
+                      onChange={e => setVisitorCountryCode(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-orange-500"
+                    >
+                      {availableCountries.map(country => {
+                        const code = country.code.toUpperCase();
+                        const dial = country.dial_code || (PAYMENT_ROUTING[code]?.dialCode) || '';
+                        return (
+                          <option key={country.id || code} value={code}>
+                            {country.name} {dial ? `(${dial})` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
                   Contact du Destinataire
                 </label>
-                <input
-                  type={contactMethod === 'wa' ? 'tel' : 'email'}
-                  value={contactValue}
-                  onChange={(e) => setContactValue(e.target.value)}
-                  placeholder={contactMethod === 'wa' ? '+225 01 23 45 67 89' : 'marie@exemple.com'}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-mono"
-                  required
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                    {contactMethod === 'wa' ? (
+                      <span className="font-bold text-sm bg-slate-800 px-2 py-1 rounded border border-white/5">{visitorCountry?.dialCode || '+225'}</span>
+                    ) : (
+                      <Mail size={18} />
+                    )}
+                  </div>
+                  <input
+                    type={contactMethod === 'wa' ? 'tel' : 'email'}
+                    value={contactValue}
+                    onChange={(e) => setContactValue(e.target.value)}
+                    placeholder={contactMethod === 'wa' ? '05 44 24 69 72' : 'marie@exemple.com'}
+                    className={`w-full bg-slate-900/60 border border-slate-700 rounded-xl py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-medium ${contactMethod === 'wa' ? 'pl-20' : 'pl-12'} pr-4`}
+                    required
+                  />
+                </div>
               </div>
 
               <button
@@ -606,9 +675,6 @@ const TransferModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () 
   );
 };
 
-
-
-
 // Modal de Récupération de Billets (Multi-appareil)
 const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = ({ onClose, onSuccess }) => {
   const [step, setStep] = useState<'input' | 'searching' | 'otp' | 'results'>('input');
@@ -617,6 +683,44 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
   const [error, setError] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState('');
   const [ticketData, setTicketData] = useState<any[]>([]);
+  
+  // Nouveaux états pour le sélecteur dynamique
+  const [contactMethod, setContactMethod] = useState<'wa' | 'email'>('wa');
+  const [visitorCountryCode, setVisitorCountryCode] = useState('CI');
+  const [availableCountries, setAvailableCountries] = useState<any[]>([]);
+  const [loadingCountries, setLoadingCountries] = useState(true);
+
+  // Charger les pays actifs depuis la base de données (gérés par l'admin)
+  useEffect(() => {
+    const fetchActiveCountries = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('supported_countries')
+          .select('*')
+          .eq('is_active', true)
+          .order('name');
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setAvailableCountries(data);
+          // Si le pays par défaut (CI) n'est pas dans la liste active, prendre le premier
+          if (!data.find((c: any) => c.code.toUpperCase() === 'CI')) {
+            setVisitorCountryCode(data[0].code.toUpperCase());
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching countries", err);
+        // Fallback sur les pays par défaut si erreur
+        setAvailableCountries(Object.values(PAYMENT_ROUTING));
+      } finally {
+        setLoadingCountries(false);
+      }
+    };
+
+    fetchActiveCountries();
+  }, []);
+
+  const visitorCountry = PAYMENT_ROUTING[visitorCountryCode] || { dialCode: '+225' };
 
   const handleRecoverSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -626,82 +730,98 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
     setError(null);
 
     try {
-      const searchValue = contactValue.trim();
-      const numOnly = searchValue.replace(/[^0-9]/g, '');
-      let orQuery = `guest_email.eq.${searchValue},guest_email.eq.${searchValue.toLowerCase()}`;
-
-      if (numOnly.length >= 8) {
-         let core = numOnly;
-         if (core.startsWith('225')) core = core.slice(3);
-         else if (core.startsWith('00225')) core = core.slice(5);
-
-         const spacePattern = `${core.slice(0,2)} ${core.slice(2,4)} ${core.slice(4,6)} ${core.slice(6,8)} ${core.slice(8,10)}`.trim();
-         orQuery += `,guest_email.eq.${core},guest_email.eq.${numOnly},guest_email.eq.+225${core},guest_email.eq.${spacePattern}`;
+      const searchContact = contactValue.trim().toLowerCase().replace(/\s/g, '');
+      const dialCode = (visitorCountry?.dialCode || '+225').replace('+', '');
+      let finalContact = searchContact;
+      
+      if (contactMethod === 'wa') {
+        // Formater intelligemment : Ne pas doubler le préfixe
+        if (searchContact.startsWith('+')) {
+          finalContact = searchContact.replace('+', '');
+        } else if (searchContact.startsWith(dialCode)) {
+          finalContact = searchContact;
+        } else {
+          finalContact = `${dialCode}${searchContact}`;
+        }
       }
 
-      // 1. Rechercher les billets en base de données avec OR
-      const { data, error: fetchError } = await supabase
-        .from('tickets')
-        .select(`
-          *,
-          events (
-            title,
-            date,
-            location,
-              city,
-              profiles:organizer_id (
-                name,
-                avatar
-              )
-            )
-          `)
-        .or(orQuery)
-        .eq('status', 'valid');
+      // Pour la recherche, on cherche :
+      // 1. Le format exact construit (ex: 22507...)
+      // 2. Le format avec joker (au cas où) 
+      // 3. Le numéro brut sans indicatif
+      let orQuery = `guest_email.eq.${finalContact},guest_email.ilike.%${finalContact}%`;
+      
+      if (contactMethod === 'wa') {
+        const numOnly = searchContact.replace(/[^0-9]/g, '');
+        if (numOnly.length >= 8) {
+           // On cherche aussi le numéro seul (pour les anciens billets ou erreurs d'indicatif)
+           orQuery += `,guest_email.ilike.%${numOnly},guest_email.eq.${numOnly}`;
+        }
+      }
+
+      // 1. Rechercher les billets en base de données via RPC (Sécurisé & Outre-passe le RLS)
+      const { data: rawData, error: fetchError } = await supabase
+        .rpc('find_tickets_by_contact', { p_contact: finalContact });
 
       if (fetchError) throw fetchError;
 
-      if (!data || data.length === 0) {
+      if (!rawData || rawData.length === 0) {
         setFoundCount(0);
         setStep('results');
         return;
       }
 
-      setTicketData(data);
-      setFoundCount(data.length);
+      // 2. Transformer les données à plat du RPC vers le format attendu par l'UI
+      const formattedData = rawData.map((d: any) => ({
+        ...d,
+        events: {
+          title: d.event_title,
+          date: d.event_date,
+          location: d.event_location,
+          city: d.event_city,
+          profiles: {
+            name: d.organizer_name,
+            avatar: d.organizer_avatar
+          }
+        }
+      }));
 
-      const isEmail = contactValue.includes('@');
+      setTicketData(formattedData);
+      setFoundCount(formattedData.length);
 
-      if (isEmail) {
+      if (contactMethod === 'email') {
          // Appeler le backend dédié pour un OTP sécurisé + email "Récupération de Billets"
          try {
            await fetch(`${SERVER_URL}/api/auth/ticket-otp`, {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
                body: JSON.stringify({
-                 email: contactValue.trim().toLowerCase(),
-                 ticketCount: data.length
+                 email: finalContact,
+                 ticketCount: formattedData.length
                })
            });
          } catch (err) {
            console.error("Email send error", err);
          }
       } else {
-         // Pour WhatsApp, générer l'OTP et le stocker localement
-         const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-         try {
-           await supabase.from('auth_otps').insert([{
-              email: contactValue.trim().toLowerCase(),
-              otp_code: generatedOtp,
-              expires_at: new Date(Date.now() + 10 * 60000).toISOString()
-           }]);
-         } catch (e) {
-           console.error("Erreur enregistrement OTP:", e);
-         }
-         
-         const waMsg = `🔐 *Code de Sécurité Babipass*\n\nQuelqu'un tente de récupérer vos ${data.length} billets.\n\nVotre code de vérification est : *${generatedOtp}*\n\nValable 10 minutes.`;
-         const phoneClean = contactValue.replace(/[^0-9]/g, '');
-         WhatsAppService.sendMessage(phoneClean, waMsg);
-      }
+          // Pour WhatsApp, générer l'OTP et le stocker localement via RPC sécurisé
+          const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+          try {
+            // Utiliser le RPC sécurisé pour enregistrer l'OTP (Contourne l'erreur 401 RLS)
+            const { error: rpcError } = await supabase.rpc('save_whatsapp_otp', { 
+               p_contact: finalContact, 
+               p_otp: generatedOtp 
+            });
+            if (rpcError) throw rpcError;
+          } catch (e) {
+            console.error("Erreur enregistrement OTP via RPC:", e);
+          }
+          
+          const waMsg = `🔐 *Code de Sécurité Babipass*\n\nQuelqu'un tente de récupérer vos ${formattedData.length} billets.\n\nVotre code de vérification est : *${generatedOtp}*\n\nValable 10 minutes.`;
+          
+          console.log(`[MyTickets] Envoi OTP WA vers ${finalContact}`);
+          WhatsAppService.sendMessage(finalContact, waMsg);
+       }
 
       setStep('otp');
 
@@ -720,15 +840,28 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
     setStep('searching'); // Reuse loading screen
     
     try {
-      // 1. Vérifier l'OTP
-      const { data: otpRecord, error: otpFetchError } = await supabase
-        .from('auth_otps')
-        .select('*')
-        .eq('email', contactValue.trim().toLowerCase())
-        .eq('otp_code', otpCode)
-        .maybeSingle();
+      // 1. Construire le contact au format international (SANS DOUBLON)
+      const searchContact = contactValue.trim().toLowerCase().replace(/\s/g, '');
+      const dialCode = (visitorCountry?.dialCode || '+225').replace('+', '');
+      let finalContact = searchContact;
 
-      if (otpFetchError || !otpRecord) {
+      if (contactMethod === 'wa') {
+        if (searchContact.startsWith('+')) {
+          finalContact = searchContact.replace('+', '');
+        } else if (searchContact.startsWith(dialCode)) {
+          finalContact = searchContact;
+        } else {
+          finalContact = `${dialCode}${searchContact}`;
+        }
+      }
+
+      // 2. Vérifier l'OTP via RPC sécurisé
+      const { data: res, error: otpFetchError } = await supabase.rpc('verify_whatsapp_otp', {
+        p_contact: finalContact,
+        p_otp: otpCode
+      });
+
+      if (otpFetchError || !res || !res.success) {
         setError("Code incorrect ou expiré. Veuillez réessayer.");
         setStep('otp');
         return;
@@ -773,31 +906,84 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-300">
       <div className="bg-[#0f172a] w-full max-w-md rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden relative">
-        <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-white z-10 p-2 hover:bg-white/5 rounded-full">
-          <X size={24} />
-        </button>
-
+        
         {step === 'input' && (
-          <div className="p-8 pt-12 text-center">
-            <div className="w-20 h-20 bg-orange-500/20 text-orange-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-              <Search size={40} />
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white">Récupérer mes Billets</h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <h3 className="text-2xl font-black text-white mb-3">Récupérer mes Billets</h3>
-            <p className="text-slate-400 text-sm mb-8">
+
+            <p className="text-slate-400 text-sm mb-6">
               Saisissez l'email ou le numéro WhatsApp utilisé lors de votre achat.
             </p>
 
-            <form onSubmit={handleRecoverSearch} className="space-y-4">
-              <input
-                type="text"
-                value={contactValue}
-                onChange={(e) => setContactValue(e.target.value)}
-                placeholder="Email ou Numéro (+225...)"
-                className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl px-6 py-4 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-all text-center font-bold"
-                required
-              />
-              {error && <p className="text-rose-500 text-xs font-bold">{error}</p>}
-              <button type="submit" className="w-full py-5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-2xl font-black shadow-lg">
+            <div className="flex bg-slate-800 p-1 rounded-xl mb-6">
+              <button
+                onClick={() => setContactMethod('wa')}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${contactMethod === 'wa' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              >
+                <Smartphone size={16} /> WhatsApp
+              </button>
+              <button
+                onClick={() => setContactMethod('email')}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${contactMethod === 'email' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              >
+                <Mail size={16} /> Email
+              </button>
+            </div>
+
+            {contactMethod === 'wa' && (
+              <div className="mb-4 bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
+                <span className="text-slate-300 text-xs font-bold uppercase tracking-wider">Votre pays</span>
+                {loadingCountries ? (
+                  <div className="h-10 flex items-center px-3 bg-slate-900 rounded-lg animate-pulse">
+                    <span className="text-slate-500 text-xs text-center w-full">Chargement des pays...</span>
+                  </div>
+                ) : (
+                  <select
+                    value={visitorCountryCode}
+                    onChange={e => setVisitorCountryCode(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-orange-500"
+                  >
+                    {availableCountries.map(country => {
+                      const code = country.code.toUpperCase();
+                      const dialCode = country.dial_code || (PAYMENT_ROUTING[code]?.dialCode) || '';
+                      return (
+                        <option key={country.id || code} value={code}>
+                          {country.name} {dialCode ? `(${dialCode})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
+            )}
+
+            <form onSubmit={handleRecoverSearch}>
+              <div className="relative mb-6">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                  {contactMethod === 'wa' ? (
+                    <span className="font-bold text-sm bg-slate-800 px-2 py-1 rounded border border-white/5">{visitorCountry?.dialCode || '+225'}</span>
+                  ) : (
+                    <Mail size={18} />
+                  )}
+                </div>
+                <input
+                  type={contactMethod === 'wa' ? 'tel' : 'email'}
+                  value={contactValue}
+                  onChange={(e) => setContactValue(e.target.value)}
+                  className={`w-full bg-slate-900 border border-slate-700 rounded-xl py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-all font-medium ${contactMethod === 'wa' ? 'pl-20' : 'pl-12'} pr-4`}
+                  placeholder={contactMethod === 'wa' ? '05 44 24 69 72' : 'votre@email.com'}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-4 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold hover:shadow-[0_0_20px_rgba(249,115,22,0.3)] transition-all flex items-center justify-center gap-2"
+              >
+                <Search size={18} />
                 Rechercher
               </button>
             </form>
