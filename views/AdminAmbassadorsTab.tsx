@@ -17,38 +17,57 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
 
     const fetchTopAmbassadors = async () => {
         setLoadingTop(true);
-        const { data, error } = await supabase
+        const { data: links, error } = await supabase
             .from('ambassador_links')
-            .select(`
-                *,
-                profiles:user_id(name, email),
-                events:event_id(title)
-            `)
+            .select('*')
             .order('earned_amount', { ascending: false })
             .limit(50);
             
         if (error) {
             addToast("Erreur lors du chargement des top ambassadeurs: " + error.message, 'error');
+        } else if (links && links.length > 0) {
+            const userIds = [...new Set(links.map(l => l.user_id))];
+            const eventIds = [...new Set(links.map(l => l.event_id))];
+
+            const [{ data: profiles }, { data: events }] = await Promise.all([
+                supabase.from('profiles').select('id, name, email').in('id', userIds),
+                supabase.from('events').select('id, title').in('id', eventIds)
+            ]);
+
+            const enriched = links.map(link => ({
+                ...link,
+                profiles: profiles?.find(p => p.id === link.user_id) || null,
+                events: events?.find(e => e.id === link.event_id) || null
+            }));
+            
+            setTopAmbassadors(enriched);
         } else {
-            setTopAmbassadors(data || []);
+            setTopAmbassadors([]);
         }
         setLoadingTop(false);
     };
 
     const fetchWithdrawals = async () => {
         setLoadingWithdrawals(true);
-        const { data, error } = await supabase
+        const { data: wData, error } = await supabase
             .from('ambassador_withdrawals')
-            .select(`
-                *,
-                profiles:user_id(name, email)
-            `)
+            .select('*')
             .order('created_at', { ascending: false });
 
         if (error) {
             addToast("Erreur lors du chargement des retraits: " + error.message, 'error');
+        } else if (wData && wData.length > 0) {
+            const userIds = [...new Set(wData.map(w => w.user_id))];
+            const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+
+            const enriched = wData.map(w => ({
+                ...w,
+                profiles: profiles?.find(p => p.id === w.user_id) || null
+            }));
+
+            setWithdrawals(enriched);
         } else {
-            setWithdrawals(data || []);
+            setWithdrawals([]);
         }
         setLoadingWithdrawals(false);
     };
