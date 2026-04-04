@@ -109,15 +109,7 @@ export const AmbassadorLogin = () => {
 
             if (signUpError) throw signUpError;
 
-            // Send OTP via our server (branded email)
-            const serverRes = await fetch(`${SERVER_URL}/api/auth/ambassador-otp`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email.trim().toLowerCase(), name: fullName.trim() })
-            });
-            const serverData = await serverRes.json();
-            if (!serverData.success) throw new Error(serverData.error || "Erreur lors de l'envoi du code.");
-
+            // Supabase Auth envoie automatiquement l'email OTP configuré dans le dashboard
             setOtpStep(true);
             setSuccessMsg('');
         } catch (err: any) {
@@ -168,37 +160,38 @@ export const AmbassadorLogin = () => {
         try {
             const cleanEmail = email.trim().toLowerCase();
 
-            // Verify OTP against our auth_otps table (set by the server)
-            const { data: otpData, error: otpFetchError } = await supabase
-                .from('auth_otps')
-                .select('*')
-                .eq('email', cleanEmail)
-                .eq('otp_code', otpCode)
-                .maybeSingle();
+            // Vérification via Supabase Auth en natif
+            const { data, error: verifyError } = await supabase.auth.verifyOtp({
+                email: cleanEmail,
+                token: otpCode,
+                type: 'signup'
+            });
 
-            if (otpFetchError || !otpData) {
+            if (verifyError) {
                 throw new Error("Code incorrect ou expiré. Vérifiez votre email.");
             }
 
-            // Sign in the newly created user
+            // Sign in just to be completely sure (verifyOtp should already sign in, but let's be safe)
             const { error: signInError } = await supabase.auth.signInWithPassword({
                 email: cleanEmail,
                 password
             });
-            if (signInError) throw signInError;
+            if (signInError && !data.session) throw signInError;
 
             // Update profile: phone + role + name
             const { data: { user: authedUser } } = await supabase.auth.getUser();
             if (authedUser) {
-                await supabase.from('profiles').update({
+                const profileUpdate = {
                     phone: getFullSignupPhone(),
                     name: fullName.trim() || cleanEmail.split('@')[0],
                     role: 'AMBASSADOR'
-                }).eq('id', authedUser.id);
+                };
+                
+                const { error: profError } = await supabase.from('profiles').update(profileUpdate).eq('id', authedUser.id);
+                if (profError) {
+                    await supabase.from('profiles').upsert([{ id: authedUser.id, email: authedUser.email, ...profileUpdate }]);
+                }
             }
-
-            // Clean up OTP
-            await supabase.from('auth_otps').delete().eq('email', cleanEmail);
 
             setSuccessMsg("Compte créé ! Redirection en cours...");
             setRole(UserRole.AMBASSADOR);
