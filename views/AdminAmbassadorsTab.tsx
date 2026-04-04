@@ -15,13 +15,23 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
     const [withdrawals, setWithdrawals] = useState<any[]>([]);
     const [loadingWithdrawals, setLoadingWithdrawals] = useState(true);
 
+    // Pagination States
+    const [pageTop, setPageTop] = useState(1);
+    const [totalTop, setTotalTop] = useState(0);
+    const [pageWithdrawals, setPageWithdrawals] = useState(1);
+    const [totalWithdrawals, setTotalWithdrawals] = useState(0);
+    const ITEMS_PER_PAGE = 20;
+
     const fetchTopAmbassadors = async () => {
         setLoadingTop(true);
-        const { data: links, error } = await supabase
+        const from = (pageTop - 1) * ITEMS_PER_PAGE;
+        const to = from + ITEMS_PER_PAGE - 1;
+
+        const { data: links, count, error } = await supabase
             .from('ambassador_links')
-            .select('*')
+            .select('*', { count: 'exact' })
             .order('earned_amount', { ascending: false })
-            .limit(50);
+            .range(from, to);
             
         if (error) {
             addToast("Erreur lors du chargement des top ambassadeurs: " + error.message, 'error');
@@ -41,18 +51,24 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
             }));
             
             setTopAmbassadors(enriched);
+            setTotalTop(count || 0);
         } else {
             setTopAmbassadors([]);
+            setTotalTop(0);
         }
         setLoadingTop(false);
     };
 
     const fetchWithdrawals = async () => {
         setLoadingWithdrawals(true);
-        const { data: wData, error } = await supabase
+        const from = (pageWithdrawals - 1) * ITEMS_PER_PAGE;
+        const to = from + ITEMS_PER_PAGE - 1;
+
+        const { data: wData, count, error } = await supabase
             .from('ambassador_withdrawals')
-            .select('*')
-            .order('created_at', { ascending: false });
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false })
+            .range(from, to);
 
         if (error) {
             addToast("Erreur lors du chargement des retraits: " + error.message, 'error');
@@ -66,8 +82,10 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
             }));
 
             setWithdrawals(enriched);
+            setTotalWithdrawals(count || 0);
         } else {
             setWithdrawals([]);
+            setTotalWithdrawals(0);
         }
         setLoadingWithdrawals(false);
     };
@@ -78,8 +96,9 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
         } else {
             fetchWithdrawals();
         }
-    }, [subTab]);
+    }, [subTab, pageTop, pageWithdrawals]);
 
+    // ... handleAction intact ...
     const handleAction = async (id: string, newStatus: string) => {
         if (!window.confirm(`Voulez-vous passer ce retrait au statut : ${newStatus} ?`)) return;
 
@@ -126,6 +145,7 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                     ) : topAmbassadors.length === 0 ? (
                         <div className="p-12 text-center text-slate-500">Aucune donnée ambassadeur trouvée.</div>
                     ) : (
+                        <>
                         <div className="overflow-x-auto relative">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
@@ -140,7 +160,7 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                                     {topAmbassadors.map((amb) => (
                                         <tr key={amb.id} className="hover:bg-white/5 transition-colors">
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-white">{amb.profiles?.name || 'Inconnu'}</div>
+                                                <div className="font-bold text-white">{amb.profiles?.name || 'Inconnu (Compte supprimé)'}</div>
                                                 <div className="text-xs text-slate-500">{amb.profiles?.email}</div>
                                             </td>
                                             <td className="px-6 py-4 text-slate-300">
@@ -159,6 +179,12 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                                 </tbody>
                             </table>
                         </div>
+                        {totalTop > ITEMS_PER_PAGE && (
+                            <div className="px-6 py-4 border-t border-white/5">
+                                <Pagination currentPage={pageTop} itemsPerPage={ITEMS_PER_PAGE} totalItems={totalTop} totalPages={Math.ceil(totalTop / ITEMS_PER_PAGE)} onPageChange={setPageTop} />
+                            </div>
+                        )}
+                        </>
                     )}
                 </div>
             )}
@@ -170,6 +196,7 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                     ) : withdrawals.length === 0 ? (
                          <div className="p-12 text-center text-slate-500">Aucune demande de retrait pour le moment.</div>
                     ) : (
+                         <>
                          <div className="overflow-x-auto relative">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
@@ -189,7 +216,7 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                                                 {new Date(w.created_at).toLocaleDateString('fr-FR')}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-white">{w.profiles?.name || 'Inconnu'}</div>
+                                                <div className="font-bold text-white">{w.profiles?.name || 'Inconnu (Compte supprimé)'}</div>
                                                 <div className="text-xs text-slate-500">{w.profiles?.email}</div>
                                             </td>
                                             <td className="px-6 py-4 font-bold text-emerald-400">
@@ -230,6 +257,12 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                                 </tbody>
                             </table>
                          </div>
+                         {totalWithdrawals > ITEMS_PER_PAGE && (
+                             <div className="px-6 py-4 border-t border-white/5">
+                                 <Pagination currentPage={pageWithdrawals} itemsPerPage={ITEMS_PER_PAGE} totalItems={totalWithdrawals} totalPages={Math.ceil(totalWithdrawals / ITEMS_PER_PAGE)} onPageChange={setPageWithdrawals} />
+                             </div>
+                         )}
+                         </>
                     )}
                 </div>
             )}
