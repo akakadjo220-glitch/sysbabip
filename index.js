@@ -822,3 +822,60 @@ app.get('/api/webhooks/didit/logs', (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 AfriTix Server (SMTP + Payment Proxy) running on port ${PORT}`);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── CRON : Event Lifecycle Manager ────────────────────────────────────────
+// Runs every hour — marks events as 'completed' 24h after their date
+// ═══════════════════════════════════════════════════════════════════════════
+async function runEventLifecycleCron() {
+    try {
+        console.log('[Cron] Running event lifecycle check...');
+
+        // Fetch events that are still 'published' but ended more than 24 hours ago
+        const { data: expiredEvents, error: fetchErr } = await supabase
+            .from('events')
+            .select('id, title, date')
+            .eq('status', 'published');
+
+        if (fetchErr) {
+            console.error('[Cron] Error fetching events:', fetchErr.message);
+            return;
+        }
+
+        if (!expiredEvents || expiredEvents.length === 0) {
+            console.log('[Cron] No published events found.');
+            return;
+        }
+
+        const now = new Date();
+        const toClose = expiredEvents.filter(ev => {
+            const evDate = ev.date ? new Date(ev.date) : null;
+            if (!evDate) return false;
+            const releaseDate = new Date(evDate.getTime() + 24 * 60 * 60 * 1000);
+            return releaseDate < now;
+        });
+
+        if (toClose.length === 0) {
+            console.log('[Cron] No events to close at this time.');
+            return;
+        }
+
+        const idsToClose = toClose.map(ev => ev.id);
+        const { error: updateErr } = await supabase
+            .from('events')
+            .update({ status: 'completed' })
+            .in('id', idsToClose);
+
+        if (updateErr) {
+            console.error('[Cron] Error updating events:', updateErr.message);
+        } else {
+            console.log(`[Cron] ✅ Marked ${toClose.length} event(s) as completed:`, toClose.map(e => e.title));
+        }
+    } catch (err) {
+        console.error('[Cron] Unexpected error:', err.message);
+    }
+}
+
+// Run immediately on startup, then every hour (3 600 000 ms)
+runEventLifecycleCron();
+setInterval(runEventLifecycleCron, 60 * 60 * 1000);
