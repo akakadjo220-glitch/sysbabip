@@ -12,6 +12,7 @@ export const AmbassadorDashboard = () => {
   const [links, setLinks] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
   
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState('');
@@ -31,7 +32,7 @@ export const AmbassadorDashboard = () => {
   const loadData = async () => {
     setFetching(true);
     try {
-      const [linksData, withdrawalsData] = await Promise.all([
+      const [linksData, withdrawalsData, profileData] = await Promise.all([
         supabase
           .from('ambassador_links')
           .select('*, events(title, image)')
@@ -41,11 +42,17 @@ export const AmbassadorDashboard = () => {
           .from('ambassador_withdrawals')
           .select('*')
           .eq('user_id', user?.id)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user?.id)
+          .single()
       ]);
 
       if (linksData.data) setLinks(linksData.data);
       if (withdrawalsData.data) setWithdrawals(withdrawalsData.data);
+      if (profileData.data) setProfile(profileData.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -120,11 +127,11 @@ export const AmbassadorDashboard = () => {
         <div>
           <h1 className="text-3xl font-black text-white flex items-center gap-3">
             <Gift className="text-indigo-400" size={32} />
-            Espace Ambassadeur
+            Bonjour {profile?.name ? profile.name.split(' ')[0] : 'Ambassadeur'} 👋
           </h1>
           <div className="mt-2 text-slate-400 flex flex-col gap-1">
-            <p>Gérez vos liens de parrainage et retirez vos gains.</p>
-            {user?.email && <p className="text-indigo-300 font-medium">{user.email}</p>}
+            <p>Espace Ambassadeur • {profile?.name || user?.email}</p>
+            {user?.email && <p className="text-indigo-300 font-medium text-sm">Gérez vos liens de parrainage et retirez vos gains</p>}
           </div>
         </div>
         <button

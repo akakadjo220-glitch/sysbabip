@@ -24,34 +24,61 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
 
     const fetchTopAmbassadors = async () => {
         setLoadingTop(true);
-        const from = (pageTop - 1) * ITEMS_PER_PAGE;
-        const to = from + ITEMS_PER_PAGE - 1;
 
-        const { data: links, count, error } = await supabase
+        const { data: allLinks, error } = await supabase
             .from('ambassador_links')
-            .select('*', { count: 'exact' })
-            .order('earned_amount', { ascending: false })
-            .range(from, to);
+            .select('*');
             
         if (error) {
             addToast("Erreur lors du chargement des top ambassadeurs: " + error.message, 'error');
-        } else if (links && links.length > 0) {
-            const userIds = [...new Set(links.map(l => l.user_id))];
-            const eventIds = [...new Set(links.map(l => l.event_id))];
+            setLoadingTop(false);
+            return;
+        }
 
-            const [{ data: profiles }, { data: events }] = await Promise.all([
-                supabase.from('profiles').select('id, name, email').in('id', userIds),
-                supabase.from('events').select('id, title').in('id', eventIds)
-            ]);
+        if (allLinks && allLinks.length > 0) {
+            const grouped: Record<string, any> = {};
+            for (const link of allLinks) {
+                if (!grouped[link.user_id]) {
+                    grouped[link.user_id] = {
+                        id: link.user_id, // Utiliser user_id comme clé (pour la map list)
+                        user_id: link.user_id,
+                        sales: 0,
+                        clicks: 0,
+                        earned_amount: 0,
+                        events_set: new Set(),
+                        link_ids: []
+                    };
+                }
+                grouped[link.user_id].sales += link.sales || 0;
+                grouped[link.user_id].clicks += link.clicks || 0;
+                grouped[link.user_id].earned_amount += Number(link.earned_amount || 0);
+                grouped[link.user_id].events_set.add(link.event_id);
+                grouped[link.user_id].link_ids.push(link.id);
+            }
 
-            const enriched = links.map(link => ({
-                ...link,
-                profiles: profiles?.find(p => p.id === link.user_id) || null,
-                events: events?.find(e => e.id === link.event_id) || null
-            }));
-            
-            setTopAmbassadors(enriched);
-            setTotalTop(count || 0);
+            let aggregated = Object.values(grouped).map(g => ({
+                ...g,
+                events_count: g.events_set.size
+            })).sort((a, b) => b.earned_amount - a.earned_amount);
+
+            setTotalTop(aggregated.length);
+
+            const from = (pageTop - 1) * ITEMS_PER_PAGE;
+            const paginated = aggregated.slice(from, from + ITEMS_PER_PAGE);
+
+            if (paginated.length > 0) {
+                const userIds = paginated.map(l => l.user_id);
+                const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+
+                const enriched = paginated.map(amb => ({
+                    ...amb,
+                    profiles: profiles?.find(p => p.id === amb.user_id) || null
+                }));
+                
+                setTopAmbassadors(enriched);
+            } else {
+                setTopAmbassadors([]);
+            }
         } else {
             setTopAmbassadors([]);
             setTotalTop(0);
@@ -168,8 +195,8 @@ export const AdminAmbassadorsTab = ({ addToast }: { addToast: (msg: string, type
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-slate-300">
-                                                {amb.events?.title || 'Non trouvé'}
-                                                <div className="text-xs text-slate-500 mt-1 uppercase">Code: {amb.code}</div>
+                                                <div className="font-medium text-white">{amb.events_count} événement(s) promu(s)</div>
+                                                <div className="text-xs text-slate-500 mt-1 uppercase">{amb.link_ids.length} lien(s) généré(s)</div>
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <span className="font-medium text-emerald-400">{amb.sales} tickets</span>

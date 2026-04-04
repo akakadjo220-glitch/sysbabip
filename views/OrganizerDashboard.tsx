@@ -28,7 +28,7 @@ const MapResizer = () => {
   return null;
 };
 
-type OrganizerTab = 'overview' | 'events' | 'attendees' | 'sales' | 'marketing' | 'wallet' | 'chatbot' | 'account' | 'agents' | 'crm' | 'physical' | 'fundraising';
+type OrganizerTab = 'overview' | 'events' | 'attendees' | 'sales' | 'marketing' | 'wallet' | 'chatbot' | 'account' | 'agents' | 'crm' | 'physical' | 'fundraising' | 'ambassadors';
 type ToastType = 'success' | 'error' | 'info';
 
 import { AccountSettingsView } from '../components/AccountSettingsView';
@@ -88,7 +88,7 @@ export const OrganizerDashboard: React.FC = () => {
     }
   }, []);
 
-  const [stats, setStats] = useState({ totalGross: 0, totalNet: 0, totalCommission: 0, availableBalance: 0 });
+  const [stats, setStats] = useState({ totalGross: 0, totalNet: 0, totalCommission: 0, availableBalance: 0, totalAmbassador: 0 });
   const [eventSales, setEventSales] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
 
@@ -509,6 +509,7 @@ export const OrganizerDashboard: React.FC = () => {
           { id: 'crm', icon: Send, label: "CRM & Push WA" },
           { id: 'marketing', icon: Globe, label: "Heatmap (BI)" },
           { id: 'wallet', icon: Wallet, label: "Mon Wallet" },
+          { id: 'ambassadors', icon: Gift, label: "Ambassadeurs" },
           { id: 'chatbot', icon: MessageSquare, label: "Bot WhatsApp" },
           { id: 'account', icon: User, label: "Mon Compte" },
           { id: 'physical', icon: Printer, label: "Billets Physiques" },
@@ -567,6 +568,7 @@ export const OrganizerDashboard: React.FC = () => {
         {activeTab === 'account' && <AccountSettingsView userMode="organizer" />}
         {activeTab === 'physical' && <PhysicalTicketsView events={filteredEvents} transactions={filteredTransactions} addToast={addToast} />}
         {activeTab === 'fundraising' && <FundraisingTab organizerId={user?.id} addToast={addToast} />}
+        {activeTab === 'ambassadors' && <OrganizerAmbassadorsView events={filteredEvents} addToast={addToast} />}
       </div>
 
       {showWizard && <CreateEventWizard initialData={wizardEvent} onCancel={() => { setShowWizard(false); setWizardEvent(null); }} onSave={handleSaveEvent} />}
@@ -1426,6 +1428,21 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
   const totalNet = Number(stats?.totalNet || 0);
   const availableBalance = Number(stats?.availableBalance || 0);
 
+  // Split balance: completed events (date+24h < now) = unlocked, future events = locked
+  const now = new Date();
+  const completedEventIds = new Set(
+    (eventSales || []).filter((ev: any) => {
+      const evDate = ev.date ? new Date(ev.date) : null;
+      if (!evDate) return false;
+      return new Date(evDate.getTime() + 24 * 60 * 60 * 1000) < now;
+    }).map((ev: any) => ev.event_id)
+  );
+  const lockedBalance = (eventSales || []).reduce((sum: number, ev: any) => {
+    if (!completedEventIds.has(ev.event_id)) return sum + Number(ev.base_net || 0);
+    return sum;
+  }, 0);
+  const unlockedBalance = Math.max(0, availableBalance - lockedBalance);
+
   // Eligible events for a new cash advance
   const eligibleEvents = eventStats.filter((e: any) => e.gross > 0 && e.advanceStatus !== 'pending' && e.advanceStatus !== 'paid');
   const selectedEventStat = eligibleEvents.find((e: any) => e.id === selectedEventId);
@@ -1529,6 +1546,24 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
               </p>
               <h2 className="text-5xl font-black text-white drop-shadow-md">{formatCurrency(availableBalance)}</h2>
               <p className="text-slate-400 text-sm mt-3">Solde total net garanti après les éventuelles avances de trésorerie reversées.</p>
+            </div>
+          </div>
+
+          {/* Breakdown: Unlocked vs Locked */}
+          <div className="mt-6 relative z-10 grid grid-cols-2 gap-3">
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+              <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
+                <CheckCircle size={12}/> Disponible maintenant
+              </p>
+              <p className="text-2xl font-black text-emerald-300">{formatCurrency(unlockedBalance)}</p>
+              <p className="text-slate-500 text-xs mt-1">Événements terminés (+24h)</p>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4">
+              <p className="text-amber-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
+                <Clock size={12}/> En attente
+              </p>
+              <p className="text-2xl font-black text-amber-300">{formatCurrency(lockedBalance)}</p>
+              <p className="text-slate-500 text-xs mt-1">Libéré 24h après l'événement</p>
             </div>
           </div>
         </div>
@@ -3593,5 +3628,123 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
   );
 };
 
+// ─── Ambassadors ───
+const OrganizerAmbassadorsView = ({ events, addToast }: { events: any[], addToast: any }) => {
+    const [ambassadors, setAmbassadors] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
+    useEffect(() => {
+        const fetchAmbassadors = async () => {
+            if (!events || events.length === 0) {
+                setLoading(false);
+                return;
+            }
+            const eventIds = events.map(e => e.id);
+            const { data: allLinks, error } = await supabase
+                .from('ambassador_links')
+                .select('*')
+                .in('event_id', eventIds);
 
+            if (error) {
+                addToast("Erreur lors du chargement des ambassadeurs: " + error.message, 'error');
+                setLoading(false);
+                return;
+            }
+
+            if (allLinks && allLinks.length > 0) {
+                const grouped: Record<string, any> = {};
+                for (const link of allLinks) {
+                    if (!grouped[link.user_id]) {
+                        grouped[link.user_id] = {
+                            id: link.user_id,
+                            user_id: link.user_id,
+                            sales: 0,
+                            clicks: 0,
+                            earned_amount: 0,
+                            events_set: new Set(),
+                            link_ids: []
+                        };
+                    }
+                    grouped[link.user_id].sales += link.sales || 0;
+                    grouped[link.user_id].clicks += link.clicks || 0;
+                    grouped[link.user_id].earned_amount += Number(link.earned_amount || 0);
+                    grouped[link.user_id].events_set.add(link.event_id);
+                    grouped[link.user_id].link_ids.push(link.id);
+                }
+
+                let aggregated = Object.values(grouped).map(g => ({
+                    ...g,
+                    events_count: g.events_set.size
+                })).sort((a, b) => b.earned_amount - a.earned_amount);
+
+                const userIds = aggregated.map(a => a.user_id);
+                const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+
+                const enriched = aggregated.map(amb => ({
+                    ...amb,
+                    profiles: profiles?.find(p => p.id === amb.user_id) || null
+                }));
+
+                setAmbassadors(enriched);
+            } else {
+                setAmbassadors([]);
+            }
+            setLoading(false);
+        };
+        fetchAmbassadors();
+    }, [events]);
+
+    return (
+        <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden fade-in">
+            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-900/80">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Gift className="text-orange-400" /> Vos Ambassadeurs</h2>
+            </div>
+            {loading ? (
+                <div className="flex justify-center p-12"><Loader2 className="animate-spin text-orange-500" /></div>
+            ) : ambassadors.length === 0 ? (
+                <div className="p-12 text-center text-slate-500">
+                    <Gift className="mx-auto mb-4 opacity-50" size={48} />
+                    <p>Aucun ambassadeur n'a encore généré de lien pour vos événements.</p>
+                </div>
+            ) : (
+                <div className="overflow-x-auto relative">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
+                            <tr>
+                                <th className="px-6 py-4">Ambassadeur</th>
+                                <th className="px-6 py-4">Engagement</th>
+                                <th className="px-6 py-4 text-center">Ventes</th>
+                                <th className="px-6 py-4 text-right">Commissions Dues</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {ambassadors.map((amb) => (
+                                <tr key={amb.id} className="hover:bg-white/5 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="font-bold text-white">
+                                            {amb.profiles?.name || (amb.profiles?.email ? 'Utilisateur sans nom' : 'Inconnu')}
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                            {amb.profiles?.email || `ID: ${amb.user_id.substring(0, 8)}...`}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-slate-300">
+                                        <div className="font-medium text-white">{amb.events_count} de vos événement(s)</div>
+                                        <div className="text-xs text-slate-500 mt-1 uppercase">{amb.link_ids.length} lien(s) généré(s)</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className="font-medium text-emerald-400">{amb.sales} tickets</span>
+                                        <div className="text-xs text-slate-500">{amb.clicks} clics</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-bold text-white">
+                                        {formatCurrency(amb.earned_amount)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
