@@ -62,15 +62,15 @@ async function sendWaSenderMessage(to, text) {
 
 async function getBabipassContext() {
     // RAG: Fetch active events, prices, and stats from Supabase
+    // Try 'date' column first (main schema), fallback gracefully
     const { data: events, error } = await supabase
         .from('events')
         .select(`
-            id, slug, title, city, location, event_date_start, event_date_end, description, status, ai_context,
+            id, slug, title, city, location, date, description, status, ai_context, coordinates,
             ticket_types (id, name, price, capacity, sold)
         `)
         .eq('status', 'published')
-        .order('event_date_start', { ascending: true })
-        .limit(10);
+        .order('date', { ascending: true });
 
     if (error) {
         console.error('[WhatsApp Bot] Supabase error:', error.message);
@@ -84,13 +84,19 @@ async function getBabipassContext() {
 
     events.forEach(e => {
         context += `Événement: ${e.title}\n`;
-        context += `Lieu: ${e.location}, ${e.city}\n`;
-        context += `Date: du ${new Date(e.event_date_start).toLocaleString('fr-FR')} au ${new Date(e.event_date_end).toLocaleString('fr-FR')}\n`;
+        context += `Lieu: ${e.location || 'Non précisé'}, ${e.city}\n`;
+        const eventDate = e.date ? new Date(e.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Non précisée';
+        context += `Date: ${eventDate}\n`;
         // Keep description short to save context tokens
         context += `Description: ${e.description ? e.description.substring(0, 150) + '...' : 'N/A'}\n`;
         
         if (e.ai_context && e.ai_context.trim().length > 0) {
             context += `Instructions Spéciales / FAQ Fournies par l'organisateur: ${e.ai_context}\n`;
+        }
+
+        // Coordonnées GPS pour Google Maps
+        if (e.coordinates && e.coordinates.lat && e.coordinates.lng) {
+            context += `Google Maps: https://www.google.com/maps/search/?api=1&query=${e.coordinates.lat},${e.coordinates.lng}\n`;
         }
 
         context += `Billets :\n`;

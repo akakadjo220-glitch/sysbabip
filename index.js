@@ -56,10 +56,10 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
         // Ignore messages sent by the bot itself
         let isFromMe = req.body.fromMe || (req.body.data && req.body.data.message && req.body.data.message.fromMe);
 
-        if (phone && text && !isFromMe) { 
-           console.log(`[WhatsApp Webhook] Message received from ${phone}: ${text}`);
-           // Do not await, reply immediately to webhook to avoid timeout
-           WhatsAppAIBot.handleIncomingMessage(phone, text).catch(console.error);
+        if (phone && text && !isFromMe) {
+            console.log(`[WhatsApp Webhook] Message received from ${phone}: ${text}`);
+            // Do not await, reply immediately to webhook to avoid timeout
+            WhatsAppAIBot.handleIncomingMessage(phone, text).catch(console.error);
         }
 
         res.status(200).send('OK');
@@ -160,10 +160,10 @@ app.post('/api/auth/reset-password', async (req, res) => {
             // Tentative 2: si le profile n'existe pas, essayer via listUsers
             const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
             if (usersError) return res.status(500).json({ success: false, error: "Erreur récupération utilisateur." });
-            
+
             const authUser = usersData.users.find(u => u.email === email);
             if (!authUser) return res.status(404).json({ success: false, error: "Utilisateur introuvable." });
-            
+
             // Mettre à jour le mot de passe
             const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password: new_password });
             if (updateError) throw updateError;
@@ -305,6 +305,93 @@ app.post('/api/auth/ticket-otp', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── AMBASSADOR OTP ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+app.post('/api/auth/ambassador-otp', async (req, res) => {
+    try {
+        const { email, name } = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, error: 'Email requis.' });
+        }
+
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60000).toISOString();
+
+        await supabase.from('auth_otps').delete().eq('email', email.trim().toLowerCase());
+
+        const { error: insertError } = await supabase.from('auth_otps').insert([{
+            email: email.trim().toLowerCase(),
+            otp_code: otpCode,
+            expires_at: expiresAt
+        }]);
+        if (insertError) throw insertError;
+
+        const smtpConfig = await getSetting('smtp_config');
+        if (!smtpConfig || !smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
+            return res.status(500).json({ success: false, error: 'Configuration SMTP non configurée.' });
+        }
+
+        const htmlBody = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Code Ambassadeur</title>
+</head>
+<body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:24px;overflow:hidden;border:1px solid #334155;">
+          <!-- Header violet/ambassadeur -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);padding:36px 40px;text-align:center;">
+              <h1 style="margin:0;color:#fff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">🎁 Babipass Ambassadeur</h1>
+              <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">Programme d'Affiliation Officiel</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px;">
+              <p style="color:#cbd5e1;font-size:15px;margin:0 0 16px;">Bonjour <strong>${name || 'Ambassadeur'}</strong>,</p>
+              <p style="color:#94a3b8;font-size:15px;margin:0 0 24px;">Voici votre code de confirmation pour activer votre compte Ambassadeur :</p>
+              <!-- OTP Box -->
+              <div style="background:#0f172a;border:2px solid #7c3aed;border-radius:16px;padding:28px;text-align:center;margin:0 0 28px;">
+                <p style="margin:0;font-size:48px;font-weight:900;letter-spacing:12px;color:#8b5cf6;font-family:'Courier New',monospace;">${otpCode}</p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+        const transporter = nodemailer.createTransport({
+            host: smtpConfig.host,
+            port: smtpConfig.port || 465,
+            secure: smtpConfig.port == 465,
+            auth: { user: smtpConfig.user, pass: smtpConfig.pass },
+            tls: { rejectUnauthorized: false }
+        });
+
+        await transporter.sendMail({
+            from: '"Babipass Ambassadeur" <' + smtpConfig.user + '>',
+            to: email.trim(),
+            subject: otpCode + " — Votre code d'activation Ambassadeur Babipass",
+            html: htmlBody,
+        });
+
+        console.log('[Ambassador OTP] Code envoyé à ' + email);
+        return res.status(200).json({ success: true });
+
+    } catch (err) {
+        console.error('[Ambassador OTP] Error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── PAYMENT PROXY ENDPOINTS (Keys stay server‑side) ─────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
@@ -661,7 +748,7 @@ const webhookLogs = [];
 app.post('/api/webhooks/didit', async (req, res) => {
     try {
         const body = req.body;
-        
+
         // Log incoming webhook for deep debugging
         const logEntry = {
             timestamp: new Date().toISOString(),
@@ -669,11 +756,11 @@ app.post('/api/webhooks/didit', async (req, res) => {
         };
         webhookLogs.unshift(logEntry);
         if (webhookLogs.length > 50) webhookLogs.pop(); // Keep last 50
-        
+
         console.log('[Didit Webhook] Received:', body);
 
         const { decision, vendor_data } = body;
-        
+
         // Handle vendor_data natively
         let user_id = null;
         if (typeof vendor_data === 'string') {
