@@ -831,7 +831,6 @@ async function runEventLifecycleCron() {
     try {
         console.log('[Cron] Running event lifecycle check...');
 
-        // Fetch events that are still 'published' but ended more than 24 hours ago
         const { data: expiredEvents, error: fetchErr } = await supabase
             .from('events')
             .select('id, title, date')
@@ -855,27 +854,204 @@ async function runEventLifecycleCron() {
             return releaseDate < now;
         });
 
-        if (toClose.length === 0) {
-            console.log('[Cron] No events to close at this time.');
-            return;
-        }
+        if (toClose.length > 0) {
+            const idsToClose = toClose.map(ev => ev.id);
+            const { error: updateErr } = await supabase
+                .from('events')
+                .update({ status: 'completed' })
+                .in('id', idsToClose);
 
-        const idsToClose = toClose.map(ev => ev.id);
-        const { error: updateErr } = await supabase
-            .from('events')
-            .update({ status: 'completed' })
-            .in('id', idsToClose);
-
-        if (updateErr) {
-            console.error('[Cron] Error updating events:', updateErr.message);
+            if (updateErr) {
+                console.error('[Cron] Error updating events:', updateErr.message);
+            } else {
+                console.log(`[Cron] ✅ Marked ${toClose.length} event(s) as completed:`, toClose.map(e => e.title));
+            }
         } else {
-            console.log(`[Cron] ✅ Marked ${toClose.length} event(s) as completed:`, toClose.map(e => e.title));
+            console.log('[Cron] No events to close at this time.');
         }
     } catch (err) {
         console.error('[Cron] Unexpected error:', err.message);
     }
 }
 
-// Run immediately on startup, then every hour (3 600 000 ms)
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── CRON : J-1 Reminder Emails ────────────────────────────────────────────
+// Runs every day — sends reminder emails to ticket buyers for tomorrow's events
+// ═══════════════════════════════════════════════════════════════════════════
+async function runReminderCron() {
+    try {
+        console.log('[Reminder] Checking for events happening tomorrow...');
+
+        const smtpConfig = await getSetting('smtp_config');
+        if (!smtpConfig || !smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
+            console.warn('[Reminder] SMTP not configured, skipping reminder emails.');
+            return;
+        }
+
+        // Find events happening tomorrow (date between +24h and +48h from now)
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStart = new Date(tomorrow);
+        tomorrowStart.setHours(0, 0, 0, 0);
+        const tomorrowEnd = new Date(tomorrow);
+        tomorrowEnd.setHours(23, 59, 59, 999);
+
+        const { data: tomorrowEvents, error: evErr } = await supabase
+            .from('events')
+            .select('id, title, date, city, location')
+            .eq('status', 'published')
+            .gte('date', tomorrowStart.toISOString())
+            .lte('date', tomorrowEnd.toISOString());
+
+        if (evErr) {
+            console.error('[Reminder] Error fetching tomorrow events:', evErr.message);
+            return;
+        }
+
+        if (!tomorrowEvents || tomorrowEvents.length === 0) {
+            console.log('[Reminder] No events scheduled for tomorrow.');
+            return;
+        }
+
+        console.log(`[Reminder] Found ${tomorrowEvents.length} event(s) for tomorrow. Fetching buyers...`);
+
+        const transporter = nodemailer.createTransport({
+            host: smtpConfig.host,
+            port: smtpConfig.port || 465,
+            secure: smtpConfig.port == 465,
+            auth: { user: smtpConfig.user, pass: smtpConfig.pass },
+            tls: { rejectUnauthorized: false }
+        });
+
+        for (const event of tomorrowEvents) {
+            // Get all completed transactions for this event
+            const { data: transactions, error: trxErr } = await supabase
+                .from('transactions')
+                .select('guest_name, guest_email, id')
+                .eq('event_id', event.id)
+                .eq('status', 'completed');
+
+            if (trxErr) {
+                console.error(`[Reminder] Error fetching buyers for event ${event.id}:`, trxErr.message);
+                continue;
+            }
+
+            if (!transactions || transactions.length === 0) {
+                console.log(`[Reminder] No buyers for event "${event.title}".`);
+                continue;
+            }
+
+            const eventDate = new Date(event.date);
+            const dateStr = eventDate.toLocaleDateString('fr-FR', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            });
+            const timeStr = eventDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+            let sentCount = 0;
+            for (const trx of transactions) {
+                if (!trx.guest_email) continue;
+
+                const firstName = trx.guest_name ? trx.guest_name.split(' ')[0] : 'Cher participant';
+
+                const htmlBody = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"/><title>Rappel Événement</title></head>
+<body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:24px;overflow:hidden;border:1px solid #334155;">
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);padding:36px 40px;text-align:center;">
+            <h1 style="margin:0;color:#fff;font-size:26px;font-weight:800;">🎉 C'est demain !</h1>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,0.9);font-size:15px;">Votre événement approche à grands pas</p>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="color:#cbd5e1;font-size:16px;margin:0 0 16px;">Bonjour <strong style="color:#fff;">${firstName}</strong> 👋,</p>
+            <p style="color:#94a3b8;font-size:15px;margin:0 0 24px;">
+              Nous vous rappelons que l'événement auquel vous avez acheté votre billet a lieu <strong style="color:#f97316;">demain</strong> !
+            </p>
+
+            <!-- Event Card -->
+            <div style="background:#0f172a;border:1px solid #334155;border-left:4px solid #f97316;border-radius:16px;padding:24px;margin:0 0 28px;">
+              <h2 style="margin:0 0 12px;color:#fff;font-size:20px;font-weight:800;">${event.title}</h2>
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:4px 12px 4px 0;color:#94a3b8;font-size:14px;">📅 Date</td>
+                  <td style="padding:4px 0;color:#e2e8f0;font-size:14px;font-weight:600;">${dateStr}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 12px 4px 0;color:#94a3b8;font-size:14px;">🕐 Heure</td>
+                  <td style="padding:4px 0;color:#e2e8f0;font-size:14px;font-weight:600;">${timeStr}</td>
+                </tr>
+                ${event.location ? `<tr>
+                  <td style="padding:4px 12px 4px 0;color:#94a3b8;font-size:14px;">📍 Lieu</td>
+                  <td style="padding:4px 0;color:#e2e8f0;font-size:14px;font-weight:600;">${event.location}</td>
+                </tr>` : ''}
+                ${event.city ? `<tr>
+                  <td style="padding:4px 12px 4px 0;color:#94a3b8;font-size:14px;">🌍 Ville</td>
+                  <td style="padding:4px 0;color:#e2e8f0;font-size:14px;font-weight:600;">${event.city}</td>
+                </tr>` : ''}
+              </table>
+            </div>
+
+            <!-- Reminder Tips -->
+            <div style="background:#1e3a5f;border:1px solid #1d4ed8;border-radius:12px;padding:20px;margin:0 0 28px;">
+              <p style="color:#93c5fd;font-size:14px;font-weight:700;margin:0 0 8px;">💡 Conseils pour demain :</p>
+              <ul style="color:#bfdbfe;font-size:14px;margin:0;padding-left:20px;line-height:1.8;">
+                <li>Préparez votre billet (QR code dans vos emails de confirmation)</li>
+                <li>Arrivez 15 minutes avant l'heure indiquée</li>
+                <li>Présentez votre billet (screenshot ou email) à l'entrée</li>
+              </ul>
+            </div>
+
+            <p style="color:#64748b;font-size:13px;margin:0;text-align:center;">
+              Vous recevez cet email car vous avez acheté un billet sur <strong>Babipass</strong>.<br/>
+              Bonne soirée ! 🎊
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#0f172a;padding:20px 40px;text-align:center;border-top:1px solid #1e293b;">
+            <p style="color:#475569;font-size:12px;margin:0;">© Babipass • Plateforme de Billetterie Africaine</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+                try {
+                    await transporter.sendMail({
+                        from: `"Babipass" <${smtpConfig.user}>`,
+                        to: trx.guest_email.trim(),
+                        subject: `🎉 Rappel : "${event.title}" c'est demain !`,
+                        html: htmlBody,
+                    });
+                    sentCount++;
+                } catch (mailErr) {
+                    console.error(`[Reminder] Failed to send to ${trx.guest_email}:`, mailErr.message);
+                }
+            }
+
+            console.log(`[Reminder] ✅ Sent ${sentCount} reminder(s) for "${event.title}"`);
+        }
+
+    } catch (err) {
+        console.error('[Reminder] Unexpected error:', err.message);
+    }
+}
+
+// Run lifecycle cron immediately on startup, then every hour
 runEventLifecycleCron();
 setInterval(runEventLifecycleCron, 60 * 60 * 1000);
+
+// Run reminder cron immediately on startup, then every 24 hours
+runReminderCron();
+setInterval(runReminderCron, 24 * 60 * 60 * 1000);
