@@ -1647,6 +1647,7 @@ const SettingsTab = () => {
     intouch: false,
     paydunya: false
   });
+  const [emailToggles, setEmailToggles] = useState({ reminders: true, thanks: true });
 
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(EXCHANGE_RATES);
   const [globalRates, setGlobalRates] = useState({ commission: 8, advance: 30, physical: 2.0, fundraising: 5.0 });
@@ -1662,7 +1663,8 @@ const SettingsTab = () => {
         .in('key', ['wa_config', 'smtp_config', 'paystack_config', 'pawapay_config',
           'feexpay_config', 'intouch_config', 'paydunya_config',
           'affiliate_config', 'payment_toggles', 'exchange_rates',
-          'default_commission_rate', 'default_advance_rate', 'default_physical_commission_rate', 'openrouter_api_key', 'support_config']);
+          'default_commission_rate', 'default_advance_rate', 'default_physical_commission_rate', 'openrouter_api_key', 'support_config',
+          'enable_auto_reminders', 'enable_auto_thanks']);
 
       if (data) {
         const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
@@ -1678,6 +1680,10 @@ const SettingsTab = () => {
         if (map.payment_toggles) setPaymentToggles(map.payment_toggles);
         if (map.exchange_rates) setExchangeRates(map.exchange_rates);
         if (map.support_config) setSupportConfig(map.support_config);
+        setEmailToggles({
+          reminders: map.enable_auto_reminders === 'true' || map.enable_auto_reminders === true,
+          thanks: map.enable_auto_thanks === 'true' || map.enable_auto_thanks === true
+        });
 
         let comm = 8;
         let adv = 30;
@@ -1713,6 +1719,8 @@ const SettingsTab = () => {
       { key: 'default_advance_rate', value: globalRates.advance },
       { key: 'default_fundraising_commission_rate', value: globalRates.fundraising },
       { key: 'support_config', value: supportConfig },
+      { key: 'enable_auto_reminders', value: emailToggles.reminders },
+      { key: 'enable_auto_thanks', value: emailToggles.thanks },
     ];
 
     try {
@@ -1762,6 +1770,31 @@ const SettingsTab = () => {
               </label>
             )
           })}
+        </div>
+      </div>
+
+      <div className="bg-slate-900/50 backdrop-blur-xl p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl mb-8">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Mail size={20} className="text-indigo-400" /> Communications Automatiques</h3>
+        <p className="text-slate-400 text-sm mb-6">Contrôlez les envois d'emails automatiques gérés par le système (Cron Jobs).</p>
+        <div className="flex flex-wrap gap-6 text-sm">
+          <label className="flex items-center gap-3 bg-slate-800/50 px-5 py-3 rounded-xl border border-white/5 cursor-pointer hover:bg-slate-800 transition-colors">
+            <input
+              type="checkbox"
+              checked={emailToggles.reminders}
+              onChange={(e) => setEmailToggles({ ...emailToggles, reminders: e.target.checked })}
+              className="w-5 h-5 rounded border-white/10 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+            />
+            <span className="font-bold text-slate-200">Activer les Rappels de Billets (J-1)</span>
+          </label>
+          <label className="flex items-center gap-3 bg-slate-800/50 px-5 py-3 rounded-xl border border-white/5 cursor-pointer hover:bg-slate-800 transition-colors">
+            <input
+              type="checkbox"
+              checked={emailToggles.thanks}
+              onChange={(e) => setEmailToggles({ ...emailToggles, thanks: e.target.checked })}
+              className="w-5 h-5 rounded border-white/10 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+            />
+            <span className="font-bold text-slate-200">Activer les Emails de Remerciement (Post-Événement)</span>
+          </label>
         </div>
       </div>
 

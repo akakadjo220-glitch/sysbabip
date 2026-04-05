@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
@@ -1735,6 +1735,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     ambassador_enabled: boolean;
     ambassador_commission_type: 'percentage' | 'fixed';
     ambassador_commission_value: number;
+    sales_close_before_minutes: number;
   }>(initialData ? {
     id: initialData.id,
     isEdit: true,
@@ -1760,7 +1761,8 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     dialCode: initialData.dialCode || '+225',
     ambassador_enabled: initialData.ambassador_enabled || false,
     ambassador_commission_type: initialData.ambassador_commission_type || 'percentage',
-    ambassador_commission_value: initialData.ambassador_commission_value || 10
+    ambassador_commission_value: initialData.ambassador_commission_value || 10,
+    sales_close_before_minutes: initialData.sales_close_before_minutes ?? 60
   } : {
     title: '', date: '', location: '', city: '', country: '', price: 0, capacity: 1000,
     category: '', image: '', description: '', video: '', gallery: [],
@@ -1775,7 +1777,8 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     dialCode: '+225',
     ambassador_enabled: false,
     ambassador_commission_type: 'percentage',
-    ambassador_commission_value: 10
+    ambassador_commission_value: 10,
+    sales_close_before_minutes: 60
   });
 
   const [countries, setCountries] = useState<{ name: string, code: string }[]>([]);
@@ -2186,6 +2189,27 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
               </div>
 
               <label className="block"><span className="text-slate-400 font-semibold mb-1 block">Description</span><textarea rows={4} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none resize-none" placeholder="Décrivez votre événement..." /></label>
+              {/* Cloture automatique des ventes */}
+              <div className="bg-slate-900/50 border border-amber-500/20 rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <Clock className="text-amber-400" size={18} />
+                  <span className="text-white font-bold text-sm">Cloture automatique des ventes</span>
+                </div>
+                <p className="text-slate-400 text-xs mb-3 leading-relaxed">Les billets ne pourront plus etre achetes a partir du delai choisi avant le debut de l'evenement.</p>
+                <select
+                  value={form.sales_close_before_minutes}
+                  onChange={e => setForm({ ...form, sales_close_before_minutes: Number(e.target.value) })}
+                  className="w-full bg-slate-800 border border-amber-500/30 rounded-xl px-4 py-3 text-white font-medium focus:ring-2 focus:ring-amber-500 outline-none cursor-pointer"
+                >
+                  <option value={0}>Pas de cloture (ventes ouvertes en permanence)</option>
+                  <option value={30}>30 minutes avant le debut</option>
+                  <option value={60}>1 heure avant le debut (recommande)</option>
+                  <option value={120}>2 heures avant le debut</option>
+                  <option value={360}>6 heures avant le debut</option>
+                  <option value={720}>12 heures avant le debut</option>
+                  <option value={1440}>La veille (24h avant)</option>
+                </select>
+              </div>
             </div>
           )}
         </div>

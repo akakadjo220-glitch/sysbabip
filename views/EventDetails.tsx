@@ -381,6 +381,14 @@ export const EventDetails: React.FC = () => {
   // We'll add a demo check: if you want to test the resale, you can manually set capacity=sold in db.
   const isSoldOut = event.capacity > 0 && event.sold >= event.capacity;
 
+  // Clôture automatique des ventes configurée par l'organisateur
+  const salesCloseMinutes = Number((event as any).sales_close_before_minutes ?? 0);
+  const isSalesClosed = salesCloseMinutes > 0 && (() => {
+    const eventDate = new Date(event.date);
+    const closeAt = new Date(eventDate.getTime() - salesCloseMinutes * 60 * 1000);
+    return new Date() >= closeAt;
+  })();
+
   return (
     <div className="relative min-h-screen pb-36">
       <SEO
@@ -519,7 +527,15 @@ export const EventDetails: React.FC = () => {
                 )}
 
                 <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  {isSoldOut ? (
+                  {isSalesClosed && !isSoldOut ? (
+                  <div className="p-6 text-center bg-amber-500/5 border border-amber-500/30 rounded-xl mb-4">
+                    <div className="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Clock size={24} />
+                    </div>
+                    <p className="font-bold text-white text-xl mb-1">Ventes Clôturées</p>
+                    <p className="text-slate-400 text-sm">Les ventes en ligne sont fermées pour cet événement. Présentez-vous directement à l'entrée si des billets sont encore disponibles.</p>
+                  </div>
+                ) : isSoldOut ? (
                     <div className="p-6 text-center bg-slate-800/50 border border-slate-700 rounded-xl mb-4">
                       <div className="w-12 h-12 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
                         <X size={24} />
@@ -565,7 +581,7 @@ export const EventDetails: React.FC = () => {
                   )}
                 </div>
 
-                {!isSoldOut && (
+                {!isSoldOut && !isSalesClosed && (
                   <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
                     {isSuspended ? (
                       <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-xl flex items-start gap-3 mt-4">

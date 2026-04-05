@@ -55,6 +55,7 @@ export interface Event {
   ambassador_enabled?: boolean;
   ambassador_commission_type?: 'percentage' | 'fixed';
   ambassador_commission_value?: number;
+  sales_close_before_minutes?: number;
 }
 
 export interface TicketType {
