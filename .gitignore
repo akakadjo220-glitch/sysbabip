@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -12,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.vite
 
 # Editor directories and files
 .vscode/*
@@ -27,7 +28,4 @@ dist-ssr
 
 # Backend folder (stored in separate repo)
 server/
-=======
-node_modules/
-.env
->>>>>>> 1bcac3a17a4590d9fb81456d3b4ed55eabf3124a
+temp_server/
