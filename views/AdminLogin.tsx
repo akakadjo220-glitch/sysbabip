@@ -56,7 +56,7 @@ export const AdminLogin: React.FC = () => {
             // 3. Connexion réussie
             setRole(UserRole.ADMIN);
             localStorage.setItem('afritix_user_role', 'ADMIN');
-            navigate('/admin');
+            navigate('/sysbap');
 
         } catch (err: any) {
             console.error(err);

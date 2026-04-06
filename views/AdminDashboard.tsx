@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift } from 'lucide-react';
+import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift, Filter } from 'lucide-react';
 import { formatCurrency, EXCHANGE_RATES } from '../constants';
 import { UserRole, UserProfile, Event } from '../types';
 import { supabase } from '../supabaseClient';
@@ -11,7 +11,7 @@ import { getPlatformSettings, clearSettingsCache } from '../utils/platformSettin
 import { getUniqueSlug } from '../utils/slugUtils';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b'];
-type AdminTab = 'overview' | 'users' | 'events' | 'finance' | 'kyb' | 'ads' | 'countries' | 'templates' | 'settings' | 'account' | 'categories' | 'fundraising' | 'refunds' | 'ambassadors';
+type AdminTab = 'overview' | 'users' | 'events' | 'finance' | 'kyb' | 'kyc' | 'ads' | 'countries' | 'templates' | 'settings' | 'account' | 'categories' | 'fundraising' | 'refunds' | 'ambassadors';
 
 import { EMAIL_TEMPLATES, EmailTemplateType } from '../constants';
 import { AdminAmbassadorsTab } from './AdminAmbassadorsTab';
@@ -195,6 +195,7 @@ export const AdminDashboard: React.FC = () => {
           { id: 'fundraising', icon: Heart, label: 'Collectes de Fonds' },
           { id: 'finance', icon: CreditCard, label: 'Finance' },
           { id: 'kyb', icon: Building2, label: 'Vérif. Business' },
+          { id: 'kyc', icon: FileText, label: 'Validation Documents' },
           { id: 'ads', icon: Eye, label: 'Publicités' },
           { id: 'categories', icon: Tags, label: 'Catégories' },
           { id: 'countries', icon: Globe, label: 'Pays' },
@@ -218,13 +219,14 @@ export const AdminDashboard: React.FC = () => {
         {activeTab === 'events' && <EventsTab onAction={handleEventAction} onSave={handleSaveEvent} addToast={addToast} />}
         {activeTab === 'finance' && <FinanceTab stats={stats} addToast={addToast} />}
         {activeTab === 'kyb' && <KybReviewTab addToast={addToast} />}
+        {activeTab === 'kyc' && <KycReviewTab addToast={addToast} />}
         {activeTab === 'ads' && <AdBannersTab addToast={addToast} />}
         {activeTab === 'categories' && <EventCategoriesTab addToast={addToast} />}
         {activeTab === 'countries' && <CountriesTab />}
-        { activeTab === 'templates' && <EmailTemplatesManager addToast={addToast} /> }
-        { activeTab === 'fundraising' && <AdminFundraisingTab addToast={addToast} /> }
-        { activeTab === 'refunds' && <RefundsManagementView addToast={addToast} /> }
-        { activeTab === 'settings' && <SettingsTab /> }
+        {activeTab === 'templates' && <EmailTemplatesManager addToast={addToast} />}
+        {activeTab === 'fundraising' && <AdminFundraisingTab addToast={addToast} />}
+        {activeTab === 'refunds' && <RefundsManagementView addToast={addToast} />}
+        {activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'account' && <AccountSettingsView userMode="admin" />}
       </div>
     </div>
@@ -237,25 +239,101 @@ const OverviewTab = ({ stats }: any) => {
   const [chartData, setChartData] = useState<{ name: string, value: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filters
+  const [filterEvent, setFilterEvent] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [eventsList, setEventsList] = useState<{ id: string, title: string }[]>([]);
+  const [usersList, setUsersList] = useState<{ id: string, name: string }[]>([]);
+
+  // Filtered KPIs
+  const [filteredStats, setFilteredStats] = useState({ revenue: 0, commission: 0, trxCount: 0 });
+  const hasFilters = filterEvent || filterUser || filterDateFrom || filterDateTo;
+
+  // Load dropdown options once
   useEffect(() => {
-    const fetchChartData = async () => {
+    supabase.from('events').select('id, title').order('title').then(({ data }) => setEventsList(data || []));
+    supabase.from('profiles').select('id, name').in('role', ['ORGANIZER', 'ADMIN']).order('name').then(({ data }) => setUsersList(data || []));
+  }, []);
+
+  // Fetch filtered data
+  useEffect(() => {
+    const fetchData = async () => {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_revenue_by_country');
-      if (!error && data) {
-        setChartData(data);
+
+      // Chart data (always global)
+      const { data: cData } = await supabase.rpc('get_revenue_by_country');
+      if (cData) setChartData(cData);
+
+      // Filtered KPIs
+      if (hasFilters) {
+        let q = supabase.from('transactions').select('amount, commission_amount, event_id, events!inner(organizer_id)').neq('status', 'valid');
+        if (filterEvent) q = q.eq('event_id', filterEvent);
+        if (filterDateFrom) q = q.gte('created_at', filterDateFrom + 'T00:00:00');
+        if (filterDateTo) q = q.lte('created_at', filterDateTo + 'T23:59:59');
+        if (filterUser) q = q.eq('events.organizer_id', filterUser);
+
+        const { data: trxData } = await q;
+        const arr = trxData || [];
+        setFilteredStats({
+          revenue: arr.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0),
+          commission: arr.reduce((s: number, t: any) => s + (Number(t.commission_amount) || 0), 0),
+          trxCount: arr.length
+        });
       }
+
       setLoading(false);
     };
-    fetchChartData();
-  }, []);
+    fetchData();
+  }, [filterEvent, filterUser, filterDateFrom, filterDateTo]);
+
+  const displayStats = hasFilters ? filteredStats : stats;
 
   return (
     <div className="space-y-6">
+      {/* Filters Bar */}
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[160px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Événement</label>
+          <select value={filterEvent} onChange={e => setFilterEvent(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+            <option value="">Tous</option>
+            {eventsList.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+          </select>
+        </div>
+        <div className="flex-1 min-w-[160px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Organisateur</label>
+          <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+            <option value="">Tous</option>
+            {usersList.map(u => <option key={u.id} value={u.id}>{u.name || 'Sans nom'}</option>)}
+          </select>
+        </div>
+        <div className="min-w-[140px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Du</label>
+          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500" />
+        </div>
+        <div className="min-w-[140px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Au</label>
+          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500" />
+        </div>
+        {hasFilters && (
+          <button onClick={() => { setFilterEvent(''); setFilterUser(''); setFilterDateFrom(''); setFilterDateTo(''); }} className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs font-bold hover:bg-red-500/20 transition-all flex items-center gap-1.5">
+            <X size={14} /> Réinitialiser
+          </button>
+        )}
+      </div>
+
+      {hasFilters && (
+        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-2 text-xs text-orange-300 font-medium flex items-center gap-2">
+          <Filter size={14} /> Résultats filtrés — {filteredStats.trxCount} transaction(s) trouvée(s)
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPI title="Volume Total" value={formatCurrency(stats.revenue)} trend="+12% ce mois" color="from-orange-500 to-blue-500" />
-        <KPI title="Commissions" value={formatCurrency(stats.commission)} trend="+8% vs hier" color="from-amber-500 to-rose-500" />
-        <KPI title="Utilisateurs" value={stats.userCount} trend="Actifs" color="from-emerald-500 to-teal-500" />
-        <KPI title="Événements" value={stats.activeEvents} trend={`${stats.pendingEvents} à valider`} color="from-amber-500 to-orange-500" />
+        <KPI title="Volume Total" value={formatCurrency(displayStats.revenue)} trend={hasFilters ? 'Filtré' : '+12% ce mois'} color="from-orange-500 to-blue-500" />
+        <KPI title="Commissions" value={formatCurrency(displayStats.commission)} trend={hasFilters ? 'Filtré' : '+8% vs hier'} color="from-amber-500 to-rose-500" />
+        <KPI title="Utilisateurs" value={hasFilters ? filteredStats.trxCount + ' trx' : stats.userCount} trend={hasFilters ? 'Transactions' : 'Actifs'} color="from-emerald-500 to-teal-500" />
+        <KPI title="Événements" value={hasFilters ? (filterEvent ? '1 sélectionné' : 'Tous') : stats.activeEvents} trend={hasFilters ? '' : `${stats.pendingEvents} à valider`} color="from-amber-500 to-orange-500" />
       </div>
 
       <div className="glass-panel p-8 rounded-3xl border border-white/10 bg-slate-900/50 backdrop-blur-xl shadow-2xl">
@@ -685,10 +763,10 @@ const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'succe
               <td className="px-6 py-4 text-white font-bold">{formatCurrency(r.amount)}</td>
               <td className="px-6 py-4">
                 <span className={`px-2 py-1 rounded text-xs font-bold ${r.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' :
-                    r.status === 'approved_for_print' ? 'bg-blue-500/20 text-blue-400' :
-                      r.status === 'pending_payment' ? 'bg-purple-500/20 text-purple-400' :
-                        r.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                          'bg-amber-500/20 text-amber-400'
+                  r.status === 'approved_for_print' ? 'bg-blue-500/20 text-blue-400' :
+                    r.status === 'pending_payment' ? 'bg-purple-500/20 text-purple-400' :
+                      r.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                        'bg-amber-500/20 text-amber-400'
                   }`}>
                   {r.status === 'approved_for_print' ? 'APPROUVÉ IMPR.' :
                     r.status === 'pending_payment' ? 'PAIEMENT REQUIS' :
@@ -760,22 +838,56 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
   useEffect(() => {
     const fetchPayouts = async () => {
       setLoading(true);
-      const { data } = await supabase.from('admin_event_payouts_view')
+
+      // 1. Fetch base payouts view (gives revenue, commission, and combined advance)
+      const { data: viewData } = await supabase.from('admin_event_payouts_view')
         .select('*')
-        .gt('payout_amount', 0)
+        .gt('revenue', 0)
         .order('revenue', { ascending: false });
 
-      if (data) {
-        setPayouts(data.map(d => ({
-          eid: d.event_id,
-          event: d.event_title,
-          org: d.organizer_name,
-          date: d.event_date,
-          revenue: d.revenue,
-          commission: d.commission,
-          advanceDeducted: d.advance_deducted,
-          payoutAmount: d.payout_amount
-        })));
+      // 2. Fetch all ambassador commissions
+      const { data: ambData } = await supabase.from('transactions')
+        .select('event_id, ambassador_commission')
+        .gt('ambassador_commission', 0)
+        .neq('status', 'valid');
+
+      const ambByEvent: Record<string, number> = {};
+      (ambData || []).forEach(t => {
+        ambByEvent[t.event_id] = (ambByEvent[t.event_id] || 0) + Number(t.ambassador_commission);
+      });
+
+      // 3. Fetch all payout requests to separate cash_advance and physical_commission
+      const { data: prData } = await supabase.from('payout_requests')
+        .select('event_id, type, amount')
+        .in('status', ['paid', 'approved', 'pending'])
+        .in('type', ['cash_advance', 'physical_commission']);
+
+      const advancesByEvent: Record<string, { cash: number, phys: number }> = {};
+      (prData || []).forEach(p => {
+        if (!advancesByEvent[p.event_id]) advancesByEvent[p.event_id] = { cash: 0, phys: 0 };
+        if (p.type === 'cash_advance') advancesByEvent[p.event_id].cash += Number(p.amount);
+        if (p.type === ' physical_commission' || p.type === 'physical_commission') advancesByEvent[p.event_id].phys += Number(p.amount);
+      });
+
+      if (viewData) {
+        setPayouts(viewData.map(d => {
+          const ambComm = ambByEvent[d.event_id] || 0;
+          const cashAdv = advancesByEvent[d.event_id]?.cash || 0;
+          const physComp = advancesByEvent[d.event_id]?.phys || 0;
+
+          return {
+            eid: d.event_id,
+            event: d.event_title,
+            org: d.organizer_name,
+            date: d.event_date,
+            revenue: d.revenue,
+            commission: d.commission,
+            ambassadorCommission: ambComm,
+            cashAdvance: cashAdv,
+            physicalCompensation: physComp,
+            payoutAmount: d.revenue - d.commission - ambComm - cashAdv - physComp
+          };
+        }).filter(p => p.revenue > 0 || p.payoutAmount > 0)); // keep events that generated money
       }
       setLoading(false);
     };
@@ -799,16 +911,28 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
               <p className="font-bold text-slate-300">{formatCurrency(p.revenue)}</p>
             </div>
             <div className="text-center select-none">
-              <p className="text-xs text-slate-500">Commission (8%)</p>
+              <p className="text-xs text-slate-500">Commission Babipass</p>
               <p className="font-bold text-rose-400">-{formatCurrency(p.commission)}</p>
             </div>
-            {p.advanceDeducted > 0 && (
+            {p.ambassadorCommission > 0 && (
               <div className="text-center select-none">
-                <p className="text-xs text-slate-500">Avance Déduite</p>
-                <p className="font-bold text-orange-400">-{formatCurrency(p.advanceDeducted)}</p>
+                <p className="text-xs text-slate-500">Ambassadeurs</p>
+                <p className="font-bold text-indigo-400">-{formatCurrency(p.ambassadorCommission)}</p>
               </div>
             )}
-            <div className="text-center select-none bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 mr-2">
+            {p.cashAdvance > 0 && (
+              <div className="text-center select-none">
+                <p className="text-xs text-slate-500">Avance Versée</p>
+                <p className="font-bold text-amber-500">-{formatCurrency(p.cashAdvance)}</p>
+              </div>
+            )}
+            {p.physicalCompensation > 0 && (
+              <div className="text-center select-none">
+                <p className="text-xs text-slate-500">Comp. Physiques</p>
+                <p className="font-bold text-pink-500">-{formatCurrency(p.physicalCompensation)}</p>
+              </div>
+            )}
+            <div className="text-center select-none bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 mr-2 min-w-[120px]">
               <p className="text-xs text-emerald-400">À Reverser</p>
               <p className="font-bold text-emerald-400 text-lg">{formatCurrency(p.payoutAmount)}</p>
             </div>
@@ -964,8 +1088,8 @@ const AmbassadorWithdrawalsManager = ({ addToast }: { addToast: (msg: string, ty
               <td className="px-6 py-4 text-white font-bold">{formatCurrency(r.amount)}</td>
               <td className="px-6 py-4">
                 <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${r.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' :
-                        r.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                          'bg-amber-500/20 text-amber-400'
+                  r.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                    'bg-amber-500/20 text-amber-400'
                   }`}>
                   {r.status === 'paid' ? 'Payé' : r.status === 'rejected' ? 'Rejeté' : 'En Attente'}
                 </span>
@@ -1007,16 +1131,63 @@ const FinanceTab = ({ stats, addToast }: any) => {
   const [loading, setLoading] = useState(true);
   const TRX_PER_PAGE = 25;
 
+  // Filters
+  const [fEvent, setFEvent] = useState('');
+  const [fUser, setFUser] = useState('');
+  const [fDateFrom, setFDateFrom] = useState('');
+  const [fDateTo, setFDateTo] = useState('');
+  const [eventOpts, setEventOpts] = useState<{ id: string, title: string }[]>([]);
+  const [userOpts, setUserOpts] = useState<{ id: string, name: string }[]>([]);
+  const hasFilters = fEvent || fUser || fDateFrom || fDateTo;
+
+  // Filtered KPIs
+  const [fStats, setFStats] = useState({ revenue: 0, commission: 0, ambassadorCommission: 0 });
+  // Global totals (always fetched)
+  const [totalAmbassadorCommission, setTotalAmbassadorCommission] = useState(0);
+  const [totalCashAdvance, setTotalCashAdvance] = useState(0);
+  const [totalPhysicalCompensation, setTotalPhysicalCompensation] = useState(0);
+
+  // Load dropdown options + global totals once
+  useEffect(() => {
+    supabase.from('events').select('id, title').order('title').then(({ data }) => setEventOpts(data || []));
+    supabase.from('profiles').select('id, name').in('role', ['ORGANIZER', 'ADMIN']).order('name').then(({ data }) => setUserOpts(data || []));
+    // Fetch total ambassador commissions (all time, excluding physical)
+    supabase.from('transactions').select('ambassador_commission').neq('status', 'valid').then(({ data }) => {
+      const total = (data || []).reduce((s: number, t: any) => s + (Number(t.ambassador_commission) || 0), 0);
+      setTotalAmbassadorCommission(total);
+    });
+    // Fetch total cash advances paid to organizers
+    supabase.from('payout_requests').select('amount').eq('type', 'cash_advance').eq('status', 'paid').then(({ data }) => {
+      const total = (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+      setTotalCashAdvance(total);
+    });
+    // Fetch total physical commission compensated from organizer wallet
+    supabase.from('payout_requests').select('amount').eq('type', 'physical_commission').eq('status', 'paid').then(({ data }) => {
+      const total = (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+      setTotalPhysicalCompensation(total);
+    });
+  }, []);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setTrxPage(1); }, [fEvent, fUser, fDateFrom, fDateTo]);
+
   const fetchTransactions = async () => {
     setLoading(true);
     const from = (trxPage - 1) * TRX_PER_PAGE;
     const to = from + TRX_PER_PAGE - 1;
 
-    const { data, count, error } = await supabase
+    let query = supabase
       .from('transactions')
-      .select('*, events!inner(title)', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
+      .select('*, events!inner(title, organizer_id)', { count: 'exact' })
+      .neq('status', 'valid')
+      .order('created_at', { ascending: false });
+
+    if (fEvent) query = query.eq('event_id', fEvent);
+    if (fDateFrom) query = query.gte('created_at', fDateFrom + 'T00:00:00');
+    if (fDateTo) query = query.lte('created_at', fDateTo + 'T23:59:59');
+    if (fUser) query = query.eq('events.organizer_id', fUser);
+
+    const { data, count, error } = await query.range(from, to);
 
     if (error) {
       addToast?.(`Erreur transactions: ${error.message}`, 'error');
@@ -1024,22 +1195,89 @@ const FinanceTab = ({ stats, addToast }: any) => {
       setTransactions(data || []);
       setTotalTrx(count || 0);
     }
+
+    // Compute filtered KPIs when filters are active
+    if (hasFilters) {
+      let kpiQ = supabase.from('transactions').select('amount, commission_amount, ambassador_commission, events!inner(organizer_id)').neq('status', 'valid');
+      if (fEvent) kpiQ = kpiQ.eq('event_id', fEvent);
+      if (fDateFrom) kpiQ = kpiQ.gte('created_at', fDateFrom + 'T00:00:00');
+      if (fDateTo) kpiQ = kpiQ.lte('created_at', fDateTo + 'T23:59:59');
+      if (fUser) kpiQ = kpiQ.eq('events.organizer_id', fUser);
+      const { data: kpiData } = await kpiQ;
+      const arr = kpiData || [];
+      setFStats({
+        revenue: arr.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0),
+        commission: arr.reduce((s: number, t: any) => s + (Number(t.commission_amount) || 0), 0),
+        ambassadorCommission: arr.reduce((s: number, t: any) => s + (Number(t.ambassador_commission) || 0), 0)
+      });
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
     fetchTransactions();
-  }, [trxPage]);
+  }, [trxPage, fEvent, fUser, fDateFrom, fDateTo]);
 
   const totalTrxPages = Math.ceil(totalTrx / TRX_PER_PAGE);
 
   return (
     <div className="space-y-6 block">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <KPI title="CA Global" value={formatCurrency(stats.revenue)} trend="Total encaissé" color="from-orange-600 to-orange-400" />
-        <KPI title="Bénéfice Ligne" value={formatCurrency(stats.commission)} trend="Commission (Web)" color="from-rose-600 to-rose-400" />
-        <KPI title="Bénéfice Physique" value={formatCurrency(Number(stats.physicalCommission) || 0)} trend="Commission (Impression)" color="from-purple-600 to-purple-400" />
-        <KPI title="Dû Organisateurs" value={formatCurrency(stats.paidPayouts)} trend="A reverser" color="from-teal-600 to-teal-400" />
+      {/* Filters Bar */}
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[160px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Événement</label>
+          <select value={fEvent} onChange={e => setFEvent(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+            <option value="">Tous</option>
+            {eventOpts.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+          </select>
+        </div>
+        <div className="flex-1 min-w-[160px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Organisateur</label>
+          <select value={fUser} onChange={e => setFUser(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+            <option value="">Tous</option>
+            {userOpts.map(u => <option key={u.id} value={u.id}>{u.name || 'Sans nom'}</option>)}
+          </select>
+        </div>
+        <div className="min-w-[140px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Du</label>
+          <input type="date" value={fDateFrom} onChange={e => setFDateFrom(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500" />
+        </div>
+        <div className="min-w-[140px]">
+          <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Au</label>
+          <input type="date" value={fDateTo} onChange={e => setFDateTo(e.target.value)} className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-orange-500" />
+        </div>
+        {hasFilters && (
+          <button onClick={() => { setFEvent(''); setFUser(''); setFDateFrom(''); setFDateTo(''); }} className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs font-bold hover:bg-red-500/20 transition-all flex items-center gap-1.5">
+            <X size={14} /> Réinitialiser
+          </button>
+        )}
+      </div>
+
+      {hasFilters && (
+        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-2 text-xs text-orange-300 font-medium flex items-center gap-2">
+          <Filter size={14} /> Résultats filtrés — {totalTrx} transaction(s) trouvée(s)
+        </div>
+      )}
+
+      {/* Row 1: Revenue KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPI title="CA Global" value={formatCurrency(hasFilters ? fStats.revenue : stats.revenue)} trend={hasFilters ? 'Filtré' : 'Total encaissé (en ligne)'} color="from-orange-600 to-orange-400" />
+        <KPI title="Commission Ligne" value={formatCurrency(hasFilters ? fStats.commission : stats.commission)} trend={hasFilters ? 'Filtré' : 'Babipass (Web)'} color="from-rose-600 to-rose-400" />
+        <KPI title="Commission Physique" value={formatCurrency(Number(stats.physicalCommission) || 0)} trend="Babipass (Impression)" color="from-purple-600 to-purple-400" />
+        <KPI title="Commission Ambassadeurs" value={formatCurrency(hasFilters ? fStats.ambassadorCommission : totalAmbassadorCommission)} trend={hasFilters ? 'Filtré' : 'Total reversé'} color="from-indigo-600 to-indigo-400" />
+      </div>
+
+      {/* Row 2: Deductions & Final */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KPI title="Avances Versées" value={formatCurrency(totalCashAdvance)} trend="Cash Advance payé" color="from-amber-600 to-yellow-500" />
+        <KPI title="Compensations Physiques" value={formatCurrency(totalPhysicalCompensation)} trend="Déduit du wallet organisateur" color="from-pink-600 to-pink-400" />
+        <KPI title="Dû Organisateurs (Net)" value={formatCurrency(
+          (hasFilters
+            ? fStats.revenue - fStats.commission - fStats.ambassadorCommission
+            : stats.revenue - stats.commission - totalAmbassadorCommission
+          ) - totalCashAdvance - totalPhysicalCompensation
+        )} trend="CA - Commissions - Ambassadeurs - Avances - Compensations" color="from-teal-600 to-teal-400" />
       </div>
 
       <div className="bg-white/5 border border-white/10 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl relative z-20">
@@ -2534,6 +2772,204 @@ const KybReviewTab = ({ addToast }: { addToast: (msg: string, type?: any) => voi
   );
 };
 
+// ─── KycReviewTab ─────────────────────────────────────────────────────────────
+const KycReviewTab = ({ addToast }: { addToast: (msg: string, type?: any) => void }) => {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [rejectModal, setRejectModal] = useState<{ id: string, name: string } | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const fetchKycRequests = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('address_status', 'none')
+      .not('address_doc_url', 'is', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      addToast(`Erreur chargement KYC: ${error.message}`, 'error');
+    } else {
+      setRequests(data || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchKycRequests();
+  }, []);
+
+  const handleApprove = async (id: string) => {
+    if (!window.confirm("Approuver ce document d'adresse ? L'organisateur pourra imprimer des billets physiques.")) return;
+    setProcessing(true);
+    const { error } = await supabase.from('profiles').update({
+      address_status: 'verified',
+      address_rejection_reason: null
+    }).eq('id', id);
+
+    if (error) {
+      addToast(`Erreur: ${error.message}`, 'error');
+    } else {
+      addToast('Document d\'adresse approuvé avec succès !', 'success');
+      setRequests(r => r.map(user => user.id === id ? { ...user, address_status: 'verified' } : user));
+    }
+    setProcessing(false);
+  };
+
+  const handleReject = async () => {
+    if (!rejectModal) return;
+    setProcessing(true);
+    const { error } = await supabase.from('profiles').update({
+      address_status: 'rejected',
+      address_doc_url: null,
+      address_rejection_reason: rejectReason || 'Document non valide ou illisible.'
+    }).eq('id', rejectModal.id);
+
+    if (error) {
+      addToast(`Erreur: ${error.message}`, 'error');
+    } else {
+      addToast('Document rejeté.', 'success');
+      setRequests(r => r.filter(user => user.id !== rejectModal.id));
+      setRejectModal(null);
+      setRejectReason('');
+    }
+    setProcessing(false);
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === 'verified') return <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider flex items-center w-max gap-1"><CheckCircle2 size={12} /> Vérifié</span>;
+    if (status === 'pending') return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider flex items-center w-max gap-1"><Clock size={12} /> En attente</span>;
+    return <span className="text-slate-500 text-xs">-</span>;
+  };
+
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-3xl p-6 shadow-2xl relative z-20 overflow-hidden">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center border border-orange-500/30">
+          <FileText className="text-orange-400" size={20} />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-white">Validation Documents Adresse (KYC)</h2>
+          <p className="text-slate-400 text-sm">Approuvez les justificatifs de domicile pour débloquer l'impression physique.</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-12 mx-auto w-max"><Loader2 className="animate-spin text-orange-500" size={32} /></div>
+      ) : requests.length === 0 ? (
+        <div className="bg-slate-900/50 rounded-2xl p-8 border border-white/5 text-center">
+          <CheckCircle2 className="text-slate-500 mx-auto mb-3" size={32} />
+          <p className="text-slate-400 font-medium pt-2">Aucune demande KYC en attente.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
+              <tr>
+                <th className="px-6 py-4">Organisateur</th>
+                <th className="px-6 py-4">Statut</th>
+                <th className="px-6 py-4">Document</th>
+                <th className="px-6 py-4">Soumis le</th>
+                <th className="px-6 py-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {requests.map((r) => (
+                <tr key={r.id} className="hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="text-white font-bold">{r.name}</div>
+                    <div className="text-slate-400 text-xs">{r.email}</div>
+                  </td>
+                  <td className="px-6 py-4">{statusBadge(r.address_status)}</td>
+                  <td className="px-6 py-4">
+                    {r.address_doc_url && (
+                      <button onClick={async () => {
+                        try {
+                          const path = r.address_doc_url.split('/kyc_documents/')[1];
+                          if (!path) throw new Error("Chemin invalide");
+                          const { data, error } = await supabase.storage.from('kyc_documents').createSignedUrl(path, 60);
+                          if (error) throw error;
+                          if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                        } catch (err: any) {
+                          addToast(`Erreur ouverture document : ${err.message}`, 'error');
+                        }
+                      }}
+                        className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors">
+                        <FileText size={14} /> Voir le Document
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-slate-400 text-xs">{new Date(r.updated_at || r.created_at).toLocaleDateString('fr-FR')}</td>
+                  <td className="px-6 py-4">
+                    {r.address_status === 'pending' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleApprove(r.id)}
+                          disabled={processing}
+                          className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50">
+                          <Check size={14} /> Approuver
+                        </button>
+                        <button
+                          onClick={() => setRejectModal({ id: r.id, name: r.name })}
+                          disabled={processing}
+                          className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50">
+                          <X size={14} /> Rejeter
+                        </button>
+                      </div>
+                    )}
+                    {r.address_status === 'verified' && (
+                      <button
+                        onClick={() => setRejectModal({ id: r.id, name: r.name })}
+                        className="text-slate-500 hover:text-red-400 text-xs font-medium transition-colors">
+                        Révoquer
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/10 rounded-3xl p-8 shadow-2xl w-full max-w-md">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center"><AlertTriangle className="text-red-400" size={24} /></div>
+              <div>
+                <h3 className="text-white font-bold text-lg">Rejeter la demande KYC</h3>
+                <p className="text-slate-400 text-sm">{rejectModal.name}</p>
+              </div>
+            </div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Motif du rejet (optionnel)</label>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              placeholder="Ex: Document illisible, mauvais justificatif, etc."
+              rows={4}
+              className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-red-500 resize-none mb-6"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setRejectModal(null); setRejectReason(''); }}
+                className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 py-3 rounded-xl font-bold transition-all">
+                Annuler
+              </button>
+              <button onClick={handleReject} disabled={processing}
+                className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold transition-all">
+                {processing ? <Loader2 size={18} className="animate-spin mx-auto" /> : 'Confirmer le rejet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── AdBannersTab ─────────────────────────────────────────────────────────────
 const BADGE_COLOR_OPTIONS = [
   { value: 'orange', label: '🟠 Orange' },
@@ -3277,7 +3713,7 @@ const RefundsManagementView = ({ addToast }: any) => {
       .select('id, title, date, organizer_id, cancellation_status, cancellation_reason, profiles(name, email)')
       .eq('cancellation_status', 'requested')
       .order('created_at', { ascending: false });
-    
+
     if (err1) addToast('Erreur requêtes annulation: ' + err1.message, 'error');
     else setRequests(reqData || []);
 
@@ -3287,7 +3723,7 @@ const RefundsManagementView = ({ addToast }: any) => {
       .select('id, guest_name, guest_email, buyer_phone, amount, method, status, refund_status, event_id, created_at, events(title)')
       .eq('refund_status', 'pending')
       .order('created_at', { ascending: true });
-    
+
     if (err2) addToast('Erreur transactions à rembourser: ' + err2.message, 'error');
     else setPendingRefunds(refData || []);
 
@@ -3372,7 +3808,7 @@ const RefundsManagementView = ({ addToast }: any) => {
           ) : requests.map(req => (
             <div key={req.id} className="bg-slate-900/50 border border-red-500/20 p-5 rounded-2xl flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
               <div className="flex-1">
-                <h3 className="font-bold text-lg text-white mb-1">{req.title} <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400 ml-2">ID: {req.id.slice(0,8)}</span></h3>
+                <h3 className="font-bold text-lg text-white mb-1">{req.title} <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400 ml-2">ID: {req.id.slice(0, 8)}</span></h3>
                 <p className="text-sm text-slate-400 mb-3"><strong>Organisateur :</strong> {req.profiles?.name} ({req.profiles?.email})</p>
                 <div className="bg-red-900/20 border justify-center border-red-500/20 p-3 rounded-xl text-sm italic text-red-200">
                   "{req.cancellation_reason}"
@@ -3391,9 +3827,9 @@ const RefundsManagementView = ({ addToast }: any) => {
         <div className="space-y-4">
           <div className="flex justify-between items-center bg-slate-900/50 p-4 border border-white/10 rounded-2xl">
             <span className="text-slate-300 font-bold">{pendingRefunds.length} transactions à rembourser manuellement</span>
-            <button onClick={exportPendingRefunds} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 text-white font-bold rounded-xl text-sm"><Download size={16}/> Exporter CSV (Batch)</button>
+            <button onClick={exportPendingRefunds} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 text-white font-bold rounded-xl text-sm"><Download size={16} /> Exporter CSV (Batch)</button>
           </div>
-          
+
           <div className="overflow-x-auto bg-slate-900/50 rounded-3xl border border-white/10">
             <table className="w-full text-left text-sm text-slate-300">
               <thead className="bg-slate-800/80 uppercase text-xs font-bold text-slate-400">
@@ -3413,7 +3849,7 @@ const RefundsManagementView = ({ addToast }: any) => {
                     <td className="px-4 py-3 text-white font-medium">{t.events?.title || '—'}</td>
                     <td className="px-4 py-3 font-bold text-orange-400">{t.method}</td>
                     <td className="px-4 py-3 font-bold text-emerald-400">{t.amount?.toLocaleString('fr-FR')} F</td>
-                    <td className="px-4 py-3 text-xs leading-relaxed max-w-[200px] truncate">{t.guest_name} <br/> <span className="text-slate-500">{t.buyer_phone || t.guest_email}</span></td>
+                    <td className="px-4 py-3 text-xs leading-relaxed max-w-[200px] truncate">{t.guest_name} <br /> <span className="text-slate-500">{t.buyer_phone || t.guest_email}</span></td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => markAsRefunded(t.id)} className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-lg text-xs font-bold transition">Marqué Remboursé</button>
                     </td>

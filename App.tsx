@@ -86,7 +86,7 @@ const AppContent: React.FC = () => {
           <Route path="/collecte/:slug" element={<FundraisingPage />} />
 
           <Route path="/organizer/login" element={<OrganizerLogin />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/sysbap/login" element={<AdminLogin />} />
           <Route path="/agent/login" element={<AgentLogin />} />
           <Route path="/ambassador/login" element={<AmbassadorLogin />} />
 
@@ -95,8 +95,8 @@ const AppContent: React.FC = () => {
               <OrganizerDashboard />
             </ProtectedRoute>
           } />
-          <Route path="/admin" element={
-            <ProtectedRoute allowedRoles={[UserRole.ADMIN]} fallbackPath="/admin/login">
+          <Route path="/sysbap" element={
+            <ProtectedRoute allowedRoles={[UserRole.ADMIN]} fallbackPath="/sysbap/login">
               <AdminDashboard />
             </ProtectedRoute>
           } />

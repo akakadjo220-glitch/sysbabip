@@ -1,6 +1,6 @@
-﻿import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift } from 'lucide-react';
+import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift, Lock, Upload } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatCurrency } from '../constants';
@@ -55,7 +55,7 @@ export const OrganizerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [wizardEvent, setWizardEvent] = useState<any>(null);
-  
+
   // Cancellation States
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelEventObj, setCancelEventObj] = useState<any>(null);
@@ -88,7 +88,7 @@ export const OrganizerDashboard: React.FC = () => {
     }
   }, []);
 
-  const [stats, setStats] = useState({ totalGross: 0, totalNet: 0, totalCommission: 0, availableBalance: 0, totalAmbassador: 0 });
+  const [stats, setStats] = useState<any>({ totalGross: 0, totalNet: 0, totalCommission: 0, availableBalance: 0, totalAmbassador: 0, physicalCount: 0, physicalCommissionPaid: 0 });
   const [eventSales, setEventSales] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
 
@@ -196,7 +196,9 @@ export const OrganizerDashboard: React.FC = () => {
           totalNet: globalStats.totalNet,
           totalCommission: globalStats.totalCommission,
           availableBalance: globalStats.availableBalance,
-          totalAmbassador: globalStats.totalAmbassador ?? 0
+          totalAmbassador: globalStats.totalAmbassador ?? 0,
+          physicalCount: globalStats.physicalCount ?? 0,
+          physicalCommissionPaid: globalStats.physicalCommissionPaid ?? 0
         });
       }
 
@@ -278,9 +280,9 @@ export const OrganizerDashboard: React.FC = () => {
         : eventPayload.price || 0;
 
       const payload: any = { ...eventPayload, capacity: totalCapacity, price: minPrice, practical_infos: practicalInfos, support_phone: supportPhone, organizer_name: user?.name, organizer_id: user?.id, video_url: video };
-      
+
       if (payload.title) {
-         payload.slug = await getUniqueSlug(payload.title, 'events', id);
+        payload.slug = await getUniqueSlug(payload.title, 'events', id);
       }
 
       let savedEvt: any = null;
@@ -558,7 +560,7 @@ export const OrganizerDashboard: React.FC = () => {
           onExportBuyers={exportEventBuyers}
           onRequestCancel={(e: any) => { setCancelEventObj(e); setCancelReason(''); setCancelModalOpen(true); }}
           addToast={addToast} />}
-        {activeTab === 'attendees' && <AttendeesView userId={user?.id} addToast={addToast} />}
+        {activeTab === 'attendees' && <AttendeesView userId={user?.id} events={events} addToast={addToast} />}
         {activeTab === 'sales' && <SalesView stats={stats} eventSales={eventSales} transactions={filteredTransactions} events={filteredEvents} />}
         {activeTab === 'agents' && <PosTeamView events={events} transactions={transactions} addToast={addToast} />}
         {activeTab === 'crm' && <PushCampaignView events={events} addToast={addToast} />}
@@ -566,7 +568,7 @@ export const OrganizerDashboard: React.FC = () => {
         {activeTab === 'wallet' && <WalletView eventSales={eventSales} stats={stats} addToast={addToast} refreshData={fetchData} profile={profile} fetchProfile={fetchProfile} />}
         {activeTab === 'chatbot' && <ChatbotView events={events} addToast={addToast} />}
         {activeTab === 'account' && <AccountSettingsView userMode="organizer" />}
-        {activeTab === 'physical' && <PhysicalTicketsView events={filteredEvents} transactions={filteredTransactions} addToast={addToast} />}
+        {activeTab === 'physical' && <PhysicalTicketsView profile={profile} fetchProfile={fetchProfile} events={filteredEvents} transactions={filteredTransactions} addToast={addToast} />}
         {activeTab === 'fundraising' && <FundraisingTab organizerId={user?.id} addToast={addToast} />}
         {activeTab === 'ambassadors' && <OrganizerAmbassadorsView events={filteredEvents} addToast={addToast} />}
       </div>
@@ -804,7 +806,7 @@ const EventsListView = ({ events, onCreate, onEdit, onDelete, onExportBuyers, on
               {e.image ? <img src={e.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={48} className="text-slate-600" /></div>}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none" />
               <div className="absolute top-4 right-4"><StatusBadge status={e.status} /></div>
-              
+
               {e.cancellation_status && e.cancellation_status !== 'none' && (
                 <div className="absolute top-4 left-4 bg-red-600/90 text-white text-xs font-bold px-3 py-1 rounded-full border border-red-500 shadow-xl flex items-center gap-1">
                   <AlertTriangle size={12} />
@@ -844,7 +846,7 @@ const EventsListView = ({ events, onCreate, onEdit, onDelete, onExportBuyers, on
                     <Trash2 size={16} />
                   </button>
                 </div>
-                
+
                 {/* Cancellation Button */}
                 {(new Date(e.date) > new Date() || e.status === 'published') && (!e.cancellation_status || e.cancellation_status === 'none' || e.cancellation_status === 'rejected') && (
                   <button
@@ -863,7 +865,7 @@ const EventsListView = ({ events, onCreate, onEdit, onDelete, onExportBuyers, on
 };
 
 // ─── Attendees ───
-const AttendeesView = ({ userId, addToast }: any) => {
+const AttendeesView = ({ userId, events, addToast }: any) => {
   const [loading, setLoading] = useState(true);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -938,15 +940,28 @@ const AttendeesView = ({ userId, addToast }: any) => {
       setAttendees([]);
       setTotalCount(0);
     } else {
-      const mapped = (data || []).map((t: any) => ({
-        id: String(t.id).slice(0, 8).toUpperCase(),
-        fullId: t.id,
-        name: t.guest_name || t.guest_email || '—',
-        event: t.events?.title || '—',
-        ticketType: t.tickets?.[0]?.ticket_type || 'Standard',
-        status: t.tickets?.[0]?.status || 'valid',
-        realTicketId: t.tickets?.[0]?.id || null,
-      }));
+      // Build type name map from the passed events prop
+      const typeNameMap: Record<string, string> = {};
+      (events || []).forEach((e: any) => {
+        (e.ticketTypes || e.ticket_types || []).forEach((tt: any) => {
+          typeNameMap[tt.id] = tt.name || 'Standard';
+        });
+      });
+
+      const mapped = (data || []).map((t: any) => {
+        const rawType = t.tickets?.[0]?.ticket_type || 'Standard';
+        const mappedType = typeNameMap[rawType] || rawType;
+        
+        return {
+          id: String(t.id).slice(0, 8).toUpperCase(),
+          fullId: t.id,
+          name: t.guest_name || t.guest_email || '—',
+          event: t.events?.title || '—',
+          ticketType: mappedType,
+          status: t.tickets?.[0]?.status || 'valid',
+          realTicketId: t.tickets?.[0]?.id || null,
+        };
+      });
       setAttendees(mapped);
       setTotalCount(count || 0);
     }
@@ -1084,7 +1099,7 @@ const SalesView = ({ stats, eventSales }: any) => {
       {totalAmbassador > 0 && (
         <div className="bg-indigo-900/30 border border-indigo-500/30 rounded-2xl px-6 py-4 flex items-start gap-4 shadow-lg">
           <div className="bg-indigo-500/20 p-2.5 rounded-xl border border-indigo-500/30 shrink-0 mt-0.5">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><path d="M20 12V22H4V12" /><path d="M22 7H2v5h20V7z" /><path d="M12 22V7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></svg>
           </div>
           <div>
             <p className="text-indigo-300 font-bold text-sm">Programme Ambassadeur actif</p>
@@ -1378,14 +1393,16 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
 
   useEffect(() => {
     const fetchRequests = async () => {
+      if (!user?.id) { setLoading(false); return; }
       const { data } = await supabase.from('payout_requests')
         .select('*, events:event_id(title)')
+        .eq('organizer_id', user.id)
         .order('created_at', { ascending: false });
       setRequests(data || []);
       setLoading(false);
     };
     fetchRequests();
-  }, []);
+  }, [user?.id]);
 
   const eventStats = useMemo(() => {
     return (eventSales || []).map((ev: any) => {
@@ -1405,7 +1422,8 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
       const totalDeducted = eventDeductions.reduce((sum, r) => sum + Number(r.amount), 0);
 
       let remainingPayout = baseNet - totalDeducted;
-      if (remainingPayout < 0) remainingPayout = 0; // Au cas où
+      // We do NOT floor remainingPayout at 0 here, because debt on an event must cross-collateralize
+      // and reduce the overall global wallet balance.
 
       const advRate = Number(ev.adv_rate || 30);
       return {
@@ -1426,7 +1444,8 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
   // Global aggregates from RPC
   const totalGross = Number(stats?.totalGross || 0);
   const totalNet = Number(stats?.totalNet || 0);
-  const availableBalance = Number(stats?.availableBalance || 0);
+  const totalCommission = Number(stats?.totalCommission || 0);
+  const ambassadorTotal = Number(stats?.totalAmbassador || 0);
 
   // Split balance: completed events (date+24h < now) = unlocked, future events = locked
   const now = new Date();
@@ -1437,11 +1456,32 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
       return new Date(evDate.getTime() + 24 * 60 * 60 * 1000) < now;
     }).map((ev: any) => ev.event_id)
   );
-  const lockedBalance = (eventSales || []).reduce((sum: number, ev: any) => {
-    if (!completedEventIds.has(ev.event_id)) return sum + Number(ev.base_net || 0);
-    return sum;
-  }, 0);
-  const unlockedBalance = Math.max(0, availableBalance - lockedBalance);
+
+  // Compute Fonds Garantis from per-event remaining payouts (most accurate, cross-collateralized)
+  const completedRemaining = eventStats
+    .filter((e: any) => completedEventIds.has(e.id))
+    .reduce((sum: number, e: any) => sum + (e.remainingPayout || 0), 0);
+  const futureRemaining = eventStats
+    .filter((e: any) => !completedEventIds.has(e.id))
+    .reduce((sum: number, e: any) => sum + (e.remainingPayout || 0), 0);
+  const rawFondsGarantis = completedRemaining + futureRemaining;
+
+  // Subtract ambassador commissions (deducted globally, not reflected in per-event base_net)
+  const availableBalance = Math.max(0, rawFondsGarantis - ambassadorTotal);
+
+  // Split unlocked (completed events) vs locked (future events) proportionally
+  let unlockedBalance: number, lockedBalance: number;
+  if (rawFondsGarantis > 0) {
+    unlockedBalance = Math.round(availableBalance * (completedRemaining / rawFondsGarantis));
+    lockedBalance = availableBalance - unlockedBalance; // ensures exact sum
+  } else if (totalNet > 0) {
+    // Fallback: no per-event data, use RPC totalNet directly
+    unlockedBalance = 0;
+    lockedBalance = Math.max(0, totalNet);
+  } else {
+    unlockedBalance = 0;
+    lockedBalance = 0;
+  }
 
   // Eligible events for a new cash advance
   const eligibleEvents = eventStats.filter((e: any) => e.gross > 0 && e.advanceStatus !== 'pending' && e.advanceStatus !== 'paid');
@@ -1468,11 +1508,120 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
       // Refresh
       const { data } = await supabase.from('payout_requests')
         .select('*, events:event_id(title)')
+        .eq('organizer_id', user?.id)
         .order('created_at', { ascending: false });
       setRequests(data || []);
       if (refreshData) refreshData();
     } catch (e: any) {
       addToast(`Erreur: ${e.message}`, 'error');
+    }
+  };
+
+  const downloadInvoice = async (event: any) => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // En-tête
+      doc.setFontSize(22);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text('FACTURE / REÇU FINAL', pageWidth / 2, 20, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.text(`Babipass - Plateforme de Billetterie`, pageWidth / 2, 28, { align: 'center' });
+
+      // Ligne
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setLineWidth(0.5);
+      doc.line(20, 35, pageWidth - 20, 35);
+
+      // Infos de l'événement et orga
+      doc.setFontSize(14);
+      doc.setTextColor(15, 23, 42);
+      doc.setFont(undefined, 'bold');
+      doc.text('Détails de l\'événement', 20, 48);
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(71, 85, 105); // slate-600
+      doc.text(`Événement :`, 20, 58);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${event.title}`, 55, 58);
+
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Organisateur :`, 20, 66);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${profile?.company_name || profile?.full_name || 'Non spécifié'}`, 55, 66);
+
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Date d'édition :`, 20, 74);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${new Date().toLocaleDateString('fr-FR')}`, 55, 74);
+
+      // Box de récapitulatif financier
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.roundedRect(20, 90, pageWidth - 40, 85, 3, 3, 'FD');
+
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text('Récapitulatif Financier', 25, 102);
+
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(51, 65, 85);
+      doc.text(`Ventes Brutes (Total Billets) :`, 25, 115);
+      doc.setFont(undefined, 'bold');
+      doc.text(`${event.gross.toLocaleString('fr-FR')} FCFA`, pageWidth - 25, 115, { align: 'right' });
+
+      doc.setFont(undefined, 'normal');
+      const commission = event.gross - event.baseNet;
+      const commissionPercent = event.gross > 0 ? Math.round((commission / event.gross) * 100) : 0;
+      doc.text(`Frais Plateforme Babipass (~${commissionPercent}%) :`, 25, 125);
+      doc.setTextColor(225, 29, 72); // rose-600
+      doc.text(`- ${commission.toLocaleString('fr-FR')} FCFA`, pageWidth - 25, 125, { align: 'right' });
+
+      doc.setTextColor(51, 65, 85);
+      doc.text(`Total Intermédiaire (Base Nette) :`, 25, 137);
+      doc.setFont(undefined, 'bold');
+      doc.text(`${event.baseNet.toLocaleString('fr-FR')} FCFA`, pageWidth - 25, 137, { align: 'right' });
+
+      let currentY = 147;
+      if (event.totalDeducted > 0) {
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(51, 65, 85);
+        doc.text(`Déductions (Avances & Commissions) :`, 25, currentY);
+        doc.setTextColor(245, 158, 11); // amber-500
+        doc.text(`- ${event.totalDeducted.toLocaleString('fr-FR')} FCFA`, pageWidth - 25, currentY, { align: 'right' });
+        currentY += 12;
+      }
+
+      doc.setDrawColor(203, 213, 225);
+      doc.line(25, currentY - 6, pageWidth - 25, currentY - 6);
+
+      doc.setFontSize(13);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text(`RESTE À PAYER (NET FINAL) :`, 25, currentY + 3);
+      doc.setTextColor(16, 185, 129); // emerald-500
+      doc.text(`${event.remainingPayout.toLocaleString('fr-FR')} FCFA`, pageWidth - 25, currentY + 3, { align: 'right' });
+
+      // Footer
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.text('Ce document est généré automatiquement et atteste des operations enregistrees sur Babipass.', pageWidth / 2, 275, { align: 'center' });
+      doc.text('babipass.com - Abidjan, Cote-d\'Ivoire', pageWidth / 2, 280, { align: 'center' });
+
+      doc.save(`Facture_${event.title.replace(/[\s/\\:]/g, '_')}.pdf`);
+      addToast('Facture PDF générée avec succès', 'success');
+    } catch (err: any) {
+      console.error(err);
+      addToast('Erreur lors de la génération de la facture', 'error');
     }
   };
 
@@ -1553,14 +1702,14 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
           <div className="mt-6 relative z-10 grid grid-cols-2 gap-3">
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
               <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
-                <CheckCircle size={12}/> Disponible maintenant
+                <CheckCircle size={12} /> Disponible maintenant
               </p>
               <p className="text-2xl font-black text-emerald-300">{formatCurrency(unlockedBalance)}</p>
               <p className="text-slate-500 text-xs mt-1">Événements terminés (+24h)</p>
             </div>
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4">
               <p className="text-amber-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
-                <Clock size={12}/> En attente
+                <Clock size={12} /> En attente
               </p>
               <p className="text-2xl font-black text-amber-300">{formatCurrency(lockedBalance)}</p>
               <p className="text-slate-500 text-xs mt-1">Libéré 24h après l'événement</p>
@@ -1633,6 +1782,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
                 <th className="px-6 py-4">Ventes Brutes</th>
                 <th className="px-6 py-4">Avance Maximum</th>
                 <th className="px-6 py-4">Reste à Payer (Net)</th>
+                <th className="px-6 py-4 text-right">Facture</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -1658,6 +1808,16 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
                     )}
                   </td>
                   <td className="px-6 py-4 text-white font-black">{formatCurrency(e.remainingPayout)}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button
+                      onClick={() => downloadInvoice(e)}
+                      title="Télécharger votre facture PDF"
+                      className="inline-flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-xl transition-colors border border-blue-500/20 shadow-sm"
+                    >
+                      <Download size={16} />
+                      <span className="hidden xl:inline font-bold">Facture</span>
+                    </button>
+                  </td>
                 </tr>
               ))}
               {eventStats.length === 0 && (
@@ -1846,7 +2006,32 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== index) });
   };
 
-  const addTicketType = () => setForm({ ...form, ticketTypes: [...form.ticketTypes, { id: `t${Date.now()}`, name: 'VIP', price: 15000, capacity: 50, features: [] }] });
+  const addTicketType = () => {
+    let nextName = 'VIP';
+    let nextPrice = 15000;
+    let nextCapacity = 50;
+
+    if (form.ticketTypes.length > 0) {
+      const lastTicket = form.ticketTypes[form.ticketTypes.length - 1];
+      const nameLower = lastTicket.name.toLowerCase();
+      
+      if (nameLower === 'standard' || nameLower === 'regular') {
+        nextName = 'VIP';
+        nextPrice = lastTicket.price > 0 ? lastTicket.price * 3 : 15000;
+        nextCapacity = lastTicket.capacity > 0 ? Math.floor(lastTicket.capacity / 5) : 50;
+      } else if (nameLower === 'vip') {
+        nextName = 'VVIP';
+        nextPrice = lastTicket.price > 0 ? lastTicket.price * 2 : 30000;
+        nextCapacity = lastTicket.capacity > 0 ? Math.floor(lastTicket.capacity / 2) : 20;
+      } else {
+        nextName = `Nouveau Billet ${form.ticketTypes.length + 1}`;
+        nextPrice = lastTicket.price;
+        nextCapacity = lastTicket.capacity;
+      }
+    }
+    
+    setForm({ ...form, ticketTypes: [...form.ticketTypes, { id: `t${Date.now()}`, name: nextName, price: nextPrice, capacity: nextCapacity, features: [] }] });
+  };
   const updateTicketType = (index: number, field: string, value: any) => {
     const newTickets = [...form.ticketTypes];
     newTickets[index] = { ...newTickets[index], [field]: value };
@@ -1963,7 +2148,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                     <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
                   </label>
                 </div>
-                
+
                 {form.ambassador_enabled && (
                   <div className="grid grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-4 duration-300">
                     <label className="block">
@@ -2038,9 +2223,17 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                         </ul>
                       </div>
                     </div>
-                    <div className="mt-8 pt-4 border-t border-white/10 flex justify-between items-center text-xs text-slate-500">
-                      <span className="font-mono bg-white/5 px-2 py-1 rounded">ID: {form.ticketTypes[0].id.substring(0, 8)}</span>
-                      <span>{form.ticketTypes[0].capacity} places</span>
+                    <div className="mt-8 pt-4 border-t border-white/10 flex flex-col gap-2 text-xs text-slate-500">
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono bg-white/5 px-2 py-1 rounded">ID: {form.ticketTypes[0].id.substring(0, 8)}</span>
+                        <span>{form.ticketTypes[0].capacity || 0} places (Ce ticket)</span>
+                      </div>
+                      {form.ticketTypes.length > 1 && (
+                        <div className="flex justify-between items-center bg-emerald-500/10 px-2 py-1.5 rounded-lg border border-emerald-500/20">
+                          <span className="text-emerald-400 font-bold uppercase tracking-wider text-[10px]">Capacité Totale Événement</span>
+                          <span className="text-emerald-400 font-black">{form.ticketTypes.reduce((acc, t) => acc + (Number(t.capacity) || 0), 0)} places</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2891,13 +3084,48 @@ const PushCampaignView = ({ events, addToast }: any) => {
 // ─── Composant : Billets Physiques ───
 
 
-const PhysicalTicketsView = ({ events, transactions, addToast }: any) => {
+const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addToast }: any) => {
   const { user } = useAuth();
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(50);
   const [columns, setColumns] = useState<number>(3);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // KYC States
+  const [kycFile, setKycFile] = useState<File | null>(null);
+  const [kycUploading, setKycUploading] = useState(false);
+  const kycStatus = profile?.address_status || 'none';
+
+  const handleKycUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kycFile || !user?.id) return;
+    setKycUploading(true);
+    
+    try {
+      const ext = kycFile.name.split('.').pop();
+      const filePath = `${user.id}/address_verif_${Date.now()}.${ext}`;
+      
+      const { error: uploadErr } = await supabase.storage.from('kyc_documents').upload(filePath, kycFile);
+      if (uploadErr) throw uploadErr;
+      
+      const { data: urlData } = supabase.storage.from('kyc_documents').getPublicUrl(filePath);
+      
+      const { error: profileErr } = await supabase.from('profiles').update({
+        address_doc_url: urlData.publicUrl,
+        address_status: 'pending'
+      }).eq('id', user.id);
+      
+      if (profileErr) throw profileErr;
+      
+      addToast("Document soumis avec succès ! En cours de vérification.", "success");
+      if (fetchProfile) fetchProfile();
+    } catch (err: any) {
+      addToast(`Erreur : ${err.message}`, "error");
+    } finally {
+      setKycUploading(false);
+    }
+  };
 
   // Commission & wallet states
   const [walletBalance, setWalletBalance] = useState<number>(0);
@@ -2943,12 +3171,25 @@ const PhysicalTicketsView = ({ events, transactions, addToast }: any) => {
   useEffect(() => {
     if (!user?.id) return;
     const fetchRates = async () => {
-      // 1. Wallet balance
+      // 1. Wallet balance (True calculation including locked funds)
       try {
         const { data: statsData, error: rpcErr } = await supabase.rpc('get_org_stats', { p_organizer_id: user.id });
-        if (!rpcErr && statsData) setWalletBalance(Number(statsData.availableBalance || 0));
+        if (!rpcErr && statsData) {
+          const { data: requests } = await supabase.from('payout_requests')
+            .select('amount, type')
+            .eq('organizer_id', user.id)
+            .eq('status', 'paid');
+            
+          const validDeductions = (requests || []).filter((r: any) => 
+            r.type === 'cash_advance' || r.type === 'physical_commission'
+          );
+          const totalPaidDeductions = validDeductions.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+          console.log("DEBUG WALLET:", { totalNet: statsData.totalNet, totalPaidDeductions, requests });
+          const trueBalance = Math.max(0, Number(statsData.totalNet || 0) - totalPaidDeductions);
+          setWalletBalance(trueBalance);
+        }
       } catch (e) {
-        console.warn("Wallet RPC fallback:", e);
+        console.warn("Wallet fetch error:", e);
       }
 
       // 2. Commission Rate (Physical)
@@ -3150,7 +3391,73 @@ const PhysicalTicketsView = ({ events, transactions, addToast }: any) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
 
-      {/* Payment Required Modal */}
+      {/* --- KYC LOCK SCREEN --- */}
+      {kycStatus !== 'verified' && (
+        <div className="bg-slate-800/80 rounded-3xl p-8 md:p-12 border border-orange-500/30 shadow-xl text-center relative overflow-hidden">
+          <div className="absolute -top-10 -right-10 opacity-5">
+            <ShieldCheck size={250} />
+          </div>
+          
+          <div className="w-20 h-20 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-orange-500/30">
+            <Lock className="text-orange-400" size={32} />
+          </div>
+          
+          <h2 className="text-2xl font-black text-white mb-4">Fonctionnalité Verrouillée</h2>
+          
+          <p className="text-slate-400 max-w-xl mx-auto mb-8 leading-relaxed">
+            Pour des raisons de sécurité et de conformité (Anti-Fraude), l'impression massive de billets physiques (cash) nécessite la vérification de votre adresse.
+            <br/><br/>
+            Veuillez nous fournir : <span className="text-white font-bold">Une facture (CIE/SODECI), un Certificat de Résidence, ou un RIB.</span>
+          </p>
+
+          {kycStatus === 'pending' ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-2xl max-w-lg mx-auto">
+              <Clock className="text-emerald-400 mx-auto mb-3" size={28} />
+              <h3 className="text-emerald-400 font-bold mb-1">Document en cours de vérification</h3>
+              <p className="text-sm text-emerald-500/80">
+                Notre équipe examine actuellement votre document. Cette étape prend généralement entre 24h et 48h.
+              </p>
+            </div>
+          ) : (
+              <form onSubmit={handleKycUpload} className="bg-slate-900/60 border border-white/5 p-6 rounded-2xl max-w-lg mx-auto text-left">
+                {kycStatus === 'rejected' && (
+                  <div className="mb-6 bg-red-500/10 border border-red-500/30 p-4 rounded-xl flex items-start gap-3">
+                    <XOctagon className="text-red-400 shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <h3 className="text-red-400 font-bold text-sm">Document rejeté</h3>
+                      <p className="text-red-400/80 text-xs mt-1">{profile?.address_rejection_reason || "Votre document n'a pas été validé. Veuillez soumettre une pièce valide."}</p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-slate-300 mb-2">Uploader votre document (PDF, JPG, PNG)</label>
+                  <input 
+                    type="file" 
+                    accept=".pdf,image/*" 
+                    required
+                    onChange={(e) => setKycFile(e.target.files?.[0] || null)}
+                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-500/20 file:text-orange-400 hover:file:bg-orange-500/30 cursor-pointer"
+                  />
+                </div>
+              
+              <button 
+                type="submit" 
+                disabled={kycUploading || !kycFile}
+                className="w-full bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {kycUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                Soumettre pour vérification
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* --- NORMAL SCREEN (Vérifié uniquement) --- */}
+      {kycStatus === 'verified' && (
+        <>
+          {/* Payment Required Modal */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setShowPaymentModal(false)} />
@@ -3403,6 +3710,8 @@ const PhysicalTicketsView = ({ events, transactions, addToast }: any) => {
           <p className="text-slate-400 text-sm">La commission Babipass est déduite de votre wallet ou facturée avant chaque lot. Aucune surprise après l'événement.</p>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };
@@ -3654,121 +3963,121 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
 
 // ─── Ambassadors ───
 const OrganizerAmbassadorsView = ({ events, addToast }: { events: any[], addToast: any }) => {
-    const [ambassadors, setAmbassadors] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+  const [ambassadors, setAmbassadors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchAmbassadors = async () => {
-            if (!events || events.length === 0) {
-                setLoading(false);
-                return;
-            }
-            const eventIds = events.map(e => e.id);
-            const { data: allLinks, error } = await supabase
-                .from('ambassador_links')
-                .select('*')
-                .in('event_id', eventIds);
+  useEffect(() => {
+    const fetchAmbassadors = async () => {
+      if (!events || events.length === 0) {
+        setLoading(false);
+        return;
+      }
+      const eventIds = events.map(e => e.id);
+      const { data: allLinks, error } = await supabase
+        .from('ambassador_links')
+        .select('*')
+        .in('event_id', eventIds);
 
-            if (error) {
-                addToast("Erreur lors du chargement des ambassadeurs: " + error.message, 'error');
-                setLoading(false);
-                return;
-            }
+      if (error) {
+        addToast("Erreur lors du chargement des ambassadeurs: " + error.message, 'error');
+        setLoading(false);
+        return;
+      }
 
-            if (allLinks && allLinks.length > 0) {
-                const grouped: Record<string, any> = {};
-                for (const link of allLinks) {
-                    if (!grouped[link.user_id]) {
-                        grouped[link.user_id] = {
-                            id: link.user_id,
-                            user_id: link.user_id,
-                            sales: 0,
-                            clicks: 0,
-                            earned_amount: 0,
-                            events_set: new Set(),
-                            link_ids: []
-                        };
-                    }
-                    grouped[link.user_id].sales += link.sales || 0;
-                    grouped[link.user_id].clicks += link.clicks || 0;
-                    grouped[link.user_id].earned_amount += Number(link.earned_amount || 0);
-                    grouped[link.user_id].events_set.add(link.event_id);
-                    grouped[link.user_id].link_ids.push(link.id);
-                }
+      if (allLinks && allLinks.length > 0) {
+        const grouped: Record<string, any> = {};
+        for (const link of allLinks) {
+          if (!grouped[link.user_id]) {
+            grouped[link.user_id] = {
+              id: link.user_id,
+              user_id: link.user_id,
+              sales: 0,
+              clicks: 0,
+              earned_amount: 0,
+              events_set: new Set(),
+              link_ids: []
+            };
+          }
+          grouped[link.user_id].sales += link.sales || 0;
+          grouped[link.user_id].clicks += link.clicks || 0;
+          grouped[link.user_id].earned_amount += Number(link.earned_amount || 0);
+          grouped[link.user_id].events_set.add(link.event_id);
+          grouped[link.user_id].link_ids.push(link.id);
+        }
 
-                let aggregated = Object.values(grouped).map(g => ({
-                    ...g,
-                    events_count: g.events_set.size
-                })).sort((a, b) => b.earned_amount - a.earned_amount);
+        let aggregated = Object.values(grouped).map(g => ({
+          ...g,
+          events_count: g.events_set.size
+        })).sort((a, b) => b.earned_amount - a.earned_amount);
 
-                const userIds = aggregated.map(a => a.user_id);
-                const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+        const userIds = aggregated.map(a => a.user_id);
+        const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
 
-                const enriched = aggregated.map(amb => ({
-                    ...amb,
-                    profiles: profiles?.find(p => p.id === amb.user_id) || null
-                }));
+        const enriched = aggregated.map(amb => ({
+          ...amb,
+          profiles: profiles?.find(p => p.id === amb.user_id) || null
+        }));
 
-                setAmbassadors(enriched);
-            } else {
-                setAmbassadors([]);
-            }
-            setLoading(false);
-        };
-        fetchAmbassadors();
-    }, [events]);
+        setAmbassadors(enriched);
+      } else {
+        setAmbassadors([]);
+      }
+      setLoading(false);
+    };
+    fetchAmbassadors();
+  }, [events]);
 
-    return (
-        <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden fade-in">
-            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-900/80">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Gift className="text-orange-400" /> Vos Ambassadeurs</h2>
-            </div>
-            {loading ? (
-                <div className="flex justify-center p-12"><Loader2 className="animate-spin text-orange-500" /></div>
-            ) : ambassadors.length === 0 ? (
-                <div className="p-12 text-center text-slate-500">
-                    <Gift className="mx-auto mb-4 opacity-50" size={48} />
-                    <p>Aucun ambassadeur n'a encore généré de lien pour vos événements.</p>
-                </div>
-            ) : (
-                <div className="overflow-x-auto relative">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
-                            <tr>
-                                <th className="px-6 py-4">Ambassadeur</th>
-                                <th className="px-6 py-4">Engagement</th>
-                                <th className="px-6 py-4 text-center">Ventes</th>
-                                <th className="px-6 py-4 text-right">Commissions Dues</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                            {ambassadors.map((amb) => (
-                                <tr key={amb.id} className="hover:bg-white/5 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="font-bold text-white">
-                                            {amb.profiles?.name || (amb.profiles?.email ? 'Utilisateur sans nom' : 'Inconnu')}
-                                        </div>
-                                        <div className="text-xs text-slate-500">
-                                            {amb.profiles?.email || `ID: ${amb.user_id.substring(0, 8)}...`}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-slate-300">
-                                        <div className="font-medium text-white">{amb.events_count} de vos événement(s)</div>
-                                        <div className="text-xs text-slate-500 mt-1 uppercase">{amb.link_ids.length} lien(s) généré(s)</div>
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <span className="font-medium text-emerald-400">{amb.sales} tickets</span>
-                                        <div className="text-xs text-slate-500">{amb.clicks} clics</div>
-                                    </td>
-                                    <td className="px-6 py-4 text-right font-bold text-white">
-                                        {formatCurrency(amb.earned_amount)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+  return (
+    <div className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden fade-in">
+      <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-900/80">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2"><Gift className="text-orange-400" /> Vos Ambassadeurs</h2>
+      </div>
+      {loading ? (
+        <div className="flex justify-center p-12"><Loader2 className="animate-spin text-orange-500" /></div>
+      ) : ambassadors.length === 0 ? (
+        <div className="p-12 text-center text-slate-500">
+          <Gift className="mx-auto mb-4 opacity-50" size={48} />
+          <p>Aucun ambassadeur n'a encore généré de lien pour vos événements.</p>
         </div>
-    );
+      ) : (
+        <div className="overflow-x-auto relative">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
+              <tr>
+                <th className="px-6 py-4">Ambassadeur</th>
+                <th className="px-6 py-4">Engagement</th>
+                <th className="px-6 py-4 text-center">Ventes</th>
+                <th className="px-6 py-4 text-right">Commissions Dues</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {ambassadors.map((amb) => (
+                <tr key={amb.id} className="hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="font-bold text-white">
+                      {amb.profiles?.name || (amb.profiles?.email ? 'Utilisateur sans nom' : 'Inconnu')}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {amb.profiles?.email || `ID: ${amb.user_id.substring(0, 8)}...`}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-slate-300">
+                    <div className="font-medium text-white">{amb.events_count} de vos événement(s)</div>
+                    <div className="text-xs text-slate-500 mt-1 uppercase">{amb.link_ids.length} lien(s) généré(s)</div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="font-medium text-emerald-400">{amb.sales} tickets</span>
+                    <div className="text-xs text-slate-500">{amb.clicks} clics</div>
+                  </td>
+                  <td className="px-6 py-4 text-right font-bold text-white">
+                    {formatCurrency(amb.earned_amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 };

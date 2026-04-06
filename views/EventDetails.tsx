@@ -1131,17 +1131,47 @@ const CheckoutModal: React.FC<{
     };
     loadToggles();
 
-    // Robustement capturer la localisation approximative via IP avec fallbacks
+    // Capturer la localisation PRÉCISE de l'acheteur (GPS/WiFi > IP fallback)
     const fetchLocation = async () => {
-      // Éviter les appels inutiles en local (souvent bloqués/403/CORS)
+      // 1. Essayer la Geolocation du navigateur (précision GPS/WiFi réelle)
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false, // WiFi/Cell suffisant, pas besoin du GPS fin
+              timeout: 8000,
+              maximumAge: 300000 // Cache 5 min pour éviter les re-prompts
+            });
+          });
+
+          const { latitude, longitude } = position.coords;
+          let city = 'Inconnu';
+          let country = 'Inconnu';
+
+          // Reverse-geocode léger pour obtenir ville/pays
+          try {
+            const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=fr`, {
+              headers: { 'User-Agent': 'Babipass/1.0' }
+            });
+            if (geoRes.ok) {
+              const geoData = await geoRes.json();
+              city = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.municipality || 'Inconnu';
+              country = geoData.address?.country || 'Inconnu';
+            }
+          } catch (_) { /* reverse-geocode failed, keep defaults */ }
+
+          setBuyerLocation({ lat: latitude, lng: longitude, city, country });
+          return; // Succès, pas besoin du fallback IP
+        } catch (_) {
+          // L'utilisateur a refusé ou timeout → on tombe sur le fallback IP
+        }
+      }
+
+      // 2. Fallback IP (si geolocation refusée ou non supportée)
       const isLocal = window.location.hostname === 'localhost' || 
                     window.location.hostname === '127.0.0.1' || 
                     window.location.hostname.startsWith('192.168.');
-      
-      if (isLocal) {
-        console.log('[Location] Local dev detected, geolocation skipped to avoid console clutter.');
-        return;
-      }
+      if (isLocal) return;
 
       try {
         const res1 = await fetch('https://ipwho.is/');
@@ -1152,7 +1182,7 @@ const CheckoutModal: React.FC<{
             return;
           }
         }
-      } catch (e) { /* silent */ }
+      } catch (_) { /* silent */ }
 
       try {
         const res2 = await fetch('https://freeipapi.com/api/json');
@@ -1160,10 +1190,9 @@ const CheckoutModal: React.FC<{
           const data2 = await res2.json();
           if (data2.latitude) {
             setBuyerLocation({ lat: data2.latitude, lng: data2.longitude, city: data2.cityName, country: data2.countryName });
-            return;
           }
         }
-      } catch (e) { /* silent */ }
+      } catch (_) { /* silent */ }
     };
     fetchLocation();
   }, []);

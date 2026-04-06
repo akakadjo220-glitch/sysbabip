@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "name": "afritix---eventos",
   "private": true,
   "version": "0.0.0",
@@ -42,25 +41,5 @@
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
-=======
-  "name": "server",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.99.1",
-    "cors": "^2.8.6",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "nodemailer": "^8.0.1"
->>>>>>> 1bcac3a17a4590d9fb81456d3b4ed55eabf3124a
   }
 }

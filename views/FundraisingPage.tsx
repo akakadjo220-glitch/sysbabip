@@ -106,7 +106,7 @@ export const FundraisingPage: React.FC = () => {
       key: config.publicKey,
       email: form.email || 'contributeur@babipass.com',
       amount: Math.round(amount * 100), // Paystack uses smallest currency unit
-      currency: campaign.currency || 'XOF',
+      currency: (campaign.currency === 'FCFA' || !campaign.currency) ? 'XOF' : campaign.currency,
       channels: ['card', 'mobile_money'],
       ref: 'babifund_' + Date.now(),
       callback: function(response: any) {

@@ -65,7 +65,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             icon={Shield}
             color="bg-amber-500"
             active={role === UserRole.ADMIN}
-            onClick={() => handleSwitch('/admin')}
+            onClick={() => handleSwitch('/sysbap')}
           />
 
           <FabItem

@@ -32,7 +32,7 @@ export const PublicChatWidget = () => {
   }, [isOpen]);
 
   // Hide on dashboard routes — MUST be after all hooks
-  if (location.pathname.startsWith('/admin') || 
+  if (location.pathname.startsWith('/sysbap') || 
       location.pathname.startsWith('/organizer') || 
       location.pathname.startsWith('/agent')) {
     return null;
