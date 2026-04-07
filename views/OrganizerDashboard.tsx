@@ -1045,7 +1045,7 @@ const AttendeesView = ({ userId, events, addToast }: any) => {
                       <td className="px-6 py-4">
                         {a.status === 'revoked' ? (
                           <span className="px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-500 border border-red-500/30 flex items-center gap-1 w-max"><XCircle size={12} /> Désactivé</span>
-                        ) : a.status === 'scanned' ? (
+                        ) : (a.status === 'scanned' || a.status === 'used') ? (
                           <span className="px-2 py-1 rounded text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 w-max"><CheckCircle size={12} /> Scanné</span>
                         ) : (
                           <span className="px-2 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400 flex items-center gap-1 w-max"><CheckCircle size={12} /> Actif</span>
@@ -1056,7 +1056,7 @@ const AttendeesView = ({ userId, events, addToast }: any) => {
                           <button onClick={() => handleToggleStatus(a, a.status)} disabled={loadingAction === a.id} className="text-emerald-400 hover:text-white hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50">
                             {loadingAction === a.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />} Activer
                           </button>
-                        ) : a.status === 'scanned' ? (
+                        ) : (a.status === 'scanned' || a.status === 'used') ? (
                           <span className="text-slate-500 text-xs font-medium italic">Déjà utilisé</span>
                         ) : (
                           <button onClick={() => handleToggleStatus(a, a.status)} disabled={loadingAction === a.id} className="text-red-400 hover:text-white hover:bg-red-500/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50">
