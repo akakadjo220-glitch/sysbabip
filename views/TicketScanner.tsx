@@ -164,31 +164,48 @@ export const TicketScanner: React.FC = () => {
   useEffect(() => {
     let html5QrCode: Html5Qrcode | null = null;
     let mounted = true;
+    let initPromise: Promise<any> | null = null;
 
     if (cameraActive) {
       setTimeout(() => {
         if (!mounted) return;
         const el = document.getElementById('qr-reader');
         if (!el) return;
-        html5QrCode = new Html5Qrcode('qr-reader');
-        html5QrCode.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
-          () => {}
-        ).catch((err) => {
-          console.error('Camera error:', err);
-          alert("Erreur d'accès à la caméra. Vérifiez les permissions et utilisez HTTPS.");
-          setCameraActive(false);
-        });
-      }, 300);
+        
+        try {
+          html5QrCode = new Html5Qrcode('qr-reader');
+          // On demande la caméra haute résolution pour lire les QR JWS denses
+          initPromise = html5QrCode.start(
+            { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } as MediaTrackConstraints,
+            { fps: 15 }, // Pas de qrbox = scanne toute l'image HD, idéal pour QR denses
+            (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+            () => {}
+          ).catch((err) => {
+            if (!mounted) return;
+            console.error('Camera error:', err);
+            alert("Erreur d'accès à la caméra. Vérifiez les permissions et utilisez HTTPS.");
+            setCameraActive(false);
+          });
+        } catch (e) {
+          console.error("Camera init crash", e);
+        }
+      }, 500); // Wait slightly longer for DOM to settle
     }
 
     return () => {
       mounted = false;
-      if (html5QrCode?.isScanning) {
-        html5QrCode.stop().then(() => html5QrCode?.clear()).catch(console.error);
-      }
+      const cleanup = async () => {
+        if (initPromise) {
+           await initPromise.catch(() => {}); // Wait for start to finish to avoid stopping a starting camera
+        }
+        if (html5QrCode && html5QrCode.isScanning) {
+           try {
+             await html5QrCode.stop();
+             html5QrCode.clear();
+           } catch(e) { console.error("Html5Qrcode Stop Error", e); }
+        }
+      };
+      cleanup();
     };
   }, [cameraActive]);
 
@@ -406,11 +423,13 @@ export const TicketScanner: React.FC = () => {
         {/* QR Mode */}
         {scanMode === 'qr' && (
           <>
+            {/* Le div qr-reader DOIT rester dans le DOM tant que le mode QR est actif pour que html5QrCode.stop() ne plante pas */}
+            <div id="qr-reader" className={`absolute inset-0 w-full h-full [&>video]:object-cover opacity-80 z-0 ${!(cameraActive && result === 'idle') ? 'hidden' : ''}`} />
+            
             {/* Camera active */}
             {cameraActive && result === 'idle' && (
               <>
-                <div id="qr-reader" className="absolute inset-0 w-full h-full [&>video]:object-cover opacity-80 z-0" />
-                <div className="absolute inset-0 z-10 flex flex-col">
+                <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
                   <div className="flex-1 bg-black/50" />
                   <div className="flex h-64">
                     <div className="flex-1 bg-black/50" />
