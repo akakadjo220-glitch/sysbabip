@@ -948,19 +948,33 @@ const AttendeesView = ({ userId, events, addToast }: any) => {
         });
       });
 
-      const mapped = (data || []).map((t: any) => {
-        const rawType = t.tickets?.[0]?.ticket_type || 'Standard';
-        const mappedType = typeNameMap[rawType] || rawType;
+      const mapped = (data || []).flatMap((t: any) => {
+        const ticketList = Array.isArray(t.tickets) ? t.tickets : (t.tickets ? [t.tickets] : []);
+        if (ticketList.length === 0) {
+           return [{
+             id: String(t.id).slice(0, 8).toUpperCase(),
+             fullId: t.id,
+             name: t.guest_name || t.guest_email || '—',
+             event: t.events?.title || '—',
+             ticketType: 'Standard',
+             status: 'valid',
+             realTicketId: null,
+           }];
+        }
         
-        return {
-          id: String(t.id).slice(0, 8).toUpperCase(),
-          fullId: t.id,
-          name: t.guest_name || t.guest_email || '—',
-          event: t.events?.title || '—',
-          ticketType: mappedType,
-          status: t.tickets?.[0]?.status || 'valid',
-          realTicketId: t.tickets?.[0]?.id || null,
-        };
+        return ticketList.map((tk: any, i: number) => {
+          const rawType = tk.ticket_type || 'Standard';
+          const mappedType = typeNameMap[rawType] || rawType;
+          return {
+            id: String(tk.id || t.id).slice(0, 8).toUpperCase(),
+            fullId: t.id,
+            name: `${t.guest_name || t.guest_email || '—'}${ticketList.length > 1 ? ` (#${i+1})` : ''}`,
+            event: t.events?.title || '—',
+            ticketType: mappedType,
+            status: tk.status || 'valid',
+            realTicketId: tk.id || null,
+          };
+        });
       });
       setAttendees(mapped);
       setTotalCount(count || 0);
