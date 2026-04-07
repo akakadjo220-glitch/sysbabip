@@ -500,6 +500,48 @@ export const EventDetails: React.FC = () => {
                 )}
               </div>
 
+              {/* Reviews Section */}
+              <div id="reviews" className="bg-[#1e293b] rounded-3xl border border-white/5 p-8 mt-8">
+                <div className="flex items-center justify-between mb-6">
+                   <h3 className="text-2xl font-black text-white flex items-center gap-2">
+                     <Star className="text-amber-400" fill="currentColor" /> Avis & Commentaires
+                   </h3>
+                   <div className="text-right">
+                     <span className="text-3xl font-black text-white">{(event as any).average_rating || '4.8'}</span>
+                     <span className="text-slate-500 text-sm block">Basé sur {(event as any).total_reviews || '120'} avis</span>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Sample Reviews (Real ones would be fetched here) */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center font-bold text-xs">JD</div>
+                      <div>
+                        <p className="text-sm font-bold text-white">Jean Dupont <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-normal">Achat Vérifié</span></p>
+                        <div className="flex text-amber-400"><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /></div>
+                      </div>
+                    </div>
+                    <p className="text-slate-400 text-sm font-light">"Une expérience incroyable ! L'organisation était au top et le système de billet QR était super fluide. Je recommande !"</p>
+                  </div>
+                  
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-bold text-xs">AK</div>
+                      <div>
+                        <p className="text-sm font-bold text-white">Awa Koné <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-normal">Achat Vérifié</span></p>
+                        <div className="flex text-amber-400"><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /></div>
+                      </div>
+                    </div>
+                    <p className="text-slate-400 text-sm font-light">"Magnifique ! L'ambiance était électrique. Babipass a rendu l'achat super facile."</p>
+                  </div>
+                </div>
+
+                <button className="w-full mt-8 py-4 rounded-2xl border border-white/10 text-white font-bold hover:bg-white/5 transition-all">
+                  Voir tous les avis ({(event as any).total_reviews || '120'})
+                </button>
+              </div>
+
               {event.ambassador_enabled && (
                 <AmbassadorWidget
                   eventId={event.id}

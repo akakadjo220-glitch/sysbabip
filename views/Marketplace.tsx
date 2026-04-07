@@ -354,19 +354,24 @@ const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ event, onC
   const [reviewCount, setReviewCount] = useState<number>(0);
 
   useEffect(() => {
-    // Simulated persistent random data logic
-    const baseViews = Math.floor(event.sold * 1.5) + 120;
     const pseudoRandom = event.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const mockRating = 4 + (pseudoRandom % 10) / 10;
-    const mockReviews = 20 + (pseudoRandom % 100);
+    
+    // Real ratings from DB or specific 4.5-5.0 fallback
+    const dbRating = Number((event as any).average_rating || 0);
+    const dbReviews = Number((event as any).total_reviews || 0);
+    
+    // User requested range: 4.5 to 5.0
+    const fallbackRating = 4.5 + ((pseudoRandom % 6) / 10); 
+    const fallbackReviews = 12 + (pseudoRandom % 88);
 
-    // Add local views
+    setRating(dbRating > 0 ? dbRating : fallbackRating);
+    setReviewCount(dbReviews > 0 ? dbReviews : fallbackReviews);
+
+    // Real views from DB + local view buffer
+    const dbViews = Number((event as any).views || 0);
     const localViews = getLocalViews(event.id);
-
-    setRating(mockRating);
-    setReviewCount(mockReviews);
-    setViewCount(baseViews + localViews);
-  }, [event.id, event.sold]);
+    setViewCount(dbViews + localViews);
+  }, [event.id, (event as any).views, (event as any).average_rating]);
 
   // Calculer le prix minimum à partir de ticketTypes s'ils sont disponibles (sinon utiliser le prix par défaut)
   const minPrice = React.useMemo(() => {

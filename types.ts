@@ -56,6 +56,9 @@ export interface Event {
   ambassador_commission_type?: 'percentage' | 'fixed';
   ambassador_commission_value?: number;
   sales_close_before_minutes?: number;
+  views: number;
+  average_rating: number;
+  total_reviews: number;
 }
 
 export interface TicketType {
