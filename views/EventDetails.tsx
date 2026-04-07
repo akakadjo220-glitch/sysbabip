@@ -23,7 +23,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import {
   Calendar, MapPin, Clock, ArrowLeft, Share2, Heart,
   Info, ShieldCheck, Ticket, CheckCircle, Smartphone, CreditCard,
-  Download, QrCode, Mail, Link, X, Copy, Facebook, Twitter, Linkedin, Loader2, WifiOff, AlertTriangle, Timer, ShieldAlert, Banknote, Flame, Zap, Users, Phone
+  Download, QrCode, Mail, Link, X, Copy, Facebook, Twitter, Linkedin, Loader2, WifiOff, AlertTriangle, Timer, ShieldAlert, Banknote, Flame, Zap, Users, Phone, Star, Eye
 } from 'lucide-react';
 
 // Anti-Fraud Constants
