@@ -291,6 +291,20 @@ export const EventDetails: React.FC = () => {
             video: data.video_url
           };
           setEvent(formattedEvent);
+
+          // Track page view for Organizer BI dashboard (silently, no-await)
+          if (!viewTrackedRef.current) {
+            const sessionKey = `afriTix_view_tracked_${data.id}`;
+            if (!sessionStorage.getItem(sessionKey)) {
+              // Mark as tracked IMMEDIATELY (synchronously) to prevent race conditions
+              sessionStorage.setItem(sessionKey, 'true');
+              viewTrackedRef.current = true;
+              supabase.rpc('increment_event_view', { evt_id: data.id })
+                .then(null, (err) => console.error("Error tracking view:", err));
+            } else {
+              viewTrackedRef.current = true;
+            }
+          }
         } else {
           // No DB record
           setEvent(null);
@@ -304,21 +318,6 @@ export const EventDetails: React.FC = () => {
     };
 
     fetchEvent();
-
-    // Track page view for Organizer BI dashboard (silently, no-await)
-    if (id && !viewTrackedRef.current) {
-      const sessionKey = `afriTix_view_tracked_${id}`;
-      if (!sessionStorage.getItem(sessionKey)) {
-        // Mark as tracked IMMEDIATELY (synchronously) to prevent race conditions during async calls
-        sessionStorage.setItem(sessionKey, 'true');
-        viewTrackedRef.current = true;
-
-        supabase.rpc('increment_event_view', { evt_id: id })
-          .then(null, (err) => console.error("Error tracking view:", err));
-      } else {
-        viewTrackedRef.current = true;
-      }
-    }
   }, [id]);
 
   // Logic for similar events - In a real app, this would be another Supabase query 
