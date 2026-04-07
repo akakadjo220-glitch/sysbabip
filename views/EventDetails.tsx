@@ -1024,27 +1024,28 @@ const ReviewsList: React.FC<{ eventId: string }> = ({ eventId }) => {
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin text-orange-400" size={24} /></div>;
 
   if (reviews.length === 0) return (
-    <div className="text-center py-10 bg-white/3 rounded-2xl border border-white/5 mb-8">
+    <div className="text-center py-10 rounded-2xl border border-white/5 mb-8 bg-white/3">
       <Star size={36} className="mx-auto text-slate-600 mb-3" />
-      <p className="text-slate-400 font-medium">Aucun avis approuv&eacute; pour le moment.</p>
-      <p className="text-slate-600 text-sm mt-1">Soyez le premier &agrave; partager votre exp&eacute;rience !</p>
+      <p className="text-slate-400 font-medium">Aucun avis approuvé pour le moment.</p>
+      <p className="text-slate-600 text-sm mt-1">Soyez le premier à partager votre expérience !</p>
     </div>
   );
 
   return (
     <div className="space-y-4 mb-10">
       {reviews.map((r: any) => {
-        const initials = (r.profiles?.name || 'U').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
-        const colors = ['bg-orange-500','bg-blue-500','bg-emerald-500','bg-purple-500','bg-rose-500'];
-        const color = colors[initials.charCodeAt(0) % colors.length];
+        const displayName = r.profiles?.name || 'Anonyme';
+        const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+        const bgColors = ['bg-orange-500','bg-blue-500','bg-emerald-500','bg-purple-500','bg-rose-500'];
+        const bg = bgColors[initials.charCodeAt(0) % bgColors.length];
         return (
           <div key={r.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors">
             <div className="flex items-center gap-3 mb-3">
-              <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center font-bold text-xs text-white shrink-0`}>{initials}</div>
+              <div className={`w-9 h-9 rounded-full ${bg} flex items-center justify-center font-bold text-xs text-white shrink-0`}>{initials}</div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-bold text-white">{r.profiles?.name || 'Utilisateur'}</p>
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30">Avis V&eacute;rifi&eacute;</span>
+                  <p className="text-sm font-bold text-white">{displayName}</p>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30">Avis Vérifié</span>
                 </div>
                 <div className="flex gap-0.5 mt-0.5">
                   {[1,2,3,4,5].map(s => <Star key={s} size={11} fill={r.rating >= s ? 'currentColor' : 'none'} className={r.rating >= s ? 'text-amber-400' : 'text-slate-600'} />)}
@@ -1052,7 +1053,7 @@ const ReviewsList: React.FC<{ eventId: string }> = ({ eventId }) => {
               </div>
               <span className="text-xs text-slate-600 shrink-0">{new Date(r.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
             </div>
-            {r.comment && <p className="text-slate-300 text-sm leading-relaxed">&ldquo;{r.comment}&rdquo;</p>}
+            {r.comment && <p className="text-slate-300 text-sm leading-relaxed italic">"{r.comment}"</p>}
           </div>
         );
       })}
@@ -1060,7 +1061,7 @@ const ReviewsList: React.FC<{ eventId: string }> = ({ eventId }) => {
   );
 };
 
-const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId, eventTitle }) => {
+const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId }) => {
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [comment, setComment] = useState('');
@@ -1072,34 +1073,32 @@ const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setReviewError('');
-    if (rating === 0) { setReviewError('Veuillez s&eacute;lectionner une note.'); return; }
-    if (!name.trim()) { setReviewError('Veuillez entrer votre pr&eacute;nom.'); return; }
+    if (rating === 0) { setReviewError('Veuillez sélectionner une note.'); return; }
+    if (!name.trim()) { setReviewError('Veuillez entrer votre prénom.'); return; }
     setSubmitting(true);
 
+    // Try to get logged-in user; fall back to a fixed anonymous UUID
     const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id;
-
-    if (!userId) {
-      setReviewError('Vous devez &ecirc;tre connect&eacute; pour laisser un avis.');
-      setSubmitting(false);
-      return;
-    }
+    // Use a deterministic guest UUID so we don't break the FK constraint
+    const GUEST_UUID = '00000000-0000-0000-0000-000000000001';
+    const userId = user?.id || GUEST_UUID;
 
     const { error: err } = await supabase.from('reviews').insert({
       event_id: eventId,
       user_id: userId,
       rating,
-      comment: comment.trim() || null,
+      comment: name.trim() + (comment.trim() ? ` — ${comment.trim()}` : ''),
       is_approved: false,
     });
 
     if (err && err.code === '23505') {
-      setReviewError('Vous avez d&eacute;j&agrave; soumis un avis pour cet &eacute;v&eacute;nement.');
+      setReviewError('Vous avez déjà soumis un avis pour cet événement.');
       setSubmitting(false);
       return;
     }
     if (err) {
-      setReviewError("Erreur lors de l'envoi. Veuillez r&eacute;essayer.");
+      console.error('Review insert error:', err);
+      setReviewError("Erreur lors de l'envoi. Veuillez réessayer.");
       setSubmitting(false);
       return;
     }
@@ -1111,15 +1110,15 @@ const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId
   if (submitted) return (
     <div className="mt-8 p-8 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-center animate-in fade-in duration-500">
       <CheckCircle size={40} className="text-emerald-400 mx-auto mb-3" />
-      <h3 className="text-xl font-bold text-white mb-2">Avis envoy&eacute;, merci !</h3>
-      <p className="text-slate-400">Votre avis est en attente de mod&eacute;ration. Il sera affich&eacute; apr&egrave;s validation par notre &eacute;quipe.</p>
+      <h3 className="text-xl font-bold text-white mb-2">Avis envoyé, merci !</h3>
+      <p className="text-slate-400">Votre avis est en attente de modération. Il sera affiché après validation par notre équipe.</p>
     </div>
   );
 
   return (
     <div className="mt-8 p-6 md:p-8 rounded-3xl bg-white/5 border border-white/10">
-      <h3 className="text-xl font-bold text-white mb-1">Partagez votre exp&eacute;rience</h3>
-      <p className="text-slate-400 text-sm mb-6">Votre avis sera affich&eacute; apr&egrave;s mod&eacute;ration par notre &eacute;quipe.</p>
+      <h3 className="text-xl font-bold text-white mb-1">Partagez votre expérience</h3>
+      <p className="text-slate-400 text-sm mb-6">Votre avis sera affiché après modération par notre équipe.</p>
 
       <form onSubmit={handleReviewSubmit} className="space-y-5">
         <div>
@@ -1129,7 +1128,8 @@ const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId
               <button key={s} type="button"
                 onMouseEnter={() => setHovered(s)} onMouseLeave={() => setHovered(0)}
                 onClick={() => setRating(s)} className="transition-transform hover:scale-125 active:scale-110">
-                <Star size={32} fill={(hovered || rating) >= s ? 'currentColor' : 'none'}
+                <Star size={32}
+                  fill={(hovered || rating) >= s ? 'currentColor' : 'none'}
                   className={(hovered || rating) >= s ? 'text-amber-400' : 'text-slate-600'} />
               </button>
             ))}
@@ -1137,7 +1137,7 @@ const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId
         </div>
 
         <div>
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Votre pr&eacute;nom *</label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Votre prénom *</label>
           <input value={name} onChange={e => setName(e.target.value)}
             placeholder="Ex: Moussa"
             className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
@@ -1146,7 +1146,7 @@ const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Commentaire (optionnel)</label>
           <textarea value={comment} onChange={e => setComment(e.target.value)}
-            placeholder={`Racontez votre exp\u00e9rience...`}
+            placeholder="Racontez votre expérience..."
             rows={3}
             className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm resize-none" />
         </div>
