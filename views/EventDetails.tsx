@@ -500,48 +500,6 @@ export const EventDetails: React.FC = () => {
                 )}
               </div>
 
-              {/* Reviews Section */}
-              <div id="reviews" className="bg-[#1e293b] rounded-3xl border border-white/5 p-8 mt-8">
-                <div className="flex items-center justify-between mb-6">
-                   <h3 className="text-2xl font-black text-white flex items-center gap-2">
-                     <Star className="text-amber-400" fill="currentColor" /> Avis & Commentaires
-                   </h3>
-                   <div className="text-right">
-                     <span className="text-3xl font-black text-white">{(event as any).average_rating || '4.8'}</span>
-                     <span className="text-slate-500 text-sm block">Basé sur {(event as any).total_reviews || '120'} avis</span>
-                   </div>
-                </div>
-
-                <div className="space-y-6">
-                  {/* Sample Reviews (Real ones would be fetched here) */}
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center font-bold text-xs">JD</div>
-                      <div>
-                        <p className="text-sm font-bold text-white">Jean Dupont <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-normal">Achat Vérifié</span></p>
-                        <div className="flex text-amber-400"><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /></div>
-                      </div>
-                    </div>
-                    <p className="text-slate-400 text-sm font-light">"Une expérience incroyable ! L'organisation était au top et le système de billet QR était super fluide. Je recommande !"</p>
-                  </div>
-                  
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-bold text-xs">AK</div>
-                      <div>
-                        <p className="text-sm font-bold text-white">Awa Koné <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-normal">Achat Vérifié</span></p>
-                        <div className="flex text-amber-400"><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /><Star size={10} fill="currentColor" /></div>
-                      </div>
-                    </div>
-                    <p className="text-slate-400 text-sm font-light">"Magnifique ! L'ambiance était électrique. Babipass a rendu l'achat super facile."</p>
-                  </div>
-                </div>
-
-                <button className="w-full mt-8 py-4 rounded-2xl border border-white/10 text-white font-bold hover:bg-white/5 transition-all">
-                  Voir tous les avis ({(event as any).total_reviews || '120'})
-                </button>
-              </div>
-
               {event.ambassador_enabled && (
                 <AmbassadorWidget
                   eventId={event.id}
@@ -922,6 +880,36 @@ export const EventDetails: React.FC = () => {
         )}
       </div>
 
+      {/* =================== AVIS & COMMENTAIRES (Bas de page) =================== */}
+      <div className="max-w-7xl mx-auto px-4 md:px-8 mt-16 mb-10" id="reviews">
+        <div className="border-t border-white/10 pt-12">
+          <div className="flex items-start justify-between flex-wrap gap-4 mb-10">
+            <div>
+              <h2 className="text-3xl font-black text-white flex items-center gap-3">
+                <Star className="text-amber-400" fill="currentColor" /> Avis &amp; Commentaires
+              </h2>
+              <p className="text-slate-400 mt-1">Les avis sont v&#233;rifi&#233;s et mod&#233;r&#233;s avant publication.</p>
+            </div>
+            <div className="text-right">
+              <div className="text-5xl font-black text-white">{Number((event as any).average_rating || 0) > 0 ? Number((event as any).average_rating).toFixed(1) : '—'}</div>
+              <div className="flex justify-end gap-0.5 my-1">
+                {[1,2,3,4,5].map(s => {
+                  const avg = Number((event as any).average_rating || 0);
+                  return <Star key={s} size={16} fill={avg >= s ? 'currentColor' : 'none'} className={avg >= s ? 'text-amber-400' : 'text-slate-600'} />;
+                })}
+              </div>
+              <span className="text-slate-500 text-sm">{(event as any).total_reviews || 0} avis au total</span>
+            </div>
+          </div>
+
+          {/* Approved reviews list - fetched from DB */}
+          <ReviewsList eventId={event.id} />
+
+          {/* Submit Review Form */}
+          <ReviewForm eventId={event.id} eventTitle={event.title} />
+        </div>
+      </div>
+
       {/* Barre flottante Mobile de Conversion (Sticky Bottom Tab) - Root Level */}
       {!isSoldOut && !isCheckoutOpen && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] animate-in slide-in-from-bottom duration-500">
@@ -1013,6 +1001,166 @@ export const EventDetails: React.FC = () => {
 };
 
 // --- Sub Components ---
+
+// Reviews System Components
+const ReviewsList: React.FC<{ eventId: string }> = ({ eventId }) => {
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase
+      .from('reviews')
+      .select('id, rating, comment, created_at, profiles(name)')
+      .eq('event_id', eventId)
+      .eq('is_approved', true)
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => {
+        setReviews(data || []);
+        setLoading(false);
+      });
+  }, [eventId]);
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin text-orange-400" size={24} /></div>;
+
+  if (reviews.length === 0) return (
+    <div className="text-center py-10 bg-white/3 rounded-2xl border border-white/5 mb-8">
+      <Star size={36} className="mx-auto text-slate-600 mb-3" />
+      <p className="text-slate-400 font-medium">Aucun avis approuv&eacute; pour le moment.</p>
+      <p className="text-slate-600 text-sm mt-1">Soyez le premier &agrave; partager votre exp&eacute;rience !</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 mb-10">
+      {reviews.map((r: any) => {
+        const initials = (r.profiles?.name || 'U').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+        const colors = ['bg-orange-500','bg-blue-500','bg-emerald-500','bg-purple-500','bg-rose-500'];
+        const color = colors[initials.charCodeAt(0) % colors.length];
+        return (
+          <div key={r.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors">
+            <div className="flex items-center gap-3 mb-3">
+              <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center font-bold text-xs text-white shrink-0`}>{initials}</div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-bold text-white">{r.profiles?.name || 'Utilisateur'}</p>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30">Avis V&eacute;rifi&eacute;</span>
+                </div>
+                <div className="flex gap-0.5 mt-0.5">
+                  {[1,2,3,4,5].map(s => <Star key={s} size={11} fill={r.rating >= s ? 'currentColor' : 'none'} className={r.rating >= s ? 'text-amber-400' : 'text-slate-600'} />)}
+                </div>
+              </div>
+              <span className="text-xs text-slate-600 shrink-0">{new Date(r.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            </div>
+            {r.comment && <p className="text-slate-300 text-sm leading-relaxed">&ldquo;{r.comment}&rdquo;</p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId, eventTitle }) => {
+  const [rating, setRating] = useState(0);
+  const [hovered, setHovered] = useState(0);
+  const [comment, setComment] = useState('');
+  const [name, setName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReviewError('');
+    if (rating === 0) { setReviewError('Veuillez s&eacute;lectionner une note.'); return; }
+    if (!name.trim()) { setReviewError('Veuillez entrer votre pr&eacute;nom.'); return; }
+    setSubmitting(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+
+    if (!userId) {
+      setReviewError('Vous devez &ecirc;tre connect&eacute; pour laisser un avis.');
+      setSubmitting(false);
+      return;
+    }
+
+    const { error: err } = await supabase.from('reviews').insert({
+      event_id: eventId,
+      user_id: userId,
+      rating,
+      comment: comment.trim() || null,
+      is_approved: false,
+    });
+
+    if (err && err.code === '23505') {
+      setReviewError('Vous avez d&eacute;j&agrave; soumis un avis pour cet &eacute;v&eacute;nement.');
+      setSubmitting(false);
+      return;
+    }
+    if (err) {
+      setReviewError("Erreur lors de l'envoi. Veuillez r&eacute;essayer.");
+      setSubmitting(false);
+      return;
+    }
+
+    setSubmitted(true);
+    setSubmitting(false);
+  };
+
+  if (submitted) return (
+    <div className="mt-8 p-8 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-center animate-in fade-in duration-500">
+      <CheckCircle size={40} className="text-emerald-400 mx-auto mb-3" />
+      <h3 className="text-xl font-bold text-white mb-2">Avis envoy&eacute;, merci !</h3>
+      <p className="text-slate-400">Votre avis est en attente de mod&eacute;ration. Il sera affich&eacute; apr&egrave;s validation par notre &eacute;quipe.</p>
+    </div>
+  );
+
+  return (
+    <div className="mt-8 p-6 md:p-8 rounded-3xl bg-white/5 border border-white/10">
+      <h3 className="text-xl font-bold text-white mb-1">Partagez votre exp&eacute;rience</h3>
+      <p className="text-slate-400 text-sm mb-6">Votre avis sera affich&eacute; apr&egrave;s mod&eacute;ration par notre &eacute;quipe.</p>
+
+      <form onSubmit={handleReviewSubmit} className="space-y-5">
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Votre note *</label>
+          <div className="flex gap-2">
+            {[1,2,3,4,5].map(s => (
+              <button key={s} type="button"
+                onMouseEnter={() => setHovered(s)} onMouseLeave={() => setHovered(0)}
+                onClick={() => setRating(s)} className="transition-transform hover:scale-125 active:scale-110">
+                <Star size={32} fill={(hovered || rating) >= s ? 'currentColor' : 'none'}
+                  className={(hovered || rating) >= s ? 'text-amber-400' : 'text-slate-600'} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Votre pr&eacute;nom *</label>
+          <input value={name} onChange={e => setName(e.target.value)}
+            placeholder="Ex: Moussa"
+            className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Commentaire (optionnel)</label>
+          <textarea value={comment} onChange={e => setComment(e.target.value)}
+            placeholder={`Racontez votre exp\u00e9rience...`}
+            rows={3}
+            className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm resize-none" />
+        </div>
+
+        {reviewError && <p className="text-rose-400 text-sm flex items-center gap-2"><AlertTriangle size={14} />{reviewError}</p>}
+
+        <button type="submit" disabled={submitting}
+          className="w-full py-4 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
+          {submitting ? <><Loader2 size={18} className="animate-spin" /> Envoi...</> : <><Star size={18} fill="currentColor" /> Soumettre mon avis</>}
+        </button>
+      </form>
+    </div>
+  );
+};
 
 const EventDetailsSkeleton: React.FC = () => (
   <div className="relative min-h-screen pb-24 animate-pulse bg-[#0f172a]">
