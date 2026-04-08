@@ -3217,6 +3217,165 @@ const PushCampaignView = ({ events, addToast }: any) => {
   );
 };
 
+// ─── Composant : Encodeur NFC ─────────────────────────────────────────────
+
+const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: string; addToast: (msg: string, type: string) => void }) => {
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [encodingId, setEncodingId] = useState<string | null>(null);
+  const nfcSupported = typeof window !== 'undefined' && 'NDEFReader' in window;
+
+  useEffect(() => {
+    if (!selectedEventId) { setTickets([]); return; }
+    setLoading(true);
+    supabase
+      .from('tickets')
+      .select('id, ticket_type, status, nfc_encoded, nfc_encoded_at, qr_code, created_at')
+      .eq('event_id', selectedEventId)
+      .eq('guest_name', 'Billet Physique (Revendeur)')
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        setTickets(data || []);
+        setLoading(false);
+      });
+  }, [selectedEventId]);
+
+  const handleEncode = async (ticket: any) => {
+    if (!nfcSupported) {
+      addToast('NDEFReader non disponible. Utilisez Chrome sur Android.', 'error');
+      return;
+    }
+    setEncodingId(ticket.id);
+    addToast('📡 Approchez le bracelet NFC du téléphone...', 'info');
+    try {
+      const ndef = new (window as any).NDEFReader();
+      const payload = JSON.stringify({ t: ticket.id, q: ticket.qr_code });
+      await ndef.write({
+        records: [{ recordType: 'text', data: payload, lang: 'fr' }]
+      });
+      // Mark as encoded in Supabase
+      await supabase.from('tickets').update({
+        nfc_encoded: true,
+        nfc_encoded_at: new Date().toISOString()
+      }).eq('id', ticket.id);
+      // Update local state
+      setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, nfc_encoded: true, nfc_encoded_at: new Date().toISOString() } : t));
+      addToast(`✅ Bracelet encodé pour le billet ${ticket.id.slice(-6).toUpperCase()} !`, 'success');
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        addToast("❌ Permission NFC refusée. Activez le NFC sur votre appareil.", 'error');
+      } else if (err.name === 'AbortError') {
+        addToast("⏳ Encodage annulé. Réessayez.", 'error');
+      } else {
+        addToast(`❌ Erreur : ${err.message}`, 'error');
+      }
+    } finally {
+      setEncodingId(null);
+    }
+  };
+
+  if (!selectedEventId) {
+    return (
+      <div className="bg-slate-800/40 border border-white/5 rounded-2xl p-8 text-center text-slate-500">
+        <p>Sélectionnez d'abord un événement ci-dessus pour voir les billets physiques.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Browser compatibility banner */}
+      {!nfcSupported && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <p className="text-amber-400 font-bold text-sm">NFC non supporté par ce navigateur</p>
+            <p className="text-amber-400/70 text-xs mt-0.5">Ouvrez cette page sur <strong>Chrome (Android)</strong> pour encoder les bracelets. Sur iOS, utilisez un QR Code standard.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Stats rapides */}
+      {tickets.length > 0 && (
+        <div className="flex gap-4 text-sm">
+          <span className="bg-slate-800/60 border border-white/5 rounded-xl px-3 py-2 text-slate-300">
+            <strong className="text-white">{tickets.length}</strong> billet{tickets.length > 1 ? 's' : ''} physique{tickets.length > 1 ? 's' : ''}
+          </span>
+          <span className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl px-3 py-2 text-cyan-400">
+            <strong>{tickets.filter(t => t.nfc_encoded).length}</strong> encodé{tickets.filter(t => t.nfc_encoded).length > 1 ? 's' : ''} ✅
+          </span>
+          <span className="bg-slate-800/60 border border-white/5 rounded-xl px-3 py-2 text-slate-400">
+            <strong className="text-white">{tickets.filter(t => !t.nfc_encoded).length}</strong> en attente
+          </span>
+        </div>
+      )}
+
+      {/* Liste des billets */}
+      {loading ? (
+        <div className="py-10 text-center"><Loader2 className="animate-spin text-cyan-400 mx-auto" size={28} /></div>
+      ) : tickets.length === 0 ? (
+        <div className="bg-slate-800/40 border border-white/5 rounded-2xl p-8 text-center text-slate-500">
+          <p>Aucun billet physique généré pour cet événement.</p>
+          <p className="text-xs mt-1">Générez d'abord des billets via le formulaire ci-dessus.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-900/40">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-800/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
+              <tr>
+                <th className="px-5 py-3 text-left">N° Billet</th>
+                <th className="px-5 py-3 text-left">Type</th>
+                <th className="px-5 py-3 text-left">Généré le</th>
+                <th className="px-5 py-3 text-center">Statut NFC</th>
+                <th className="px-5 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {tickets.map((ticket) => (
+                <tr key={ticket.id} className={`hover:bg-white/3 transition-colors ${ticket.nfc_encoded ? 'opacity-60' : ''}`}>
+                  <td className="px-5 py-3 font-mono text-white text-xs">{ticket.id.slice(-8).toUpperCase()}</td>
+                  <td className="px-5 py-3 text-slate-300">{ticket.ticket_type || 'Standard'}</td>
+                  <td className="px-5 py-3 text-slate-400 text-xs">{new Date(ticket.created_at).toLocaleDateString('fr-FR')}</td>
+                  <td className="px-5 py-3 text-center">
+                    {ticket.nfc_encoded ? (
+                      <span className="inline-flex items-center gap-1 text-xs bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 px-2 py-1 rounded-full font-bold">
+                        ✅ Encodé
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs bg-slate-700/50 text-slate-500 border border-white/5 px-2 py-1 rounded-full">
+                        ⬜ Non encodé
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    {ticket.nfc_encoded ? (
+                      <span className="text-xs text-slate-600 italic">
+                        {ticket.nfc_encoded_at ? new Date(ticket.nfc_encoded_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleEncode(ticket)}
+                        disabled={!!encodingId || !nfcSupported}
+                        className="inline-flex items-center gap-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 px-4 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {encodingId === ticket.id ? (
+                          <><Loader2 size={14} className="animate-spin" /> Encodage...</>
+                        ) : (
+                          <>📡 Encoder ce billet</>
+                        )}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Composant : Billets Physiques ───
 
 
@@ -3845,6 +4004,28 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
               <h3 className="text-white font-bold mb-2">Commission automatique</h3>
               <p className="text-slate-400 text-sm">La commission Babipass est déduite de votre wallet ou facturée avant chaque lot. Aucune surprise après l'événement.</p>
             </div>
+          </div>
+
+          {/* ─── Section Encodage NFC ─────────────────────────────────── */}
+          <div className="mt-10">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center border border-cyan-500/30 text-cyan-400">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+                  <path d="M8 12h.01M12 12h.01M16 12h.01" strokeLinecap="round" strokeWidth="3" />
+                  <path d="M6 8c0 0 2-2 6-2s6 2 6 2M6 16c0 0 2 2 6 2s6-2 6-2" strokeLinecap="round" />
+                </svg>
+              </span>
+              Encodage NFC Bracelets / Badges
+              <span className="text-xs font-medium text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full">Android Chrome requis</span>
+            </h3>
+            <p className="text-slate-400 text-sm mb-6">
+              Sélectionnez un billet physique généré, approchez le bracelet ou badge NFC vierge et cliquez sur "Encoder". Le billet sera gravé dans la puce de façon sécurisée.
+            </p>
+            <NfcEncoderSection
+              selectedEventId={selectedEventId}
+              addToast={addToast}
+            />
           </div>
         </>
       )}
