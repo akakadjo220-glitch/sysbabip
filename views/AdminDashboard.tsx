@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift, Filter } from 'lucide-react';
+import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift, Filter, Star } from 'lucide-react';
 import { formatCurrency, EXCHANGE_RATES } from '../constants';
 import { UserRole, UserProfile, Event } from '../types';
 import { supabase } from '../supabaseClient';
@@ -11,10 +11,11 @@ import { getPlatformSettings, clearSettingsCache } from '../utils/platformSettin
 import { getUniqueSlug } from '../utils/slugUtils';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b'];
-type AdminTab = 'overview' | 'users' | 'events' | 'finance' | 'kyb' | 'kyc' | 'ads' | 'countries' | 'templates' | 'settings' | 'account' | 'categories' | 'fundraising' | 'refunds' | 'ambassadors';
+type AdminTab = 'overview' | 'users' | 'events' | 'finance' | 'kyb' | 'kyc' | 'ads' | 'countries' | 'templates' | 'settings' | 'account' | 'categories' | 'fundraising' | 'refunds' | 'ambassadors' | 'reviews';
 
 import { EMAIL_TEMPLATES, EmailTemplateType } from '../constants';
 import { AdminAmbassadorsTab } from './AdminAmbassadorsTab';
+import { AdminReviewsTab } from './AdminReviewsTab';
 import { VideoUploadField } from '../components/LazyVideo';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -201,6 +202,7 @@ export const AdminDashboard: React.FC = () => {
           { id: 'countries', icon: Globe, label: 'Pays' },
           { id: 'templates', icon: Mail, label: 'Templates d\'Emails' },
           { id: 'refunds', icon: AlertTriangle, label: 'Annulations & Remb.' },
+          { id: 'reviews', icon: Star, label: 'Avis & Notes' },
           { id: 'settings', icon: Settings, label: 'Configurations API' },
           { id: 'account', icon: User, label: 'Mon Compte' },
         ].map(tab => (
@@ -226,6 +228,7 @@ export const AdminDashboard: React.FC = () => {
         {activeTab === 'templates' && <EmailTemplatesManager addToast={addToast} />}
         {activeTab === 'fundraising' && <AdminFundraisingTab addToast={addToast} />}
         {activeTab === 'refunds' && <RefundsManagementView addToast={addToast} />}
+        {activeTab === 'reviews' && <AdminReviewsTab addToast={addToast} />}
         {activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'account' && <AccountSettingsView userMode="admin" />}
       </div>

@@ -15,10 +15,12 @@ CREATE TABLE IF NOT EXISTS public.reviews (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- If table already exists, patch it:
+-- If table already exists, patch it (add any missing columns):
 ALTER TABLE public.reviews 
     ALTER COLUMN user_id DROP NOT NULL,
-    ADD COLUMN IF NOT EXISTS reviewer_name TEXT NOT NULL DEFAULT 'Anonyme';
+    ADD COLUMN IF NOT EXISTS reviewer_name TEXT NOT NULL DEFAULT 'Anonyme',
+    ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Remove duplicate constraint that blocks anonymous (multiple anon reviews)
 -- Drop old unique constraint if it exists, we'll only block per logged-in user
