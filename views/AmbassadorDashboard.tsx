@@ -72,8 +72,8 @@ export const AmbassadorDashboard = () => {
     setWithdrawMessage({ text: '', type: '' });
     
     const amount = Number(withdrawAmount);
-    if (!amount || amount < 1000) {
-      setWithdrawMessage({ text: "Le montant minimum de retrait est de 1000 FCFA.", type: 'error' });
+    if (!amount || amount < 50) {
+      setWithdrawMessage({ text: "Le montant minimum de retrait est de 50 FCFA.", type: 'error' });
       return;
     }
 
@@ -230,11 +230,11 @@ export const AmbassadorDashboard = () => {
             
             <form onSubmit={handleWithdrawalRequest} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Montant (Min. 1000 FCFA)</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Montant (Min. 50 FCFA)</label>
                 <input
                   type="number"
                   required
-                  min="1000"
+                  min="50"
                   max={availableBalance}
                   value={withdrawAmount}
                   onChange={e => setWithdrawAmount(e.target.value)}
@@ -279,7 +279,7 @@ export const AmbassadorDashboard = () => {
 
               <button
                 type="submit"
-                disabled={withdrawLoading || availableBalance < 1000}
+                disabled={withdrawLoading || availableBalance < 50}
                 className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2"
               >
                 {withdrawLoading ? <Loader2 className="animate-spin" size={20} /> : "Retirer mes fonds"}
