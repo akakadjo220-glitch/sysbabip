@@ -66,41 +66,66 @@ const FomoBanner = () => {
 const StockBar = ({ capacity, sold }: { capacity: number, sold: number }) => {
   const [fillPct, setFillPct] = useState(0);
 
-  // Si pas de capacité, simulation pour générer de l'urgence
-  const effectiveCapacity = capacity || 500;
-  let effectiveSold = sold || 420;
+  const hasRealCapacity = capacity > 0;
+  const effectiveCapacity = hasRealCapacity ? capacity : 500;
+  const effectiveSold = hasRealCapacity
+    ? Math.min(sold, effectiveCapacity)
+    : (sold > 0 ? sold : 420);
 
-  if (effectiveSold > effectiveCapacity) effectiveSold = effectiveCapacity;
-  const targetPct = Math.round((effectiveSold / effectiveCapacity) * 100);
+  // % vendu → pour la largeur de la barre
+  const soldPct = Math.min(100, (effectiveSold / effectiveCapacity) * 100);
+  // % restant → pour le label (arrondi vers le bas pour éviter "100%")
+  const remaining = effectiveCapacity - effectiveSold;
+  const remainingPct = Math.floor((remaining / effectiveCapacity) * 100);
 
-  // Déterminer la couleur : Rouge si critique (> 85%), orange sinon
-  const isCritical = targetPct >= 85;
+  const isCritical = soldPct >= 85;
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setFillPct(targetPct);
-    }, 500); // Délai pour l'animation au chargement
+      // Minimum 2% pour que la barre soit toujours visible
+      setFillPct(Math.max(2, soldPct));
+    }, 500);
     return () => clearTimeout(timer);
-  }, [targetPct]);
+  }, [soldPct]);
+
+  // Label selon la situation
+  const availabilityLabel = isCritical
+    ? 'Presque Complet !'
+    : hasRealCapacity
+      ? `${remaining} place${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}`
+      : sold < 5
+        ? 'Billets disponibles'
+        : `${remainingPct}% des places restantes`;
+
+  const labelColor = isCritical
+    ? 'text-rose-500 animate-pulse'
+    : hasRealCapacity && remainingPct <= 30
+      ? 'text-amber-400'
+      : 'text-emerald-400';
 
   return (
     <div className="mb-6 space-y-2">
       <div className="flex justify-between items-end">
         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité</span>
-        <span className={`text-sm font-bold ${isCritical ? 'text-rose-500 animate-pulse' : 'text-orange-400'}`}>
-          {isCritical ? 'Presque Complet !' : `${100 - targetPct}% des places restantes`}
+        <span className={`text-sm font-bold ${labelColor}`}>
+          {availabilityLabel}
         </span>
       </div>
       <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden shadow-inner relative">
         <div
-          className={`h-full rounded-full transition-all duration-1500 ease-out relative overflow-hidden ${isCritical ? 'bg-gradient-to-r from-rose-600 to-rose-400' : 'bg-gradient-to-r from-orange-600 to-amber-400'}`}
+          className={`h-full rounded-full transition-all duration-[1500ms] ease-out relative overflow-hidden ${isCritical ? 'bg-gradient-to-r from-rose-600 to-rose-400' : 'bg-gradient-to-r from-orange-600 to-amber-400'}`}
           style={{ width: `${fillPct}%` }}
         >
-          {/* Shimmer effect inside the bar */}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
         </div>
       </div>
-      <p className="text-[10px] text-slate-500 text-right">{effectiveSold} billets déjà réservés</p>
+      <p className="text-[10px] text-slate-500 text-right">
+        {hasRealCapacity
+          ? `${effectiveSold} / ${effectiveCapacity} billets vendus`
+          : sold > 0
+            ? `${sold} billet${sold > 1 ? 's' : ''} déjà réservé${sold > 1 ? 's' : ''}`
+            : 'Soyez parmi les premiers !'}
+      </p>
     </div>
   );
 };

@@ -15,6 +15,10 @@ import { AgentLogin } from './views/AgentLogin';
 import { AmbassadorLogin } from './views/AmbassadorLogin';
 import { FundraisingPage } from './views/FundraisingPage';
 import { AmbassadorDashboard } from './views/AmbassadorDashboard';
+import { About } from './views/About';
+import { FAQ } from './views/FAQ';
+import { Privacy } from './views/Privacy';
+import { Terms } from './views/Terms';
 import { UserRole } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PublicChatWidget } from './components/PublicChatWidget';
@@ -84,6 +88,12 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           } />
           <Route path="/collecte/:slug" element={<FundraisingPage />} />
+
+          {/* Institutional Pages */}
+          <Route path="/about" element={<About />} />
+          <Route path="/faq" element={<FAQ />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
 
           <Route path="/organizer/login" element={<OrganizerLogin />} />
           <Route path="/sysbap/login" element={<AdminLogin />} />

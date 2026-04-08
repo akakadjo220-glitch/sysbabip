@@ -1,7 +1,7 @@
-
-import React, { useContext, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Footer } from './Footer';
 import { UserRole } from '../types';
 import {
   LayoutDashboard,
@@ -53,6 +53,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {children}
         </div>
       </main>
+
+      <Footer />
 
       {/* Floating Action Button (FAB) Menu */}
       <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-4 pointer-events-none">
