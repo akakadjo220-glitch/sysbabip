@@ -100,6 +100,18 @@ export interface UserProfile {
   avatar: string;
 }
 
+export interface PayoutSettings {
+  id: string;
+  organizer_id: string;
+  bank_name: string;
+  account_holder_name: string;
+  iban: string;
+  swift_bic: string;
+  country?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface PayoutRequest {
   id: string;
   organizerId: string;

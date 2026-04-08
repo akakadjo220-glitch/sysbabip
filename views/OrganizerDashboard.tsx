@@ -951,24 +951,24 @@ const AttendeesView = ({ userId, events, addToast }: any) => {
       const mapped = (data || []).flatMap((t: any) => {
         const ticketList = Array.isArray(t.tickets) ? t.tickets : (t.tickets ? [t.tickets] : []);
         if (ticketList.length === 0) {
-           return [{
-             id: String(t.id).slice(0, 8).toUpperCase(),
-             fullId: t.id,
-             name: t.guest_name || t.guest_email || '—',
-             event: t.events?.title || '—',
-             ticketType: 'Standard',
-             status: 'valid',
-             realTicketId: null,
-           }];
+          return [{
+            id: String(t.id).slice(0, 8).toUpperCase(),
+            fullId: t.id,
+            name: t.guest_name || t.guest_email || '—',
+            event: t.events?.title || '—',
+            ticketType: 'Standard',
+            status: 'valid',
+            realTicketId: null,
+          }];
         }
-        
+
         return ticketList.map((tk: any, i: number) => {
           const rawType = tk.ticket_type || 'Standard';
           const mappedType = typeNameMap[rawType] || rawType;
           return {
             id: String(tk.id || t.id).slice(0, 8).toUpperCase(),
             fullId: t.id,
-            name: `${t.guest_name || t.guest_email || '—'}${ticketList.length > 1 ? ` (#${i+1})` : ''}`,
+            name: `${t.guest_name || t.guest_email || '—'}${ticketList.length > 1 ? ` (#${i + 1})` : ''}`,
             event: t.events?.title || '—',
             ticketType: mappedType,
             status: tk.status || 'valid',
@@ -1399,24 +1399,125 @@ const MarketingView = ({ transactions }: any) => {
   );
 };
 
+const OrganizerPayoutSettings = ({ organizerId, addToast }: { organizerId: string, addToast: any }) => {
+  const [settings, setSettings] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const { data } = await supabase.from('payout_settings').select('*').eq('organizer_id', organizerId).single();
+      if (data) setSettings(data);
+      else setSettings({ bank_name: '', account_holder_name: '', iban: '', swift_bic: '', country: 'CI' });
+      setLoading(false);
+    };
+    if (organizerId) fetchSettings();
+  }, [organizerId]);
+
+  const handleSave = async () => {
+    if (!settings.bank_name || !settings.iban || !settings.swift_bic || !settings.account_holder_name) {
+      return addToast("Veuillez remplir tous les champs bancaires", "error");
+    }
+    setSaving(true);
+    const payload = {
+      organizer_id: organizerId,
+      bank_name: settings.bank_name,
+      account_holder_name: settings.account_holder_name,
+      iban: settings.iban,
+      swift_bic: settings.swift_bic,
+      country: settings.country || 'CI',
+      updated_at: new Date().toISOString()
+    };
+
+    // Check if exists
+    const { data: existing } = await supabase.from('payout_settings').select('id').eq('organizer_id', organizerId).single();
+    if (existing) {
+      const { error } = await supabase.from('payout_settings').update(payload).eq('id', existing.id);
+      if (error) addToast(error.message, 'error'); else addToast("Coordonnées bancaires mises à jour", "success");
+    } else {
+      const { error } = await supabase.from('payout_settings').insert([payload]);
+      if (error) addToast(error.message, 'error'); else addToast("Coordonnées bancaires enregistrées", "success");
+    }
+    setSaving(false);
+  };
+
+  if (loading) return <div className="flex justify-center p-6"><Loader2 className="animate-spin text-orange-500" size={24} /></div>;
+
+  return (
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 p-6 rounded-3xl shadow-xl mt-6 mb-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400">
+          <Banknote size={24} />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-white">Coordonnées Bancaires (Virement Payouts)</h3>
+          <p className="text-slate-400 text-sm">Où devons-nous envoyer vos paiements et reversements ?</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div>
+          <label className="block text-slate-400 text-xs font-bold mb-2">Nom de la Banque</label>
+          <input type="text" value={settings.bank_name || ''} onChange={e => setSettings({ ...settings, bank_name: e.target.value })} className="w-full bg-slate-800/80 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 outline-none" placeholder="Ex: Ecobank, SGCI..." />
+        </div>
+        <div>
+          <label className="block text-slate-400 text-xs font-bold mb-2">Titulaire du Compte (Exact)</label>
+          <input type="text" value={settings.account_holder_name || ''} onChange={e => setSettings({ ...settings, account_holder_name: e.target.value })} className="w-full bg-slate-800/80 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 outline-none" placeholder="Afritix Group SARL" />
+        </div>
+        <div>
+          <label className="block text-slate-400 text-xs font-bold mb-2">IBAN / RIB</label>
+          <input type="text" value={settings.iban || ''} onChange={e => setSettings({ ...settings, iban: e.target.value })} className="w-full bg-slate-800/80 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 outline-none" placeholder="Numéro Iban/Rib (CI...)" />
+        </div>
+        <div>
+          <label className="block text-slate-400 text-xs font-bold mb-2">Code SWIFT / BIC</label>
+          <input type="text" value={settings.swift_bic || ''} onChange={e => setSettings({ ...settings, swift_bic: e.target.value })} className="w-full bg-slate-800/80 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500/50 outline-none" placeholder="BBXYZ..." />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all">
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+          Enregistrer mes coordonnées
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchProfile }: any) => {
   const { user } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
+  const [ambCommByEvent, setAmbCommByEvent] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchRequests = async () => {
       if (!user?.id) { setLoading(false); return; }
-      const { data } = await supabase.from('payout_requests')
-        .select('*, events:event_id(title)')
-        .eq('organizer_id', user.id)
-        .order('created_at', { ascending: false });
-      setRequests(data || []);
+
+      const [{ data: reqData }, { data: ambData }] = await Promise.all([
+        supabase.from('payout_requests')
+          .select('*, events:event_id(title)')
+          .eq('organizer_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase.from('transactions')
+          .select('event_id, ambassador_commission')
+          .gt('ambassador_commission', 0)
+          .neq('status', 'valid')
+          .in('event_id', (eventSales || []).map((ev: any) => ev.event_id))
+      ]);
+      setRequests(reqData || []);
+
+      // Aggregate ambassador commissions per event
+      const ambMap: Record<string, number> = {};
+      (ambData || []).forEach((t: any) => {
+        ambMap[t.event_id] = (ambMap[t.event_id] || 0) + Number(t.ambassador_commission || 0);
+      });
+      setAmbCommByEvent(ambMap);
+
       setLoading(false);
     };
     fetchRequests();
-  }, [user?.id]);
+  }, [user?.id, eventSales]);
 
   const eventStats = useMemo(() => {
     return (eventSales || []).map((ev: any) => {
@@ -1425,7 +1526,10 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
       const advanceStatus = advanceReq?.status || ev.advance_status || null;
       const advanceAmt = advanceReq?.amount || Number(ev.advance_amt || 0);
 
+      const gross = Number(ev.gross || 0);
       const baseNet = Number(ev.base_net || 0);
+      const platformCommission = gross - baseNet; // comm Babipass
+      const ambassadorCommission = ambCommByEvent[ev.event_id] || 0;
 
       // Nouvelle logique : Trouver toutes les déductions réelles pour cet événement (Avances validées + Commissions wallet)
       const eventDeductions = requests.filter(r =>
@@ -1435,7 +1539,8 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
       );
       const totalDeducted = eventDeductions.reduce((sum, r) => sum + Number(r.amount), 0);
 
-      let remainingPayout = baseNet - totalDeducted;
+      // Net organizer = baseNet - commissions ambassadeurs - autres déductions
+      let remainingPayout = baseNet - ambassadorCommission - totalDeducted;
       // We do NOT floor remainingPayout at 0 here, because debt on an event must cross-collateralize
       // and reduce the overall global wallet balance.
 
@@ -1443,7 +1548,9 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
       return {
         id: ev.event_id,
         title: ev.title,
-        gross: Number(ev.gross || 0),
+        gross,
+        commission: platformCommission,
+        ambassadorCommission,
         baseNet,
         advanceStatus,
         advanceAmt,
@@ -1453,7 +1560,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
         maxAdvance: Number(ev.max_advance || 0)
       };
     }).sort((a: any, b: any) => b.gross - a.gross);
-  }, [eventSales, requests]);
+  }, [eventSales, requests, ambCommByEvent]);
 
   // Global aggregates from RPC
   const totalGross = Number(stats?.totalGross || 0);
@@ -1593,7 +1700,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
       doc.text(`${event.gross.toLocaleString('fr-FR')} FCFA`, pageWidth - 25, 115, { align: 'right' });
 
       doc.setFont(undefined, 'normal');
-      const commission = event.gross - event.baseNet;
+      const commission = event.commission;
       const commissionPercent = event.gross > 0 ? Math.round((commission / event.gross) * 100) : 0;
       doc.text(`Frais Plateforme Babipass (~${commissionPercent}%) :`, 25, 125);
       doc.setTextColor(225, 29, 72); // rose-600
@@ -1786,6 +1893,8 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
         </div>
       </div>
 
+      <OrganizerPayoutSettings organizerId={user?.id} addToast={addToast} />
+
       <div className="bg-slate-900/50 border border-white/10 rounded-3xl p-6 shadow-2xl">
         <h3 className="text-lg font-bold text-white mb-6">Récapitulatif & Avances par Événement</h3>
         <div className="overflow-x-auto">
@@ -1794,6 +1903,8 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
               <tr>
                 <th className="px-6 py-4">Événement</th>
                 <th className="px-6 py-4">Ventes Brutes</th>
+                <th className="px-6 py-4">Comm. Plateforme</th>
+                <th className="px-6 py-4">Comm. Ambassadeurs</th>
                 <th className="px-6 py-4">Avance Maximum</th>
                 <th className="px-6 py-4">Reste à Payer (Net)</th>
                 <th className="px-6 py-4 text-right">Facture</th>
@@ -1804,6 +1915,17 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
                 <tr key={e.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4 text-white font-medium max-w-[200px] truncate">{e.title}</td>
                   <td className="px-6 py-4 text-slate-300 font-bold">{formatCurrency(e.gross)}</td>
+                  <td className="px-6 py-4">
+                    <span className="text-rose-400 font-bold">-{formatCurrency(e.commission)}</span>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{e.gross > 0 ? Math.round((e.commission / e.gross) * 100) : 0}%</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {e.ambassadorCommission > 0 ? (
+                      <span className="text-indigo-400 font-bold">-{formatCurrency(e.ambassadorCommission)}</span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4">
                     {e.advanceStatus === 'paid' ? (
                       <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded">Encaissé : {formatCurrency(e.advanceAmt)}</span>
@@ -1835,7 +1957,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
                 </tr>
               ))}
               {eventStats.length === 0 && (
-                <tr><td colSpan={4} className="py-8 text-center text-slate-500">Aucun événement avec des ventes.</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-slate-500">Aucun événement avec des ventes.</td></tr>
               )}
             </tbody>
           </table>
@@ -2028,7 +2150,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     if (form.ticketTypes.length > 0) {
       const lastTicket = form.ticketTypes[form.ticketTypes.length - 1];
       const nameLower = lastTicket.name.toLowerCase();
-      
+
       if (nameLower === 'standard' || nameLower === 'regular') {
         nextName = 'VIP';
         nextPrice = lastTicket.price > 0 ? lastTicket.price * 3 : 15000;
@@ -2043,7 +2165,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
         nextCapacity = lastTicket.capacity;
       }
     }
-    
+
     setForm({ ...form, ticketTypes: [...form.ticketTypes, { id: `t${Date.now()}`, name: nextName, price: nextPrice, capacity: nextCapacity, features: [] }] });
   };
   const updateTicketType = (index: number, field: string, value: any) => {
@@ -3115,23 +3237,23 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
     e.preventDefault();
     if (!kycFile || !user?.id) return;
     setKycUploading(true);
-    
+
     try {
       const ext = kycFile.name.split('.').pop();
       const filePath = `${user.id}/address_verif_${Date.now()}.${ext}`;
-      
+
       const { error: uploadErr } = await supabase.storage.from('kyc_documents').upload(filePath, kycFile);
       if (uploadErr) throw uploadErr;
-      
+
       const { data: urlData } = supabase.storage.from('kyc_documents').getPublicUrl(filePath);
-      
+
       const { error: profileErr } = await supabase.from('profiles').update({
         address_doc_url: urlData.publicUrl,
         address_status: 'pending'
       }).eq('id', user.id);
-      
+
       if (profileErr) throw profileErr;
-      
+
       addToast("Document soumis avec succès ! En cours de vérification.", "success");
       if (fetchProfile) fetchProfile();
     } catch (err: any) {
@@ -3193,8 +3315,8 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
             .select('amount, type')
             .eq('organizer_id', user.id)
             .eq('status', 'paid');
-            
-          const validDeductions = (requests || []).filter((r: any) => 
+
+          const validDeductions = (requests || []).filter((r: any) =>
             r.type === 'cash_advance' || r.type === 'physical_commission'
           );
           const totalPaidDeductions = validDeductions.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
@@ -3411,16 +3533,16 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
           <div className="absolute -top-10 -right-10 opacity-5">
             <ShieldCheck size={250} />
           </div>
-          
+
           <div className="w-20 h-20 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-orange-500/30">
             <Lock className="text-orange-400" size={32} />
           </div>
-          
+
           <h2 className="text-2xl font-black text-white mb-4">Fonctionnalité Verrouillée</h2>
-          
+
           <p className="text-slate-400 max-w-xl mx-auto mb-8 leading-relaxed">
             Pour des raisons de sécurité et de conformité (Anti-Fraude), l'impression massive de billets physiques (cash) nécessite la vérification de votre adresse.
-            <br/><br/>
+            <br /><br />
             Veuillez nous fournir : <span className="text-white font-bold">Une facture (CIE/SODECI), un Certificat de Résidence, ou un RIB.</span>
           </p>
 
@@ -3433,30 +3555,30 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
               </p>
             </div>
           ) : (
-              <form onSubmit={handleKycUpload} className="bg-slate-900/60 border border-white/5 p-6 rounded-2xl max-w-lg mx-auto text-left">
-                {kycStatus === 'rejected' && (
-                  <div className="mb-6 bg-red-500/10 border border-red-500/30 p-4 rounded-xl flex items-start gap-3">
-                    <XOctagon className="text-red-400 shrink-0 mt-0.5" size={20} />
-                    <div>
-                      <h3 className="text-red-400 font-bold text-sm">Document rejeté</h3>
-                      <p className="text-red-400/80 text-xs mt-1">{profile?.address_rejection_reason || "Votre document n'a pas été validé. Veuillez soumettre une pièce valide."}</p>
-                    </div>
+            <form onSubmit={handleKycUpload} className="bg-slate-900/60 border border-white/5 p-6 rounded-2xl max-w-lg mx-auto text-left">
+              {kycStatus === 'rejected' && (
+                <div className="mb-6 bg-red-500/10 border border-red-500/30 p-4 rounded-xl flex items-start gap-3">
+                  <XOctagon className="text-red-400 shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <h3 className="text-red-400 font-bold text-sm">Document rejeté</h3>
+                    <p className="text-red-400/80 text-xs mt-1">{profile?.address_rejection_reason || "Votre document n'a pas été validé. Veuillez soumettre une pièce valide."}</p>
                   </div>
-                )}
-                
-                <div className="mb-6">
-                  <label className="block text-sm font-bold text-slate-300 mb-2">Uploader votre document (PDF, JPG, PNG)</label>
-                  <input 
-                    type="file" 
-                    accept=".pdf,image/*" 
-                    required
-                    onChange={(e) => setKycFile(e.target.files?.[0] || null)}
-                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-500/20 file:text-orange-400 hover:file:bg-orange-500/30 cursor-pointer"
-                  />
                 </div>
-              
-              <button 
-                type="submit" 
+              )}
+
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-slate-300 mb-2">Uploader votre document (PDF, JPG, PNG)</label>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  required
+                  onChange={(e) => setKycFile(e.target.files?.[0] || null)}
+                  className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-500/20 file:text-orange-400 hover:file:bg-orange-500/30 cursor-pointer"
+                />
+              </div>
+
+              <button
+                type="submit"
                 disabled={kycUploading || !kycFile}
                 className="w-full bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -3472,258 +3594,258 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       {kycStatus === 'verified' && (
         <>
           {/* Payment Required Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setShowPaymentModal(false)} />
-          <div className="relative bg-slate-800 w-full max-w-lg rounded-3xl border border-orange-500/30 shadow-2xl p-8 z-10">
-            <div className="w-14 h-14 bg-orange-500/20 rounded-2xl flex items-center justify-center mb-6 border border-orange-500/30 mx-auto">
-              <Banknote className="text-orange-400" size={28} />
-            </div>
-            <h3 className="text-xl font-extrabold text-white text-center mb-2">Paiement Commission Requis</h3>
-            <p className="text-slate-400 text-sm text-center mb-6">
-              Votre solde wallet est insuffisant pour couvrir la commission de ce lot de billets physiques.
-            </p>
-
-            <div className="bg-slate-900/60 rounded-2xl p-5 border border-white/10 space-y-3 mb-6">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Commission due</span>
-                <span className="text-white font-bold">{pendingCommission.toLocaleString('fr-FR')} FCFA</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Votre solde wallet</span>
-                <span className="text-orange-400 font-bold">{walletBalance.toLocaleString('fr-FR')} FCFA</span>
-              </div>
-              <div className="border-t border-white/10 pt-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">À payer</span>
-                  <span className="text-rose-400 font-extrabold text-base">{(pendingCommission - walletBalance).toLocaleString('fr-FR')} FCFA</span>
+          {showPaymentModal && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setShowPaymentModal(false)} />
+              <div className="relative bg-slate-800 w-full max-w-lg rounded-3xl border border-orange-500/30 shadow-2xl p-8 z-10">
+                <div className="w-14 h-14 bg-orange-500/20 rounded-2xl flex items-center justify-center mb-6 border border-orange-500/30 mx-auto">
+                  <Banknote className="text-orange-400" size={28} />
                 </div>
-              </div>
-            </div>
+                <h3 className="text-xl font-extrabold text-white text-center mb-2">Paiement Commission Requis</h3>
+                <p className="text-slate-400 text-sm text-center mb-6">
+                  Votre solde wallet est insuffisant pour couvrir la commission de ce lot de billets physiques.
+                </p>
 
-            <div className="flex gap-2 mb-4 bg-slate-900/50 p-1 border border-white/5 rounded-xl">
-              <button type="button" onClick={() => setPayMethod('paystack')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${payMethod === 'paystack' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                Carte / Paystack
-              </button>
-              <button type="button" onClick={() => setPayMethod('momo')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${payMethod === 'momo' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                Mobile Money
-              </button>
-            </div>
-
-            <form onSubmit={processCommissionPayment} className="space-y-4">
-              {payMethod === 'momo' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <select required value={momoNetwork} onChange={e => setMomoNetwork(e.target.value)} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none">
-                    <option value="ORANGE_CI">Orange CI</option>
-                    <option value="MTN_CI">MTN CI</option>
-                    <option value="MOOV_CI">Moov CI</option>
-                    <option value="WAVE_CI">Wave CI</option>
-                    <option value="ORANGE_SN">Orange SN</option>
-                    <option value="FREE_SN">Free SN</option>
-                  </select>
-                  <input type="tel" required value={momoPhone} onChange={e => setMomoPhone(e.target.value)} placeholder="N° Téléphone" className="bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none" />
+                <div className="bg-slate-900/60 rounded-2xl p-5 border border-white/10 space-y-3 mb-6">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Commission due</span>
+                    <span className="text-white font-bold">{pendingCommission.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Votre solde wallet</span>
+                    <span className="text-orange-400 font-bold">{walletBalance.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div className="border-t border-white/10 pt-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400">À payer</span>
+                      <span className="text-rose-400 font-extrabold text-base">{(pendingCommission - walletBalance).toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowPaymentModal(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-bold transition-colors">
-                  Annuler
-                </button>
-                <button type="submit" disabled={paymentInProgress} className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors">
-                  {paymentInProgress ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />} Payer & Imprimer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                <div className="flex gap-2 mb-4 bg-slate-900/50 p-1 border border-white/5 rounded-xl">
+                  <button type="button" onClick={() => setPayMethod('paystack')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${payMethod === 'paystack' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                    Carte / Paystack
+                  </button>
+                  <button type="button" onClick={() => setPayMethod('momo')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${payMethod === 'momo' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                    Mobile Money
+                  </button>
+                </div>
 
-      {/* Main Form Card */}
-      <div className="bg-slate-800/80 rounded-3xl p-6 md:p-8 border border-white/10 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-          <Printer size={120} className="text-white" />
-        </div>
-
-        <h2 className="text-2xl font-black text-white mb-2 flex items-center gap-3 relative z-10">
-          <Printer className="text-orange-400" size={28} /> Impression de Billets en Masse
-        </h2>
-        <p className="text-slate-400 max-w-2xl relative z-10 mb-8">
-          Générez des QR Codes physiques certifiés avec le même niveau de sécurité (JWS) que les billets en ligne.
-          Une commission Babipass est automatiquement calculée sur chaque lot imprimé.
-        </p>
-
-        <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 relative z-10">
-
-          <div className="space-y-2 lg:col-span-2">
-            <label className="text-sm font-bold text-slate-300">Événement</label>
-            <select
-              required
-              value={selectedEventId}
-              onChange={e => { setSelectedEventId(e.target.value); setSelectedCategoryId(''); }}
-              className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
-            >
-              <option value="">Sélectionnez un événement...</option>
-              {events.map((e: any) => (
-                <option key={e.id} value={e.id}>{e.title}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-300">Catégorie</label>
-            <select
-              required
-              value={selectedCategoryId}
-              onChange={e => setSelectedCategoryId(e.target.value)}
-              disabled={!selectedEventId}
-              className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50"
-            >
-              <option value="">Catégorie...</option>
-              {categories.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-300">Quantité</label>
-            <input
-              required
-              type="number"
-              min="1"
-              max="200"
-              value={quantity}
-              onChange={e => setQuantity(Number(e.target.value))}
-              className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-300">Taille QR / Page</label>
-            <select
-              value={columns}
-              onChange={e => setColumns(Number(e.target.value))}
-              className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
-            >
-              <option value="2">2 colonnes (Format Géant)</option>
-              <option value="3">3 colonnes (Recommandé)</option>
-              <option value="4">4 colonnes (Compact)</option>
-              <option value="6">6 colonnes (Petits QR)</option>
-              <option value="8">8 colonnes (Format Mini)</option>
-            </select>
-          </div>
-
-          {/* Commission Banner */}
-          {selectedEventId && selectedCategoryId && (
-            <div className={`lg:col-span-5 rounded-2xl p-4 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${ticketPrice === 0
-              ? 'bg-slate-700/40 border-slate-600/40'
-              : balanceSufficient
-                ? 'bg-emerald-500/10 border-emerald-500/30'
-                : 'bg-orange-500/10 border-orange-500/30'
-              }`}>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  {ticketPrice === 0 ? (
-                    <span className="text-slate-400 text-sm font-bold">🎁 Événement gratuit — aucune commission</span>
-                  ) : balanceSufficient ? (
-                    <span className="text-emerald-400 text-sm font-bold">✅ Commission payée par déduction wallet</span>
-                  ) : (
-                    <span className="text-orange-400 text-sm font-bold">⚠️ Paiement externe requis</span>
+                <form onSubmit={processCommissionPayment} className="space-y-4">
+                  {payMethod === 'momo' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <select required value={momoNetwork} onChange={e => setMomoNetwork(e.target.value)} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none">
+                        <option value="ORANGE_CI">Orange CI</option>
+                        <option value="MTN_CI">MTN CI</option>
+                        <option value="MOOV_CI">Moov CI</option>
+                        <option value="WAVE_CI">Wave CI</option>
+                        <option value="ORANGE_SN">Orange SN</option>
+                        <option value="FREE_SN">Free SN</option>
+                      </select>
+                      <input type="tel" required value={momoPhone} onChange={e => setMomoPhone(e.target.value)} placeholder="N° Téléphone" className="bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none" />
+                    </div>
                   )}
-                </div>
-                {ticketPrice > 0 && (
-                  <p className="text-xs text-slate-400 font-mono">
-                    {quantity} billets × {ticketPrice.toLocaleString('fr-FR')} FCFA × {(commissionRate * 100).toFixed(0)}%
-                    {' = '}
-                    <span className="text-white font-bold">{commissionDue.toLocaleString('fr-FR')} FCFA</span>
-                    {' · '}Votre wallet : <span className={balanceSufficient ? 'text-emerald-400' : 'text-orange-400'}>{walletBalance.toLocaleString('fr-FR')} FCFA</span>
-                  </p>
-                )}
+
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setShowPaymentModal(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-bold transition-colors">
+                      Annuler
+                    </button>
+                    <button type="submit" disabled={paymentInProgress} className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors">
+                      {paymentInProgress ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />} Payer & Imprimer
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
 
-          <div className="lg:col-span-5 border-t border-white/5 pt-6 mt-2 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
-              <ShieldCheck size={16} /> QR Codes JWS Haute Sécurité Inclus
+          {/* Main Form Card */}
+          <div className="bg-slate-800/80 rounded-3xl p-6 md:p-8 border border-white/10 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+              <Printer size={120} className="text-white" />
             </div>
 
-            <button
-              type="submit"
-              disabled={isGenerating || !selectedEventId || !selectedCategoryId}
-              className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
-            >
-              {isGenerating ? (
-                <><Loader2 size={20} className="animate-spin" /> Traitement en cours...</>
-              ) : (
-                <><Printer size={20} /> Imprimer {quantity} Billet(s)</>
+            <h2 className="text-2xl font-black text-white mb-2 flex items-center gap-3 relative z-10">
+              <Printer className="text-orange-400" size={28} /> Impression de Billets en Masse
+            </h2>
+            <p className="text-slate-400 max-w-2xl relative z-10 mb-8">
+              Générez des QR Codes physiques certifiés avec le même niveau de sécurité (JWS) que les billets en ligne.
+              Une commission Babipass est automatiquement calculée sur chaque lot imprimé.
+            </p>
+
+            <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 relative z-10">
+
+              <div className="space-y-2 lg:col-span-2">
+                <label className="text-sm font-bold text-slate-300">Événement</label>
+                <select
+                  required
+                  value={selectedEventId}
+                  onChange={e => { setSelectedEventId(e.target.value); setSelectedCategoryId(''); }}
+                  className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
+                >
+                  <option value="">Sélectionnez un événement...</option>
+                  {events.map((e: any) => (
+                    <option key={e.id} value={e.id}>{e.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-300">Catégorie</label>
+                <select
+                  required
+                  value={selectedCategoryId}
+                  onChange={e => setSelectedCategoryId(e.target.value)}
+                  disabled={!selectedEventId}
+                  className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none disabled:opacity-50"
+                >
+                  <option value="">Catégorie...</option>
+                  {categories.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-300">Quantité</label>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  max="200"
+                  value={quantity}
+                  onChange={e => setQuantity(Number(e.target.value))}
+                  className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-300">Taille QR / Page</label>
+                <select
+                  value={columns}
+                  onChange={e => setColumns(Number(e.target.value))}
+                  className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
+                >
+                  <option value="2">2 colonnes (Format Géant)</option>
+                  <option value="3">3 colonnes (Recommandé)</option>
+                  <option value="4">4 colonnes (Compact)</option>
+                  <option value="6">6 colonnes (Petits QR)</option>
+                  <option value="8">8 colonnes (Format Mini)</option>
+                </select>
+              </div>
+
+              {/* Commission Banner */}
+              {selectedEventId && selectedCategoryId && (
+                <div className={`lg:col-span-5 rounded-2xl p-4 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${ticketPrice === 0
+                  ? 'bg-slate-700/40 border-slate-600/40'
+                  : balanceSufficient
+                    ? 'bg-emerald-500/10 border-emerald-500/30'
+                    : 'bg-orange-500/10 border-orange-500/30'
+                  }`}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      {ticketPrice === 0 ? (
+                        <span className="text-slate-400 text-sm font-bold">🎁 Événement gratuit — aucune commission</span>
+                      ) : balanceSufficient ? (
+                        <span className="text-emerald-400 text-sm font-bold">✅ Commission payée par déduction wallet</span>
+                      ) : (
+                        <span className="text-orange-400 text-sm font-bold">⚠️ Paiement externe requis</span>
+                      )}
+                    </div>
+                    {ticketPrice > 0 && (
+                      <p className="text-xs text-slate-400 font-mono">
+                        {quantity} billets × {ticketPrice.toLocaleString('fr-FR')} FCFA × {(commissionRate * 100).toFixed(0)}%
+                        {' = '}
+                        <span className="text-white font-bold">{commissionDue.toLocaleString('fr-FR')} FCFA</span>
+                        {' · '}Votre wallet : <span className={balanceSufficient ? 'text-emerald-400' : 'text-orange-400'}>{walletBalance.toLocaleString('fr-FR')} FCFA</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
-            </button>
+
+              <div className="lg:col-span-5 border-t border-white/5 pt-6 mt-2 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
+                  <ShieldCheck size={16} /> QR Codes JWS Haute Sécurité Inclus
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isGenerating || !selectedEventId || !selectedCategoryId}
+                  className="w-full sm:w-auto bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
+                >
+                  {isGenerating ? (
+                    <><Loader2 size={20} className="animate-spin" /> Traitement en cours...</>
+                  ) : (
+                    <><Printer size={20} /> Imprimer {quantity} Billet(s)</>
+                  )}
+                </button>
+              </div>
+
+            </form>
           </div>
 
-        </form>
-      </div>
+          {/* Analytics Dashboard */}
+          <h3 className="text-xl font-bold text-white mt-8 mb-4 flex items-center gap-2">
+            <Activity className="text-blue-400" size={24} /> Intelligence Billets Physiques
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent transition-opacity group-hover:opacity-100 opacity-50" />
+              <h4 className="text-slate-400 text-sm font-semibold uppercase tracking-wider relative z-10">Total Imprimés</h4>
+              <p className="text-4xl font-extrabold text-white mt-2 relative z-10">{totalPrinted}</p>
+              <div className="absolute top-6 right-6 p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
+                <Printer className="text-blue-400" size={24} />
+              </div>
+            </div>
 
-      {/* Analytics Dashboard */}
-      <h3 className="text-xl font-bold text-white mt-8 mb-4 flex items-center gap-2">
-        <Activity className="text-blue-400" size={24} /> Intelligence Billets Physiques
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent transition-opacity group-hover:opacity-100 opacity-50" />
-          <h4 className="text-slate-400 text-sm font-semibold uppercase tracking-wider relative z-10">Total Imprimés</h4>
-          <p className="text-4xl font-extrabold text-white mt-2 relative z-10">{totalPrinted}</p>
-          <div className="absolute top-6 right-6 p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-            <Printer className="text-blue-400" size={24} />
-          </div>
-        </div>
+            <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent transition-opacity group-hover:opacity-100 opacity-50" />
+              <h4 className="text-slate-400 text-sm font-semibold uppercase tracking-wider relative z-10">Scannés & Consommés</h4>
+              <p className="text-4xl font-extrabold text-white mt-2 relative z-10">{totalScanned}</p>
+              <div className="absolute top-6 right-6 p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
+                <CheckCircle className="text-emerald-400" size={24} />
+              </div>
+            </div>
 
-        <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent transition-opacity group-hover:opacity-100 opacity-50" />
-          <h4 className="text-slate-400 text-sm font-semibold uppercase tracking-wider relative z-10">Scannés & Consommés</h4>
-          <p className="text-4xl font-extrabold text-white mt-2 relative z-10">{totalScanned}</p>
-          <div className="absolute top-6 right-6 p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
-            <CheckCircle className="text-emerald-400" size={24} />
+            <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent transition-opacity group-hover:opacity-100 opacity-50" />
+              <h4 className="text-slate-400 text-sm font-semibold uppercase tracking-wider relative z-10">Taux de Conversion (Scan)</h4>
+              <p className="text-4xl font-extrabold text-orange-400 mt-2 relative z-10">{conversionRate}%</p>
+              <div className="absolute top-6 right-6 p-3 bg-orange-500/10 rounded-2xl border border-orange-500/20">
+                <TrendingUp className="text-orange-400" size={24} />
+              </div>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full mt-4 overflow-hidden relative z-10">
+                <div className="h-full bg-orange-400 transition-all duration-1000" style={{ width: `${conversionRate}%` }} />
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent transition-opacity group-hover:opacity-100 opacity-50" />
-          <h4 className="text-slate-400 text-sm font-semibold uppercase tracking-wider relative z-10">Taux de Conversion (Scan)</h4>
-          <p className="text-4xl font-extrabold text-orange-400 mt-2 relative z-10">{conversionRate}%</p>
-          <div className="absolute top-6 right-6 p-3 bg-orange-500/10 rounded-2xl border border-orange-500/20">
-            <TrendingUp className="text-orange-400" size={24} />
+          {/* Information Panel */}
+          <div className="grid md:grid-cols-3 gap-6 pt-4">
+            <div className="bg-slate-800/40 p-6 rounded-2xl border border-white/5">
+              <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center mb-4 border border-orange-500/30">
+                <Key size={20} className="text-orange-400" />
+              </div>
+              <h3 className="text-white font-bold mb-2">Non-Duplicables</h3>
+              <p className="text-slate-400 text-sm">Chaque QR code contient une signature anti-fraude cryptée unique. Même imprimé, il ne peut pas être falsifié.</p>
+            </div>
+            <div className="bg-slate-800/40 p-6 rounded-2xl border border-white/5">
+              <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 border border-emerald-500/30">
+                <Clock size={20} className="text-emerald-400" />
+              </div>
+              <h3 className="text-white font-bold mb-2">Usage Unique</h3>
+              <p className="text-slate-400 text-sm">Lorsqu'un billet physique est flashé à l'entrée avec TicketScanner, il est désactivé définitivement.</p>
+            </div>
+            <div className="bg-slate-800/40 p-6 rounded-2xl border border-white/5">
+              <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 border border-blue-500/30">
+                <Banknote size={20} className="text-blue-400" />
+              </div>
+              <h3 className="text-white font-bold mb-2">Commission automatique</h3>
+              <p className="text-slate-400 text-sm">La commission Babipass est déduite de votre wallet ou facturée avant chaque lot. Aucune surprise après l'événement.</p>
+            </div>
           </div>
-          <div className="w-full h-1.5 bg-slate-800 rounded-full mt-4 overflow-hidden relative z-10">
-            <div className="h-full bg-orange-400 transition-all duration-1000" style={{ width: `${conversionRate}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Information Panel */}
-      <div className="grid md:grid-cols-3 gap-6 pt-4">
-        <div className="bg-slate-800/40 p-6 rounded-2xl border border-white/5">
-          <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center mb-4 border border-orange-500/30">
-            <Key size={20} className="text-orange-400" />
-          </div>
-          <h3 className="text-white font-bold mb-2">Non-Duplicables</h3>
-          <p className="text-slate-400 text-sm">Chaque QR code contient une signature anti-fraude cryptée unique. Même imprimé, il ne peut pas être falsifié.</p>
-        </div>
-        <div className="bg-slate-800/40 p-6 rounded-2xl border border-white/5">
-          <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 border border-emerald-500/30">
-            <Clock size={20} className="text-emerald-400" />
-          </div>
-          <h3 className="text-white font-bold mb-2">Usage Unique</h3>
-          <p className="text-slate-400 text-sm">Lorsqu'un billet physique est flashé à l'entrée avec TicketScanner, il est désactivé définitivement.</p>
-        </div>
-        <div className="bg-slate-800/40 p-6 rounded-2xl border border-white/5">
-          <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 border border-blue-500/30">
-            <Banknote size={20} className="text-blue-400" />
-          </div>
-          <h3 className="text-white font-bold mb-2">Commission automatique</h3>
-          <p className="text-slate-400 text-sm">La commission Babipass est déduite de votre wallet ou facturée avant chaque lot. Aucune surprise après l'événement.</p>
-        </div>
-      </div>
         </>
       )}
     </div>

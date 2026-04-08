@@ -677,9 +677,75 @@ const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, addToast }: any) =
 };
 
 // ─── Finance Tab ───
+const AdminBankInfoModal = ({ organizerId, orgName, onClose, addToast }: { organizerId: string, orgName: string, onClose: () => void, addToast: any }) => {
+  const [info, setInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInfo = async () => {
+      const { data } = await supabase.from('payout_settings').select('*').eq('organizer_id', organizerId).single();
+      if (data) setInfo(data);
+      setLoading(false);
+    };
+    fetchInfo();
+  }, [organizerId]);
+
+  return (
+    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm pointer-events-auto cursor-pointer" onClick={onClose} />
+      <div className="bg-slate-800 p-8 rounded-3xl w-full max-w-md relative pointer-events-auto border border-white/10 shadow-2xl animate-in zoom-in-95 duration-300">
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex items-center gap-3">
+             <div className="w-12 h-12 bg-blue-500/20 text-blue-500 rounded-xl flex items-center justify-center"><Banknote size={24} /></div>
+             <div>
+               <h3 className="text-xl font-bold text-white">Coordonnées Bancaires</h3>
+               <p className="text-slate-400 text-sm">{orgName}</p>
+             </div>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors"><X size={20} /></button>
+        </div>
+        
+        {loading ? (
+          <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-blue-500 mx-auto" size={28} /></div>
+        ) : !info ? (
+          <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-amber-400 text-sm font-medium">
+            Cet organisateur n'a pas encore renseigné ses informations de reversement bancaire.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
+              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Nom de la Banque</p>
+              <p className="text-white font-medium">{info.bank_name}</p>
+            </div>
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
+              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Titulaire du Compte</p>
+              <p className="text-white font-medium">{info.account_holder_name}</p>
+            </div>
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
+              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">IBAN / RIB</p>
+              <div className="flex justify-between items-center">
+                <p className="text-white font-mono break-all text-sm">{info.iban}</p>
+                <button onClick={() => { navigator.clipboard.writeText(info.iban); addToast("IBAN copié", "success"); }} className="text-blue-400 hover:text-blue-300 ml-2" title="Copier l'IBAN"><CheckCircle2 size={16} /></button>
+              </div>
+            </div>
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-white/5">
+              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Code SWIFT / BIC</p>
+              <div className="flex justify-between items-center">
+                <p className="text-white font-mono">{info.swift_bic}</p>
+                <button onClick={() => { navigator.clipboard.writeText(info.swift_bic); addToast("SWIFT copié", "success"); }} className="text-blue-400 hover:text-blue-300 ml-2" title="Copier le SWIFT"><CheckCircle2 size={16} /></button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'success' | 'error') => void }) => {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewBankInfo, setViewBankInfo] = useState<{ id: string, name: string } | null>(null);
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -739,6 +805,14 @@ const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'succe
 
   return (
     <div className="overflow-x-auto relative">
+      {viewBankInfo && (
+        <AdminBankInfoModal 
+          organizerId={viewBankInfo.id} 
+          orgName={viewBankInfo.name} 
+          onClose={() => setViewBankInfo(null)} 
+          addToast={addToast} 
+        />
+      )}
       <table className="w-full text-left text-sm whitespace-nowrap">
         <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
           <tr>
@@ -778,6 +852,12 @@ const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'succe
               </td>
               <td className="px-6 py-4 text-right">
                 <div className="flex justify-end items-center gap-3">
+                  <button
+                    onClick={() => setViewBankInfo({ id: r.organizer_id, name: r.profiles?.name || 'Inconnu' })}
+                    className="p-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors title='Infos Bancaires'"
+                  >
+                    <Banknote size={16} />
+                  </button>
                   {r.status === 'pending' && (
                     <div className="flex gap-2">
                       <button
@@ -837,6 +917,7 @@ const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'succe
 const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' | 'error') => void }) => {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewBankInfo, setViewBankInfo] = useState<{ id: string, name: string } | null>(null);
 
   useEffect(() => {
     const fetchPayouts = async () => {
@@ -881,6 +962,7 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
           return {
             eid: d.event_id,
             event: d.event_title,
+            orgId: d.organizer_id,
             org: d.organizer_name,
             date: d.event_date,
             revenue: d.revenue,
@@ -902,6 +984,14 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
 
   return (
     <div className="space-y-4">
+      {viewBankInfo && (
+        <AdminBankInfoModal 
+          organizerId={viewBankInfo.id} 
+          orgName={viewBankInfo.name} 
+          onClose={() => setViewBankInfo(null)} 
+          addToast={addToast} 
+        />
+      )}
       {payouts.map((p, i) => (
         <div key={i} className="flex flex-col md:flex-row items-center justify-between p-4 bg-slate-900/50 rounded-xl border border-white/5 gap-4">
           <div className="text-left w-full md:w-auto">
@@ -954,6 +1044,15 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-[0_0_15px_rgba(16,185,129,0.3)]"
               >
                 Payer le reliquat
+              </button>
+            )}
+            {p.orgId && (
+              <button
+                onClick={() => setViewBankInfo({ id: p.orgId, name: p.org })}
+                className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                title="Infos Bancaires"
+              >
+                <Banknote size={16} />
               </button>
             )}
           </div>
