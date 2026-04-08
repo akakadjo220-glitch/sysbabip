@@ -78,7 +78,7 @@ export const AmbassadorDashboard = () => {
     }
 
     if (amount > availableBalance) {
-      setWithdrawMessage({ text: "Solde insuffisant.", type: 'error' });
+      setWithdrawMessage({ text: `Solde insuffisant. Votre solde disponible est de ${availableBalance.toLocaleString('fr-FR')} FCFA.`, type: 'error' });
       return;
     }
 
@@ -238,9 +238,23 @@ export const AmbassadorDashboard = () => {
                   max={availableBalance}
                   value={withdrawAmount}
                   onChange={e => setWithdrawAmount(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  className={`w-full bg-slate-800 border rounded-xl px-4 py-3 text-white focus:ring-1 outline-none transition-colors ${
+                    Number(withdrawAmount) > availableBalance
+                      ? 'border-red-500/60 focus:border-red-500 focus:ring-red-500/30'
+                      : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500'
+                  }`}
                   placeholder="Ex: 5000"
                 />
+                {Number(withdrawAmount) > availableBalance && (
+                  <p className="mt-1.5 text-xs text-red-400 font-medium flex items-center gap-1">
+                    ⚠️ Montant supérieur à votre solde disponible ({availableBalance.toLocaleString('fr-FR')} FCFA)
+                  </p>
+                )}
+                {availableBalance > 0 && Number(withdrawAmount) <= availableBalance && Number(withdrawAmount) >= 50 && (
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Solde restant après retrait : <span className="text-emerald-400 font-bold">{(availableBalance - Number(withdrawAmount)).toLocaleString('fr-FR')} FCFA</span>
+                  </p>
+                )}
               </div>
 
               <div>
