@@ -72,8 +72,8 @@ export const AmbassadorDashboard = () => {
     setWithdrawMessage({ text: '', type: '' });
     
     const amount = Number(withdrawAmount);
-    if (!amount || amount < 50) {
-      setWithdrawMessage({ text: "Le montant minimum de retrait est de 50 FCFA.", type: 'error' });
+    if (!amount || amount < 5000) {
+      setWithdrawMessage({ text: "Le montant minimum de retrait est de 5 000 FCFA.", type: 'error' });
       return;
     }
 
@@ -230,11 +230,11 @@ export const AmbassadorDashboard = () => {
             
             <form onSubmit={handleWithdrawalRequest} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Montant (Min. 50 FCFA)</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Montant (Min. 5 000 FCFA)</label>
                 <input
                   type="number"
                   required
-                  min="50"
+                  min="5000"
                   max={availableBalance}
                   value={withdrawAmount}
                   onChange={e => setWithdrawAmount(e.target.value)}
@@ -250,7 +250,7 @@ export const AmbassadorDashboard = () => {
                     ⚠️ Montant supérieur à votre solde disponible ({availableBalance.toLocaleString('fr-FR')} FCFA)
                   </p>
                 )}
-                {availableBalance > 0 && Number(withdrawAmount) <= availableBalance && Number(withdrawAmount) >= 50 && (
+                {availableBalance > 0 && Number(withdrawAmount) <= availableBalance && Number(withdrawAmount) >= 5000 && (
                   <p className="mt-1.5 text-xs text-slate-500">
                     Solde restant après retrait : <span className="text-emerald-400 font-bold">{(availableBalance - Number(withdrawAmount)).toLocaleString('fr-FR')} FCFA</span>
                   </p>
@@ -293,7 +293,7 @@ export const AmbassadorDashboard = () => {
 
               <button
                 type="submit"
-                disabled={withdrawLoading || availableBalance < 50}
+                disabled={withdrawLoading || availableBalance < 5000}
                 className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2"
               >
                 {withdrawLoading ? <Loader2 className="animate-spin" size={20} /> : "Retirer mes fonds"}
