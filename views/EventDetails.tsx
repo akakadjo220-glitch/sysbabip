@@ -1010,7 +1010,7 @@ const ReviewsList: React.FC<{ eventId: string }> = ({ eventId }) => {
   useEffect(() => {
     supabase
       .from('reviews')
-      .select('id, rating, comment, created_at, profiles(name)')
+      .select('id, rating, comment, created_at, reviewer_name')
       .eq('event_id', eventId)
       .eq('is_approved', true)
       .order('created_at', { ascending: false })
@@ -1034,7 +1034,7 @@ const ReviewsList: React.FC<{ eventId: string }> = ({ eventId }) => {
   return (
     <div className="space-y-4 mb-10">
       {reviews.map((r: any) => {
-        const displayName = r.profiles?.name || 'Anonyme';
+        const displayName = r.reviewer_name || 'Anonyme';
         const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
         const bgColors = ['bg-orange-500','bg-blue-500','bg-emerald-500','bg-purple-500','bg-rose-500'];
         const bg = bgColors[initials.charCodeAt(0) % bgColors.length];
@@ -1077,28 +1077,24 @@ const ReviewForm: React.FC<{ eventId: string; eventTitle: string }> = ({ eventId
     if (!name.trim()) { setReviewError('Veuillez entrer votre prénom.'); return; }
     setSubmitting(true);
 
-    // Try to get logged-in user; fall back to a fixed anonymous UUID
+    // Get logged-in user if any (user_id is optional/nullable)
     const { data: { user } } = await supabase.auth.getUser();
-    // Use a deterministic guest UUID so we don't break the FK constraint
-    const GUEST_UUID = '00000000-0000-0000-0000-000000000001';
-    const userId = user?.id || GUEST_UUID;
 
-    const { error: err } = await supabase.from('reviews').insert({
+    const payload: Record<string, any> = {
       event_id: eventId,
-      user_id: userId,
+      reviewer_name: name.trim(),
       rating,
-      comment: name.trim() + (comment.trim() ? ` — ${comment.trim()}` : ''),
+      comment: comment.trim() || null,
       is_approved: false,
-    });
+    };
+    // Only attach user_id if logged in
+    if (user?.id) payload.user_id = user.id;
 
-    if (err && err.code === '23505') {
-      setReviewError('Vous avez déjà soumis un avis pour cet événement.');
-      setSubmitting(false);
-      return;
-    }
+    const { error: err } = await supabase.from('reviews').insert(payload);
+
     if (err) {
       console.error('Review insert error:', err);
-      setReviewError("Erreur lors de l'envoi. Veuillez réessayer.");
+      setReviewError("Erreur lors de l'envoi. Vérifiez votre connexion ou réessayez.");
       setSubmitting(false);
       return;
     }
