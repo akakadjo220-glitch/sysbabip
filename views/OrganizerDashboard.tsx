@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift, Lock, Upload } from 'lucide-react';
+import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift, Lock, Upload, Filter } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatCurrency } from '../constants';
@@ -515,7 +515,7 @@ export const OrganizerDashboard: React.FC = () => {
           { id: 'chatbot', icon: MessageSquare, label: "Bot WhatsApp" },
           { id: 'account', icon: User, label: "Mon Compte" },
           { id: 'physical', icon: Printer, label: "Billets Physiques" },
-          ...(profile?.is_verified && profile?.business_status === 'verified' ? [{ id: 'fundraising', icon: Heart, label: "Collecte de Fonds" }] : []),
+          { id: 'fundraising', icon: Heart, label: "Collecte de Fonds" },
         ].map(tab => (
           <button key={tab.id} onClick={() => {
             const restrictedTabs = ['events', 'agents', 'wallet', 'physical'];
@@ -569,7 +569,31 @@ export const OrganizerDashboard: React.FC = () => {
         {activeTab === 'chatbot' && <ChatbotView events={events} addToast={addToast} />}
         {activeTab === 'account' && <AccountSettingsView userMode="organizer" />}
         {activeTab === 'physical' && <PhysicalTicketsView profile={profile} fetchProfile={fetchProfile} events={filteredEvents} transactions={filteredTransactions} addToast={addToast} />}
-        {activeTab === 'fundraising' && <FundraisingTab organizerId={user?.id} addToast={addToast} />}
+        {activeTab === 'fundraising' && (
+          (profile?.is_verified && profile?.business_status === 'verified') ? (
+            <FundraisingTab organizerId={user?.id} addToast={addToast} />
+          ) : (
+            <div className="bg-slate-900/80 rounded-3xl border border-rose-500/20 p-12 flex flex-col justify-center items-center text-center fade-in max-w-3xl mx-auto mt-12 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/10 blur-[100px] pointer-events-none"></div>
+               <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-500/10 blur-[100px] pointer-events-none"></div>
+
+               <div className="w-24 h-24 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(244,63,94,0.3)] relative z-10">
+                 <Lock size={48} />
+               </div>
+               <h2 className="text-3xl font-extrabold text-white mb-4 relative z-10">Accès Restreint</h2>
+               <p className="text-slate-400 mb-8 max-w-lg text-lg leading-relaxed relative z-10">
+                 La fonctionnalité avancée de <strong className="text-white">Collecte de Fonds</strong> est réservée aux organisateurs certifiés. Veuillez vérifier votre entreprise (KYB) pour débloquer cet outil et la réception légale de fonds.
+               </p>
+               <button 
+                 onClick={() => setActiveTab('account')}
+                 className="px-8 py-4 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white font-bold text-lg rounded-2xl shadow-[0_10px_30px_rgba(244,63,94,0.4)] hover:shadow-[0_10px_40px_rgba(244,63,94,0.6)] transition-all flex items-center gap-3 transform hover:-translate-y-1 relative z-10"
+               >
+                 <Building2 size={24} />
+                 Vérifier mon entité (KYB)
+               </button>
+            </div>
+          )
+        )}
         {activeTab === 'ambassadors' && <OrganizerAmbassadorsView events={filteredEvents} addToast={addToast} />}
       </div>
 
@@ -1079,24 +1103,35 @@ const AttendeesView = ({ userId, events, addToast }: any) => {
   );
 };
 
-const SalesView = ({ stats, eventSales }: any) => {
+const SalesView = ({ stats, eventSales, transactions }: any) => {
   const [salesPage, setSalesPage] = useState(1);
   const SALES_PER_PAGE = 10;
+
+  const ambMap: Record<string, number> = {};
+  (transactions || []).forEach((t: any) => {
+    if (t.ambassador_commission > 0 && t.status !== 'valid') {
+       ambMap[t.event_id] = (ambMap[t.event_id] || 0) + Number(t.ambassador_commission);
+    }
+  });
 
   const totalRevenuBrut = Number(stats?.totalGross || 0);
   const totalCommission = Number(stats?.totalCommission || 0);
   const totalAmbassador = Number(stats?.totalAmbassador || 0);
   const totalNetAReverser = Number(stats?.totalNet || 0);
 
-  const eventSalesList = (eventSales || []).filter((e: any) => Number(e.gross) > 0).map((e: any) => ({
-    id: e.event_id,
-    title: e.title,
-    brut: Number(e.gross),
-    comm: Number(e.comm),
-    net: Number(e.base_net),
-    ticketsSold: Number(e.tickets_sold),
-    payoutStatus: e.payout_status || 'En attente'
-  }));
+  const eventSalesList = (eventSales || []).filter((e: any) => Number(e.gross) > 0).map((e: any) => {
+    const ambComm = ambMap[e.event_id] || 0;
+    return {
+      id: e.event_id,
+      title: e.title,
+      brut: Number(e.gross),
+      comm: Number(e.comm),
+      ambComm: ambComm,
+      net: Number(e.base_net) - ambComm,
+      ticketsSold: Number(e.tickets_sold),
+      payoutStatus: e.payout_status || 'En attente'
+    };
+  });
 
   const totalSalesPages = Math.ceil(eventSalesList.length / SALES_PER_PAGE);
   const paginatedSales = eventSalesList.slice((salesPage - 1) * SALES_PER_PAGE, salesPage * SALES_PER_PAGE);
@@ -1136,7 +1171,8 @@ const SalesView = ({ stats, eventSales }: any) => {
                 <th className="px-6 py-4">Événement</th>
                 <th className="px-6 py-4 text-right">Billets V.</th>
                 <th className="px-6 py-4 text-right">Revenu Brut</th>
-                <th className="px-6 py-4 text-right text-rose-400">Commission</th>
+                <th className="px-6 py-4 text-right text-rose-400">Commission Plateforme</th>
+                <th className="px-6 py-4 text-right text-indigo-400">Comm. Ambassadeurs</th>
                 <th className="px-6 py-4 text-right text-emerald-400">Net Organisateur</th>
                 <th className="px-6 py-4 text-center">Statut Reversement</th>
               </tr>
@@ -1151,6 +1187,9 @@ const SalesView = ({ stats, eventSales }: any) => {
                     <td className="px-6 py-4 text-right text-slate-300 font-mono">{e.ticketsSold}</td>
                     <td className="px-6 py-4 text-right text-slate-300 font-mono">{formatCurrency(e.brut)}</td>
                     <td className="px-6 py-4 text-right text-rose-400 font-mono">-{formatCurrency(e.comm)}</td>
+                    <td className="px-6 py-4 text-right text-indigo-400 font-mono">
+                      {e.ambComm > 0 ? `-${formatCurrency(e.ambComm)}` : '—'}
+                    </td>
                     <td className="px-6 py-4 text-right text-emerald-400 font-bold text-base bg-emerald-500/5">{formatCurrency(e.net)}</td>
                     <td className="px-6 py-4 text-center">
                       <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${e.payoutStatus === 'Transféré' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
@@ -1488,6 +1527,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
+  const [filterEventId, setFilterEventId] = useState<string>('all');
   const [ambCommByEvent, setAmbCommByEvent] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -1587,8 +1627,8 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
     .reduce((sum: number, e: any) => sum + (e.remainingPayout || 0), 0);
   const rawFondsGarantis = completedRemaining + futureRemaining;
 
-  // Subtract ambassador commissions (deducted globally, not reflected in per-event base_net)
-  const availableBalance = Math.max(0, rawFondsGarantis - ambassadorTotal);
+  // Les commissions ambassadeurs sont déjà déduites dans le calcul par événement (remainingPayout)
+  const availableBalance = Math.max(0, rawFondsGarantis);
 
   // Split unlocked (completed events) vs locked (future events) proportionally
   let unlockedBalance: number, lockedBalance: number;
@@ -1746,8 +1786,36 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
     }
   };
 
+  const filteredEventStats = useMemo(() => {
+    if (filterEventId === 'all') return eventStats;
+    return eventStats.filter((e: any) => e.id === filterEventId);
+  }, [eventStats, filterEventId]);
+
+  const filteredRequests = useMemo(() => {
+    if (filterEventId === 'all') return requests;
+    return requests.filter((r: any) => r.event_id === filterEventId);
+  }, [requests, filterEventId]);
+
   return (
     <div className="space-y-6">
+
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/10 shadow-lg backdrop-blur-xl mb-6">
+        <div>
+           <h2 className="text-xl font-bold text-white flex items-center gap-2">
+             <Filter className="text-indigo-400" size={20} /> Filtrer mon Wallet
+           </h2>
+        </div>
+        <select
+          value={filterEventId}
+          onChange={(e) => setFilterEventId(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-emerald-500 w-full md:w-80"
+        >
+          <option value="all">Tous mes événements</option>
+          {(eventSales || []).map((e: any) => (
+            <option key={e.event_id} value={e.event_id}>{e.title}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
@@ -1911,7 +1979,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {eventStats.map((e: any) => (
+              {filteredEventStats.map((e: any) => (
                 <tr key={e.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4 text-white font-medium max-w-[200px] truncate">{e.title}</td>
                   <td className="px-6 py-4 text-slate-300 font-bold">{formatCurrency(e.gross)}</td>
@@ -1956,7 +2024,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
                   </td>
                 </tr>
               ))}
-              {eventStats.length === 0 && (
+              {filteredEventStats.length === 0 && (
                 <tr><td colSpan={6} className="py-8 text-center text-slate-500">Aucun événement avec des ventes.</td></tr>
               )}
             </tbody>
@@ -1969,8 +2037,8 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
 
         {loading ? (
           <div className="py-10 text-center"><Loader2 size={32} className="animate-spin text-orange-500 mx-auto" /></div>
-        ) : requests.length === 0 ? (
-          <div className="py-10 text-center text-slate-500">Aucune demande de paiement effectuée.</div>
+        ) : filteredRequests.length === 0 ? (
+          <div className="py-10 text-center text-slate-500">Aucune demande de paiement trouvée.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -1983,7 +2051,7 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {requests.map((r: any) => (
+                {filteredRequests.map((r: any) => (
                   <tr key={r.id} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4 text-slate-300">{new Date(r.created_at).toLocaleDateString('fr-FR')}</td>
                     <td className="px-6 py-4 text-white font-medium">
@@ -2000,7 +2068,11 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
                           r.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
                             'bg-amber-500/20 text-amber-400'
                         }`}>
-                        {r.status === 'approved_for_print' ? 'APPROUVÉ IMPR.' : r.status.toUpperCase()}
+                        {r.status === 'paid' ? 'PAYÉ' :
+                         r.status === 'approved_for_print' ? 'APPROUVÉ IMPR.' :
+                         r.status === 'rejected' ? 'REJETÉ' :
+                         r.status === 'approved' ? 'APPROUVÉ' :
+                         r.status === 'pending' ? 'EN ATTENTE' : r.status.toUpperCase()}
                       </span>
                     </td>
                   </tr>
@@ -3036,9 +3108,10 @@ const PushCampaignView = ({ events, addToast }: any) => {
   const handleExportCSV = () => {
     if (contacts.length === 0) { addToast('Aucun contact à exporter.', 'error'); return; }
 
-    const headers = ['Nom', 'Email', 'Événement', 'Montant (FCFA)', 'Date achat'];
+    const headers = ['Nom', 'Téléphone', 'Email', 'Événement', 'Montant (FCFA)', 'Date achat'];
     const rows = contacts.map((c: any) => [
       c.guest_name || '',
+      c.buyer_phone || '',
       c.guest_email || '',
       (c.events as any)?.title || '',
       c.amount || '',
@@ -3135,6 +3208,7 @@ const PushCampaignView = ({ events, addToast }: any) => {
                 <thead className="sticky top-0 bg-slate-900">
                   <tr className="text-left text-[10px] uppercase tracking-widest text-slate-500">
                     <th className="px-4 py-2">Nom</th>
+                    <th className="px-4 py-2">Téléphone</th>
                     <th className="px-4 py-2">Email</th>
                     <th className="px-4 py-2">Événement</th>
                     <th className="px-4 py-2">Montant</th>
@@ -3144,6 +3218,7 @@ const PushCampaignView = ({ events, addToast }: any) => {
                   {contacts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((c: any, idx: number) => (
                     <tr key={idx} className="border-t border-white/5 hover:bg-white/5 transition-colors">
                       <td className="px-4 py-2.5 text-slate-300 font-medium">{c.guest_name || '—'}</td>
+                      <td className="px-4 py-2.5 text-slate-400 text-xs font-mono">{c.buyer_phone || '—'}</td>
                       <td className="px-4 py-2.5">
                         {c.guest_email
                           ? <span className="text-blue-400 text-xs">{c.guest_email}</span>
@@ -4040,7 +4115,8 @@ const EMPTY_FUNDRAISING_FORM = { title: '', description: '', image: '', goal_amo
 
 const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: string, t?: any) => void }> = ({ organizerId, addToast }) => {
   const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [statsMap, setStatsMap] = useState<Record<string, { total_raised: number; contributor_count: number }>>({});
+  const [statsMap, setStatsMap] = useState<Record<string, { total_raised: number; total_net_raised?: number; total_platform_fees?: number; contributor_count: number }>>({});
+  const [withdrawalsMap, setWithdrawalsMap] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -4048,6 +4124,12 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
   const [form, setForm] = useState<any>(EMPTY_FUNDRAISING_FORM);
   const [uploadingImg, setUploadingImg] = useState(false);
   const imgRef = React.useRef<HTMLInputElement>(null);
+
+  // Withdrawal modal state
+  const [withdrawModal, setWithdrawModal] = useState<any | null>(null); // campaign object
+  const [withdrawForm, setWithdrawForm] = useState({ amount: '', method: 'mobile_money', details: '' });
+  const [withdrawSaving, setWithdrawSaving] = useState(false);
+  const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
 
   const handleImageUpload = async (file: File) => {
     if (!file.type.startsWith('image/')) { addToast('Format invalide. Choisissez une image.', 'error'); return; }
@@ -4075,22 +4157,47 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
     const list = data || [];
     setCampaigns(list);
     if (list.length > 0) {
-      const { data: s } = await supabase.from('campaign_stats').select('campaign_id, total_raised, contributor_count').in('campaign_id', list.map((c: any) => c.id));
-      const map: Record<string, any> = {};
-      (s || []).forEach((r: any) => { map[r.campaign_id] = r; });
-      setStatsMap(map);
+      const ids = list.map((c: any) => c.id);
+      const [{ data: s }, { data: w }] = await Promise.all([
+        supabase.from('campaign_stats').select('*').in('campaign_id', ids),
+        supabase.from('fundraising_withdrawals').select('*').in('campaign_id', ids).order('requested_at', { ascending: false })
+      ]);
+      const sMap: Record<string, any> = {};
+      (s || []).forEach((r: any) => { sMap[r.campaign_id] = r; });
+      setStatsMap(sMap);
+      const wMap: Record<string, any[]> = {};
+      (w || []).forEach((r: any) => {
+        if (!wMap[r.campaign_id]) wMap[r.campaign_id] = [];
+        wMap[r.campaign_id].push(r);
+      });
+      setWithdrawalsMap(wMap);
     }
     setLoading(false);
   };
 
   useEffect(() => { fetchCampaigns(); }, [organizerId]);
 
-  const openCreate = () => {
-    setEditingId(null);
-    setForm(EMPTY_FUNDRAISING_FORM);
-    setShowForm(true);
-  };
+  // Global dashboard stats
+  const globalStats = campaigns.reduce((acc, c) => {
+    const s = statsMap[c.id] || { total_raised: 0, contributor_count: 0 };
+    const gross = s.total_raised || 0;
+    const net = s.total_net_raised ?? (gross * 0.95);
+    const fee = s.total_platform_fees ?? (gross * 0.05);
 
+    const wList = withdrawalsMap[c.id] || [];
+    const withdrawn = wList.filter((w: any) => w.status !== 'rejected').reduce((sum: number, w: any) => sum + Number(w.amount), 0);
+    return {
+      totalRaisedGross: acc.totalRaisedGross + gross,
+      totalRaisedNet: acc.totalRaisedNet + net,
+      totalFees: acc.totalFees + fee,
+      totalWithdrawn: acc.totalWithdrawn + withdrawn,
+      totalContributors: acc.totalContributors + s.contributor_count,
+      activeCampaigns: acc.activeCampaigns + (c.status === 'active' && c.approval_status === 'approved' ? 1 : 0),
+    };
+  }, { totalRaisedGross: 0, totalRaisedNet: 0, totalFees: 0, totalWithdrawn: 0, totalContributors: 0, activeCampaigns: 0 });
+  const globalAvailable = globalStats.totalRaisedNet - globalStats.totalWithdrawn;
+
+  const openCreate = () => { setEditingId(null); setForm(EMPTY_FUNDRAISING_FORM); setShowForm(true); };
   const openEdit = (c: any) => {
     setEditingId(c.id);
     setForm({ title: c.title, description: c.description || '', image: c.image || '', goal_amount: String(c.goal_amount || ''), currency: c.currency || 'FCFA', end_date: c.end_date || '' });
@@ -4130,6 +4237,39 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
     fetchCampaigns();
   };
 
+  const handleWithdrawSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!withdrawModal || !organizerId) return;
+    const amount = Number(withdrawForm.amount);
+    const s = statsMap[withdrawModal.id] || { total_raised: 0 };
+    const gross = s.total_raised || 0;
+    const net = s.total_net_raised ?? (gross * 0.95);
+    const wList = withdrawalsMap[withdrawModal.id] || [];
+    const alreadyWithdrawn = wList.filter((w: any) => w.status !== 'rejected').reduce((sum: number, w: any) => sum + Number(w.amount), 0);
+    const available = net - alreadyWithdrawn;
+    if (amount <= 0 || amount > available) {
+      addToast(`Montant invalide. Maximum disponible : ${available.toLocaleString('fr-FR')} FCFA`, 'error');
+      return;
+    }
+    setWithdrawSaving(true);
+    const { error } = await supabase.from('fundraising_withdrawals').insert([{
+      campaign_id: withdrawModal.id,
+      organizer_id: organizerId,
+      amount,
+      payment_method: withdrawForm.method,
+      payment_details: withdrawForm.details,
+      status: 'pending'
+    }]);
+    if (error) { addToast(error.message, 'error'); }
+    else {
+      addToast('✅ Demande de retrait envoyée ! L\'admin traitera votre demande sous 48h.', 'success');
+      setWithdrawModal(null);
+      setWithdrawForm({ amount: '', method: 'mobile_money', details: '' });
+      fetchCampaigns();
+    }
+    setWithdrawSaving(false);
+  };
+
   const publicUrl = (c: any) => `${window.location.origin}/collecte/${c.slug || c.id}`;
 
   const approvalBadge = (c: any) => {
@@ -4138,10 +4278,114 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
     return <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">⏳ En attente</span>;
   };
 
+  const wStatusBadge = (status: string) => {
+    const m: Record<string, string> = { pending: 'bg-amber-500/20 text-amber-400', approved: 'bg-blue-500/20 text-blue-400', paid: 'bg-emerald-500/20 text-emerald-400', rejected: 'bg-red-500/20 text-red-400' };
+    const l: Record<string, string> = { pending: '⏳ En attente', approved: '✅ Approuvée', paid: '💳 Payée', rejected: '❌ Rejetée' };
+    return <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${m[status] || m.pending}`}>{l[status] || status}</span>;
+  };
+
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-orange-400" size={32} /></div>;
 
   return (
     <div className="space-y-6">
+
+      {/* Withdraw Request Modal */}
+      {withdrawModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setWithdrawModal(null)} />
+          <div className="relative bg-slate-800 w-full max-w-lg rounded-3xl border border-orange-500/30 shadow-2xl p-8 z-10">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-extrabold text-white">💸 Demander un retrait</h3>
+                <p className="text-slate-400 text-sm mt-0.5">Campagne : <span className="text-white font-bold">{withdrawModal.title}</span></p>
+              </div>
+              <button onClick={() => setWithdrawModal(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+
+            {/* Available balance */}
+            {(() => {
+              const s = statsMap[withdrawModal.id] || { total_raised: 0 };
+              const gross = s.total_raised || 0;
+              const net = s.total_net_raised ?? (gross * 0.95);
+              const fee = s.total_platform_fees ?? (gross * 0.05);
+              
+              const wList = withdrawalsMap[withdrawModal.id] || [];
+              const alreadyWithdrawn = wList.filter((w: any) => w.status !== 'rejected').reduce((sum: number, w: any) => sum + Number(w.amount), 0);
+              const available = net - alreadyWithdrawn;
+              return (
+                <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 mb-3">
+                  <div className="flex justify-between text-sm mt-1 mb-2 text-slate-300">
+                    <span>Montant Brut :</span>
+                    <span className="font-bold">{gross.toLocaleString('fr-FR')} {withdrawModal.currency}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mb-3 pb-3 border-b border-white/10 text-rose-400">
+                    <span>Commission (5%) :</span>
+                    <span className="font-bold">- {fee.toLocaleString('fr-FR')} {withdrawModal.currency}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-slate-400">Total Net</p>
+                      <p className="text-base font-black text-white mt-1">{net.toLocaleString('fr-FR')} {withdrawModal.currency}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Déjà retiré</p>
+                      <p className="text-base font-black text-orange-400 mt-1">{alreadyWithdrawn.toLocaleString('fr-FR')} {withdrawModal.currency}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Disponible</p>
+                      <p className="text-base font-black text-emerald-400 mt-1">{available.toLocaleString('fr-FR')} {withdrawModal.currency}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-1">Montant à retirer ({withdrawModal.currency})</label>
+                <input
+                  type="number"
+                  required
+                  min="100"
+                  value={withdrawForm.amount}
+                  onChange={e => setWithdrawForm({ ...withdrawForm, amount: e.target.value })}
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-orange-500 outline-none"
+                  placeholder="Ex: 50000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-1">Méthode de paiement</label>
+                <select value={withdrawForm.method} onChange={e => setWithdrawForm({ ...withdrawForm, method: e.target.value })}
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-orange-500">
+                  <option value="mobile_money">📱 Mobile Money (Wave, Orange, MTN...)</option>
+                  <option value="bank_transfer">🏦 Virement Bancaire (IBAN/RIB)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-1">
+                  {withdrawForm.method === 'mobile_money' ? 'Numéro Mobile Money' : 'IBAN / RIB / Références bancaires'}
+                </label>
+                <input
+                  required
+                  value={withdrawForm.details}
+                  onChange={e => setWithdrawForm({ ...withdrawForm, details: e.target.value })}
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-orange-500 outline-none"
+                  placeholder={withdrawForm.method === 'mobile_money' ? 'Ex: +225 07 00 00 00 00' : 'Ex: CI12 1234 5678 9012 3456 7890 123'}
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setWithdrawModal(null)} className="flex-1 py-3 rounded-xl border border-white/10 text-slate-400 hover:text-white font-bold transition-colors">Annuler</button>
+                <button type="submit" disabled={withdrawSaving} className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                  {withdrawSaving ? <Loader2 size={18} className="animate-spin" /> : null}
+                  Envoyer la demande
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-black text-white flex items-center gap-2"><Heart className="text-orange-400" size={24} /> Collectes de Fonds</h2>
@@ -4152,6 +4396,24 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
         </button>
       </div>
 
+      {/* Global Dashboard Stats */}
+      {campaigns.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Total Brut (Avant Frais)', value: formatCurrency(globalStats.totalRaisedGross), color: 'text-slate-300', bg: 'bg-slate-800/40 border border-white/5' },
+            { label: 'Total Net (+ Disponible)', value: formatCurrency(globalStats.totalRaisedNet), color: 'text-white', bg: 'bg-slate-800/60' },
+            { label: 'Commission Babipass (5%)', value: formatCurrency(globalStats.totalFees), color: 'text-rose-400', bg: 'bg-rose-500/5 border border-rose-500/10' },
+            { label: 'Déjà retiré', value: formatCurrency(globalStats.totalWithdrawn), color: 'text-orange-400', bg: 'bg-orange-500/10 border border-orange-500/20' },
+          ].map((st) => (
+            <div key={st.label} className={`${st.bg} rounded-2xl p-4 text-center`}>
+              <p className="text-xs text-slate-400 mb-1">{st.label}</p>
+              <p className={`text-xl font-black ${st.color}`}>{st.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create / Edit form */}
       {showForm && (
         <form onSubmit={handleSave} className="bg-[#1e293b] border border-white/10 rounded-2xl p-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex items-center justify-between">
@@ -4201,6 +4463,7 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
         </form>
       )}
 
+      {/* Campaign cards */}
       {campaigns.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-white/10 rounded-2xl">
           <Heart size={48} className="mx-auto text-slate-600 mb-4" />
@@ -4211,9 +4474,17 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
         <div className="grid md:grid-cols-2 gap-4">
           {campaigns.map((c: any) => {
             const s = statsMap[c.id] || { total_raised: 0, contributor_count: 0 };
-            const progress = c.goal_amount > 0 ? Math.min((s.total_raised / c.goal_amount) * 100, 100) : 0;
+            const gross = s.total_raised || 0;
+            const net = s.total_net_raised ?? (gross * 0.95);
+            const fee = s.total_platform_fees ?? (gross * 0.05);
+
+            const wList = withdrawalsMap[c.id] || [];
+            const alreadyWithdrawn = wList.filter((w: any) => w.status !== 'rejected').reduce((sum: number, w: any) => sum + Number(w.amount), 0);
+            const available = net - alreadyWithdrawn;
+            const progress = c.goal_amount > 0 ? Math.min((gross / c.goal_amount) * 100, 100) : 0;
             const isApproved = c.approval_status === 'approved';
             const canEdit = c.approval_status !== 'approved';
+            const pendingWithdrawal = wList.some((w: any) => w.status === 'pending');
             return (
               <div key={c.id} className={`bg-[#1e293b] border rounded-2xl overflow-hidden ${c.approval_status === 'rejected' ? 'border-red-500/30' : c.approval_status === 'approved' ? 'border-emerald-500/20' : 'border-white/10'}`}>
                 {c.image && <img src={c.image} alt={c.title} className="w-full h-32 object-cover" />}
@@ -4238,15 +4509,77 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
 
                   <div className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-orange-400 font-bold">{s.total_raised.toLocaleString()} {c.currency}</span>
+                      <span className="text-slate-300 font-bold">{gross.toLocaleString()} {c.currency} brut collecté</span>
                       <span className="text-slate-400">{c.goal_amount > 0 ? `sur ${c.goal_amount.toLocaleString()}` : 'Objectif libre'}</span>
                     </div>
                     <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                       <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all" style={{ width: `${progress}%` }} />
                     </div>
-                    <p className="text-xs text-slate-400"><Users size={10} className="inline mr-1" />{s.contributor_count} contributeur{s.contributor_count > 1 ? 's' : ''}</p>
+                    <div className="flex justify-between text-xs mt-2">
+                       <span className="text-rose-400 font-medium">- {fee.toLocaleString()} {c.currency} (Frais)</span>
+                       <span className="text-orange-400 font-extrabold">{net.toLocaleString()} {c.currency} Net</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400 mt-1">
+                      <span><Users size={10} className="inline mr-1" />{s.contributor_count} contributeur{s.contributor_count > 1 ? 's' : ''}</span>
+                      {isApproved && <span className="text-emerald-400 font-bold">💰 {available.toLocaleString()} {c.currency} disponibles</span>}
+                    </div>
                   </div>
 
+                  {/* Withdrawal button & history toggle */}
+                  {isApproved && (
+                    <div className="border-t border-white/5 pt-3 space-y-2">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (available <= 0) { addToast('Aucun solde disponible pour ce retrait.', 'error'); return; }
+                            if (pendingWithdrawal) { addToast('Une demande est déjà en cours de traitement.', 'error'); return; }
+                            setWithdrawModal(c);
+                            setWithdrawForm({ amount: String(Math.floor(available)), method: 'mobile_money', details: '' });
+                          }}
+                          disabled={available <= 0 || pendingWithdrawal}
+                          className="flex items-center gap-1.5 text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          💸 {pendingWithdrawal ? 'Demande en cours...' : 'Demander un retrait'}
+                        </button>
+                        {wList.length > 0 && (
+                          <button
+                            onClick={() => setShowHistoryFor(showHistoryFor === c.id ? null : c.id)}
+                            className="flex items-center gap-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors"
+                          >
+                            <History size={12} /> Historique ({wList.length})
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Withdrawal history for this campaign */}
+                      {showHistoryFor === c.id && wList.length > 0 && (
+                        <div className="bg-slate-900/60 rounded-xl border border-white/5 overflow-hidden mt-2">
+                          <table className="w-full text-xs">
+                            <thead className="bg-slate-800/80 text-slate-400">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Montant</th>
+                                <th className="px-3 py-2 text-left">Méthode</th>
+                                <th className="px-3 py-2 text-left">Date</th>
+                                <th className="px-3 py-2 text-center">Statut</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {wList.map((w: any) => (
+                                <tr key={w.id}>
+                                  <td className="px-3 py-2 font-bold text-white">{Number(w.amount).toLocaleString('fr-FR')} {c.currency}</td>
+                                  <td className="px-3 py-2 text-slate-400">{w.payment_method === 'mobile_money' ? '📱 Mobile Money' : '🏦 Virement'}</td>
+                                  <td className="px-3 py-2 text-slate-500">{new Date(w.requested_at).toLocaleDateString('fr-FR')}</td>
+                                  <td className="px-3 py-2 text-center">{wStatusBadge(w.status)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
                   <div className="flex gap-2 pt-1 flex-wrap">
                     <button onClick={() => { navigator.clipboard.writeText(publicUrl(c)); addToast('Lien copié !', 'success'); }} className="flex items-center gap-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors">
                       <Link size={12} /> Copier lien
@@ -4277,7 +4610,6 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
     </div>
   );
 };
-
 // ─── Ambassadors ───
 const OrganizerAmbassadorsView = ({ events, addToast }: { events: any[], addToast: any }) => {
   const [ambassadors, setAmbassadors] = useState<any[]>([]);

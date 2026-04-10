@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift, Filter, Star } from 'lucide-react';
 import { formatCurrency, EXCHANGE_RATES } from '../constants';
@@ -690,8 +691,10 @@ const AdminBankInfoModal = ({ organizerId, orgName, onClose, addToast }: { organ
     fetchInfo();
   }, [organizerId]);
 
-  return (
-    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[99999999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm pointer-events-auto cursor-pointer" onClick={onClose} />
       <div className="bg-slate-800 p-8 rounded-3xl w-full max-w-md relative pointer-events-auto border border-white/10 shadow-2xl animate-in zoom-in-95 duration-300">
         <div className="flex justify-between items-start mb-6">
@@ -738,7 +741,8 @@ const AdminBankInfoModal = ({ organizerId, orgName, onClose, addToast }: { organ
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -804,7 +808,7 @@ const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'succe
   if (requests.length === 0) return <p className="text-slate-400 text-sm">Aucune demande de paiement.</p>;
 
   return (
-    <div className="overflow-x-auto relative">
+    <>
       {viewBankInfo && (
         <AdminBankInfoModal 
           organizerId={viewBankInfo.id} 
@@ -813,7 +817,8 @@ const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'succe
           addToast={addToast} 
         />
       )}
-      <table className="w-full text-left text-sm whitespace-nowrap">
+      <div className="overflow-x-auto relative">
+        <table className="w-full text-left text-sm whitespace-nowrap">
         <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
           <tr>
             <th className="px-6 py-4">Date</th>
@@ -911,6 +916,7 @@ const CashAdvanceManager = ({ addToast }: { addToast: (msg: string, type: 'succe
         </tbody>
       </table>
     </div>
+    </>
   );
 };
 
@@ -983,7 +989,7 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
   if (payouts.length === 0) return <p className="text-slate-400 text-sm">Aucun revenu généré à reverser.</p>;
 
   return (
-    <div className="space-y-4">
+    <>
       {viewBankInfo && (
         <AdminBankInfoModal 
           organizerId={viewBankInfo.id} 
@@ -992,7 +998,8 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
           addToast={addToast} 
         />
       )}
-      {payouts.map((p, i) => (
+      <div className="space-y-4">
+        {payouts.map((p, i) => (
         <div key={i} className="flex flex-col md:flex-row items-center justify-between p-4 bg-slate-900/50 rounded-xl border border-white/5 gap-4">
           <div className="text-left w-full md:w-auto">
             <p className="font-bold text-white text-lg">{p.event}</p>
@@ -1058,7 +1065,8 @@ const PayoutsManager = ({ addToast }: { addToast: (msg: string, type: 'success' 
           </div>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 };
 
@@ -1125,15 +1133,19 @@ const AmbassadorWithdrawalsManager = ({ addToast }: { addToast: (msg: string, ty
 
   const fetchRequests = async () => {
     setLoading(true);
-    const { data } = await supabase.from('ambassador_withdrawals').select(`
-      *,
-      profiles:user_id (
-        name,
-        email
-      )
-    `).order('created_at', { ascending: false });
+    const { data: wData, error } = await supabase.from('ambassador_withdrawals').select('*').order('created_at', { ascending: false });
 
-    setRequests(data || []);
+    if (wData && wData.length > 0) {
+      const userIds = [...new Set(wData.map((w: any) => w.user_id))];
+      const { data: profiles } = await supabase.from('profiles').select('id, name, email').in('id', userIds);
+      const enriched = wData.map((w: any) => ({
+        ...w,
+        profiles: profiles?.find(p => p.id === w.user_id) || null
+      }));
+      setRequests(enriched);
+    } else {
+      setRequests([]);
+    }
     setLoading(false);
   };
 
@@ -3597,6 +3609,9 @@ export const EventCategoriesTab = ({ addToast }: any) => {
 
 // ─── AdminFundraisingTab ───────────────────────────────────────────────────────────
 const AdminFundraisingTab = ({ addToast }: any) => {
+  const [activeSubTab, setActiveSubTab] = useState<'campaigns' | 'withdrawals'>('campaigns');
+
+  // ── Campaigns state ──
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [statsMap, setStatsMap] = useState<Record<string, { total_raised: number; contributor_count: number }>>({});
   const [adminStats, setAdminStats] = useState({ total_raised: 0, total_platform_fees: 0, total_contributors: 0, active_campaigns: 0 });
@@ -3605,14 +3620,21 @@ const AdminFundraisingTab = ({ addToast }: any) => {
   const [rejectModal, setRejectModal] = useState<{ id: string; title: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [acting, setActing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // ── Withdrawals state ──
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [wFilter, setWFilter] = useState<'all' | 'pending' | 'approved' | 'paid' | 'rejected'>('pending');
+  const [wLoading, setWLoading] = useState(false);
+  const [rejectWModal, setRejectWModal] = useState<any | null>(null);
+  const [rejectWNote, setRejectWNote] = useState('');
+  const [wActing, setWActing] = useState(false);
 
   const fetchCampaigns = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('fundraising_campaigns').select('*').order('created_at', { ascending: false });
     if (error) console.error("Error fetching campaigns:", error);
     let list = data || [];
-
-    // Fetch profiles manually to avoid PostgREST foreign key errors
     if (list.length > 0) {
       const orgIds = [...new Set(list.map((c: any) => c.organizer_id))];
       const { data: profs } = await supabase.from('profiles').select('id, name, email').in('id', orgIds);
@@ -3622,12 +3644,8 @@ const AdminFundraisingTab = ({ addToast }: any) => {
       }
     }
     setCampaigns(list);
-
     const { data: adminData } = await supabase.rpc('get_admin_fundraising_stats');
-    if (adminData && adminData.length > 0) {
-      setAdminStats(adminData[0]);
-    }
-
+    if (adminData && adminData.length > 0) setAdminStats(adminData[0]);
     if (list.length > 0) {
       const { data: s } = await supabase.from('campaign_stats').select('campaign_id, total_raised, contributor_count').in('campaign_id', list.map((c: any) => c.id));
       const map: Record<string, any> = {};
@@ -3637,8 +3655,29 @@ const AdminFundraisingTab = ({ addToast }: any) => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchCampaigns(); }, []);
+  const fetchWithdrawals = async () => {
+    setWLoading(true);
+    const { data, error } = await supabase
+      .from('fundraising_withdrawals')
+      .select('*, fundraising_campaigns(title, currency)')
+      .order('requested_at', { ascending: false });
+    if (error) { addToast('Erreur chargement retraits: ' + error.message, 'error'); setWLoading(false); return; }
+    let list = data || [];
+    if (list.length > 0) {
+      const orgIds = [...new Set(list.map((w: any) => w.organizer_id))];
+      const { data: profs } = await supabase.from('profiles').select('id, name, email').in('id', orgIds);
+      if (profs) {
+        const profMap = Object.fromEntries(profs.map((p: any) => [p.id, p]));
+        list = list.map((w: any) => ({ ...w, profiles: profMap[w.organizer_id] || null }));
+      }
+    }
+    setWithdrawals(list);
+    setWLoading(false);
+  };
 
+  useEffect(() => { fetchCampaigns(); fetchWithdrawals(); }, []);
+
+  // Campaign actions
   const handleApprove = async (id: string) => {
     setActing(true);
     const { error } = await supabase.from('fundraising_campaigns').update({ approval_status: 'approved', rejection_reason: null }).eq('id', id);
@@ -3646,7 +3685,6 @@ const AdminFundraisingTab = ({ addToast }: any) => {
     else { addToast('✅ Campagne approuvée ! Elle est maintenant visible au public.', 'success'); fetchCampaigns(); }
     setActing(false);
   };
-
   const handleRejectConfirm = async () => {
     if (!rejectModal) return;
     setActing(true);
@@ -3655,13 +3693,11 @@ const AdminFundraisingTab = ({ addToast }: any) => {
     else { addToast('❌ Campagne refusée.', 'info'); setRejectModal(null); setRejectReason(''); fetchCampaigns(); }
     setActing(false);
   };
-
   const handleForceEnd = async (id: string) => {
     if (!window.confirm('Forcer la clôture de cette campagne ? Les dons seront bloqués.')) return;
     await supabase.from('fundraising_campaigns').update({ status: 'ended' }).eq('id', id);
     addToast('Campagne clôturée de force.', 'info'); fetchCampaigns();
   };
-
   const handleDelete = async (id: string) => {
     if (!window.confirm('Supprimer définitivement cette campagne et ses contributions ?')) return;
     const { error } = await supabase.from('fundraising_campaigns').delete().eq('id', id);
@@ -3669,13 +3705,43 @@ const AdminFundraisingTab = ({ addToast }: any) => {
     else { addToast('Campagne supprimée.', 'success'); fetchCampaigns(); }
   };
 
+  // Withdrawal actions
+  const handleApproveWithdrawal = async (w: any) => {
+    setWActing(true);
+    const { error } = await supabase.from('fundraising_withdrawals').update({ status: 'approved' }).eq('id', w.id);
+    if (error) addToast(error.message, 'error');
+    else { addToast('✅ Retrait approuvé. Vous pouvez maintenant effectuer le virement.', 'success'); fetchWithdrawals(); }
+    setWActing(false);
+  };
+  const handleMarkPaid = async (w: any) => {
+    if (!window.confirm(`Confirmer que le virement de ${Number(w.amount).toLocaleString('fr-FR')} ${w.fundraising_campaigns?.currency || 'FCFA'} a bien été effectué ?`)) return;
+    setWActing(true);
+    const { error } = await supabase.from('fundraising_withdrawals').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', w.id);
+    if (error) addToast(error.message, 'error');
+    else { addToast('💳 Retrait marqué comme payé !', 'success'); fetchWithdrawals(); }
+    setWActing(false);
+  };
+  const handleRejectWithdrawal = async () => {
+    if (!rejectWModal) return;
+    setWActing(true);
+    const { error } = await supabase.from('fundraising_withdrawals').update({ status: 'rejected', admin_note: rejectWNote || 'Demande refusée.' }).eq('id', rejectWModal.id);
+    if (error) addToast(error.message, 'error');
+    else { addToast('❌ Demande de retrait refusée.', 'info'); setRejectWModal(null); setRejectWNote(''); fetchWithdrawals(); }
+    setWActing(false);
+  };
+
   const allStats = campaigns.reduce((acc, c) => {
     const s = statsMap[c.id] || { total_raised: 0, contributor_count: 0 };
     return { total_raised: acc.total_raised + s.total_raised, contributors: acc.contributors + s.contributor_count };
   }, { total_raised: 0, contributors: 0 });
-
-  const filtered = campaigns.filter(c => filter === 'all' || c.approval_status === filter);
+  const filtered = campaigns.filter(c => {
+    const matchesStatus = filter === 'all' || c.approval_status === filter;
+    const matchesSearch = !searchQuery || c.title?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
   const pendingCount = campaigns.filter(c => c.approval_status === 'pending').length;
+  const pendingWCount = withdrawals.filter(w => w.status === 'pending').length;
+  const filteredWithdrawals = withdrawals.filter(w => wFilter === 'all' || w.status === wFilter);
 
   const approvalBadge = (status: string) => {
     if (status === 'approved') return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">✅ Approuvée</span>;
@@ -3683,11 +3749,23 @@ const AdminFundraisingTab = ({ addToast }: any) => {
     return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">⏳ En attente</span>;
   };
 
+  const wStatusBadge = (status: string) => {
+    const cfg: Record<string, { cls: string; label: string }> = {
+      pending: { cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20', label: '⏳ En attente' },
+      approved: { cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20', label: '✅ Approuvé' },
+      paid: { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', label: '💳 Payé' },
+      rejected: { cls: 'bg-red-500/10 text-red-400 border-red-500/20', label: '❌ Rejeté' },
+    };
+    const c = cfg[status] || cfg.pending;
+    return <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-bold border ${c.cls}`}>{c.label}</span>;
+  };
+
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-orange-500" size={32} /></div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Rejection Modal */}
+
+      {/* Rejection Modal - Campaign */}
       {rejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-[#1e293b] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
@@ -3707,13 +3785,34 @@ const AdminFundraisingTab = ({ addToast }: any) => {
         </div>
       )}
 
+      {/* Rejection Modal - Withdrawal */}
+      {rejectWModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#1e293b] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-white">❌ Rejeter la demande de retrait</h3>
+            <p className="text-slate-400 text-sm">Campagne : <span className="text-white font-bold">{rejectWModal.fundraising_campaigns?.title}</span></p>
+            <p className="text-slate-400 text-sm">Montant : <span className="text-orange-400 font-bold">{Number(rejectWModal.amount).toLocaleString('fr-FR')} {rejectWModal.fundraising_campaigns?.currency || 'FCFA'}</span></p>
+            <div>
+              <label className="block text-sm font-semibold text-slate-300 mb-1">Motif du refus</label>
+              <textarea rows={3} value={rejectWNote} onChange={e => setRejectWNote(e.target.value)} placeholder="Ex: Informations bancaires invalides..." className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 text-sm resize-none focus:outline-none focus:border-red-500" />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setRejectWModal(null)} className="px-5 py-2 rounded-xl text-slate-400 hover:text-white text-sm font-bold">Annuler</button>
+              <button onClick={handleRejectWithdrawal} disabled={wActing} className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-xl text-sm font-bold disabled:opacity-50">
+                {wActing ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />} Rejeter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total collecté', value: formatCurrency(allStats.total_raised, 'FCFA'), icon: '💰', color: 'from-orange-500/20 to-amber-500/10' },
           { label: 'Revenus Plateforme', value: formatCurrency(adminStats.total_platform_fees || 0, 'FCFA'), icon: '📈', color: 'from-emerald-500/20 to-teal-500/10' },
           { label: 'Total donateurs', value: allStats.contributors, icon: '👥', color: 'from-blue-500/20 to-indigo-500/10' },
-          { label: 'En attente', value: pendingCount, icon: '⏳', color: pendingCount > 0 ? 'from-amber-500/20 to-orange-500/10' : 'from-slate-700/50 to-slate-800/30' },
+          { label: 'Retraits en attente', value: pendingWCount, icon: '💸', color: pendingWCount > 0 ? 'from-amber-500/20 to-orange-500/10' : 'from-slate-700/50 to-slate-800/30' },
         ].map((kpi, i) => (
           <div key={i} className={`bg-gradient-to-br ${kpi.color} rounded-2xl border border-white/10 p-5`}>
             <p className="text-2xl mb-1">{kpi.icon}</p>
@@ -3723,81 +3822,201 @@ const AdminFundraisingTab = ({ addToast }: any) => {
         ))}
       </div>
 
-      {/* Filter + Table */}
-      <div className="bg-slate-900/40 border border-white/10 rounded-3xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2"><Heart className="text-orange-400" size={20} /> Gestion des Collectes</h3>
-          <div className="flex gap-2">
-            {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
-              <button key={f} onClick={() => setFilter(f)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors ${filter === f ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
-                {f === 'all' ? 'Toutes' : f === 'pending' ? '⏳ En attente' : f === 'approved' ? '✅ Approuvées' : '❌ Refusées'}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Sub-tabs */}
+      <div className="flex gap-2 bg-slate-900/50 p-1.5 rounded-2xl border border-white/10">
+        <button
+          onClick={() => setActiveSubTab('campaigns')}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeSubTab === 'campaigns' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+        >
+          <Heart size={15} /> Campagnes {pendingCount > 0 && <span className="bg-amber-500 text-white text-xs font-black px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('withdrawals')}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeSubTab === 'withdrawals' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+        >
+          💸 Demandes de Retrait {pendingWCount > 0 && <span className="bg-red-500 text-white text-xs font-black px-1.5 py-0.5 rounded-full">{pendingWCount}</span>}
+        </button>
+      </div>
 
-        {filtered.length === 0 ? (
-          <div className="text-center py-20"><Heart size={40} className="mx-auto text-slate-600 mb-3" /><p className="text-slate-400">Aucune campagne dans cette catégorie.</p></div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-800/80 text-slate-400 uppercase text-xs font-bold">
-                <tr>
-                  <th className="px-6 py-4">Campagne</th>
-                  <th className="px-6 py-4">Organisateur</th>
-                  <th className="px-6 py-4">Collecté</th>
-                  <th className="px-6 py-4 text-center">Validation</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {filtered.map((c: any) => {
-                  const st = statsMap[c.id] || { total_raised: 0, contributor_count: 0 };
-                  return (
-                    <tr key={c.id} className={`hover:bg-white/5 transition-colors ${c.approval_status === 'pending' ? 'bg-amber-500/5' : ''}`}>
-                      <td className="px-6 py-4 max-w-xs">
-                        <p className="font-bold text-white truncate">{c.title}</p>
-                        {c.rejection_reason && <p className="text-xs text-red-400 mt-0.5 truncate">Motif : {c.rejection_reason}</p>}
+      {/* ── CAMPAIGNS TAB ── */}
+      {activeSubTab === 'campaigns' && (
+        <div className="bg-slate-900/40 border border-white/10 rounded-3xl overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2"><Heart className="text-orange-400" size={20} /> Gestion des Collectes</h3>
+            <div className="flex gap-3 items-center flex-wrap">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Rechercher une campagne..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-slate-800/80 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-4 py-1.5 focus:outline-none focus:border-orange-500 transition-colors w-48 lg:w-64"
+                />
+              </div>
+              <div className="flex gap-2">
+                {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
+                  <button key={f} onClick={() => setFilter(f)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors ${filter === f ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                    {f === 'all' ? 'Toutes' : f === 'pending' ? '⏳ En attente' : f === 'approved' ? '✅ Approuvées' : '❌ Refusées'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {filtered.length === 0 ? (
+            <div className="text-center py-20"><Heart size={40} className="mx-auto text-slate-600 mb-3" /><p className="text-slate-400">Aucune campagne dans cette catégorie.</p></div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-slate-800/80 text-slate-400 uppercase text-xs font-bold">
+                  <tr>
+                    <th className="px-6 py-4">Campagne</th>
+                    <th className="px-6 py-4">Organisateur</th>
+                    <th className="px-6 py-4">Collecté</th>
+                    <th className="px-6 py-4 text-center">Validation</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filtered.map((c: any) => {
+                    const st = statsMap[c.id] || { total_raised: 0, contributor_count: 0 };
+                    return (
+                      <tr key={c.id} className={`hover:bg-white/5 transition-colors ${c.approval_status === 'pending' ? 'bg-amber-500/5' : ''}`}>
+                        <td className="px-6 py-4 max-w-xs">
+                          <p className="font-bold text-white truncate">{c.title}</p>
+                          {c.rejection_reason && <p className="text-xs text-red-400 mt-0.5 truncate">Motif : {c.rejection_reason}</p>}
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-white font-medium">{c.profiles?.name || '—'}</p>
+                          <p className="text-slate-500 text-xs">{c.profiles?.email}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-orange-400 font-extrabold">{formatCurrency(st.total_raised, c.currency)}</p>
+                          <p className="text-xs text-slate-500"><Users size={10} className="inline mr-1" />{st.contributor_count} contrib.</p>
+                        </td>
+                        <td className="px-6 py-4 text-center">{approvalBadge(c.approval_status)}</td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2 flex-wrap">
+                            <a href={`/collecte/${c.slug || c.id}`} target="_blank" rel="noreferrer" className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors" title="Voir"><Eye size={15} /></a>
+                            {c.approval_status !== 'approved' && (
+                              <button onClick={() => handleApprove(c.id)} disabled={acting} className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-50">
+                                <Check size={13} /> Approuver
+                              </button>
+                            )}
+                            {c.approval_status !== 'rejected' && (
+                              <button onClick={() => setRejectModal({ id: c.id, title: c.title })} className="flex items-center gap-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors">
+                                <XCircle size={13} /> Refuser
+                              </button>
+                            )}
+                            {c.status === 'active' && c.approval_status === 'approved' && (
+                              <button onClick={() => handleForceEnd(c.id)} className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-400 px-3 py-1.5 rounded-lg font-bold transition-colors" title="Clôturer de force">Clôturer</button>
+                            )}
+                            <button onClick={() => handleDelete(c.id)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" title="Supprimer"><Trash2 size={15} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── WITHDRAWALS TAB ── */}
+      {activeSubTab === 'withdrawals' && (
+        <div className="bg-slate-900/40 border border-white/10 rounded-3xl overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">💸 Demandes de Retrait</h3>
+            <div className="flex gap-2 flex-wrap">
+              {(['all', 'pending', 'approved', 'paid', 'rejected'] as const).map(f => (
+                <button key={f} onClick={() => setWFilter(f)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors ${wFilter === f ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                  {f === 'all' ? 'Toutes' : f === 'pending' ? '⏳ En attente' : f === 'approved' ? '✅ Approuvées' : f === 'paid' ? '💳 Payées' : '❌ Rejetées'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {wLoading ? (
+            <div className="py-16 text-center"><Loader2 className="animate-spin text-emerald-400 mx-auto" size={28} /></div>
+          ) : filteredWithdrawals.length === 0 ? (
+            <div className="text-center py-20">
+              <p className="text-4xl mb-3">💸</p>
+              <p className="text-slate-400">Aucune demande de retrait {wFilter !== 'all' ? 'dans cette catégorie' : ''}.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-slate-800/80 text-slate-400 uppercase text-xs font-bold">
+                  <tr>
+                    <th className="px-6 py-4">Campagne</th>
+                    <th className="px-6 py-4">Organisateur</th>
+                    <th className="px-6 py-4">Montant</th>
+                    <th className="px-6 py-4">Paiement</th>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4 text-center">Statut</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredWithdrawals.map((w: any) => (
+                    <tr key={w.id} className={`hover:bg-white/5 transition-colors ${w.status === 'pending' ? 'bg-amber-500/5' : ''}`}>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-white">{w.fundraising_campaigns?.title || '—'}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-white font-medium">{c.profiles?.name || '—'}</p>
-                        <p className="text-slate-500 text-xs">{c.profiles?.email}</p>
+                        <p className="text-white font-medium">{w.profiles?.name || '—'}</p>
+                        <p className="text-slate-500 text-xs">{w.profiles?.email}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-orange-400 font-extrabold">{formatCurrency(st.total_raised, c.currency)}</p>
-                        <p className="text-xs text-slate-500"><Users size={10} className="inline mr-1" />{st.contributor_count} contrib.</p>
+                        <p className="text-emerald-400 font-extrabold">{Number(w.amount).toLocaleString('fr-FR')} {w.fundraising_campaigns?.currency || 'FCFA'}</p>
                       </td>
-                      <td className="px-6 py-4 text-center">{approvalBadge(c.approval_status)}</td>
+                      <td className="px-6 py-4">
+                        <p className="text-slate-300 text-xs">{w.payment_method === 'mobile_money' ? '📱 Mobile Money' : '🏦 Virement'}</p>
+                        <p className="text-slate-500 text-xs mt-0.5 max-w-[160px] truncate" title={w.payment_details}>{w.payment_details}</p>
+                      </td>
+                      <td className="px-6 py-4 text-slate-400 text-xs">
+                        {new Date(w.requested_at).toLocaleDateString('fr-FR')}
+                        {w.paid_at && <><br /><span className="text-emerald-500">Payé: {new Date(w.paid_at).toLocaleDateString('fr-FR')}</span></>}
+                      </td>
+                      <td className="px-6 py-4 text-center">{wStatusBadge(w.status)}</td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2 flex-wrap">
-                          <a href={`/collecte/${c.slug || c.id}`} target="_blank" rel="noreferrer" className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors" title="Voir"><Eye size={15} /></a>
-                          {c.approval_status !== 'approved' && (
-                            <button onClick={() => handleApprove(c.id)} disabled={acting} className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-50">
-                              <Check size={13} /> Approuver
+                          {w.status === 'pending' && (
+                            <>
+                              <button onClick={() => handleApproveWithdrawal(w)} disabled={wActing} className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-50">
+                                <Check size={13} /> Approuver
+                              </button>
+                              <button onClick={() => { setRejectWModal(w); setRejectWNote(''); }} className="flex items-center gap-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors">
+                                <XCircle size={13} /> Rejeter
+                              </button>
+                            </>
+                          )}
+                          {w.status === 'approved' && (
+                            <button onClick={() => handleMarkPaid(w)} disabled={wActing} className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-50">
+                              💳 Marquer Payé
                             </button>
                           )}
-                          {c.approval_status !== 'rejected' && (
-                            <button onClick={() => setRejectModal({ id: c.id, title: c.title })} className="flex items-center gap-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors">
-                              <XCircle size={13} /> Refuser
-                            </button>
+                          {w.admin_note && (
+                            <span className="text-xs text-slate-500 italic max-w-[120px] truncate" title={w.admin_note}>📝 {w.admin_note}</span>
                           )}
-                          {c.status === 'active' && c.approval_status === 'approved' && (
-                            <button onClick={() => handleForceEnd(c.id)} className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-400 px-3 py-1.5 rounded-lg font-bold transition-colors" title="Clôturer de force">Clôturer</button>
-                          )}
-                          <button onClick={() => handleDelete(c.id)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" title="Supprimer"><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
+
+
+
 
 
 // ─── Refunds Management View ──────────────────────────────────────────────────

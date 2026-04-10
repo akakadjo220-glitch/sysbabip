@@ -16,7 +16,7 @@ export const OrganizerLogin = () => {
     const [password, setPassword] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [countryCode, setCountryCode] = useState('+225');
-    const [dialOptions, setDialOptions] = useState<{code: string, flag: string, rawCode: string}[]>([]);
+    const [dialOptions, setDialOptions] = useState<{ code: string, flag: string, rawCode: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -37,7 +37,7 @@ export const OrganizerLogin = () => {
                 .split('')
                 .map(char => 127397 + char.charCodeAt(0));
             return String.fromCodePoint(...codePoints);
-        } catch(e) { return countryCode; }
+        } catch (e) { return countryCode; }
     };
 
     useEffect(() => {
@@ -49,7 +49,7 @@ export const OrganizerLogin = () => {
                         const dial = await getCountryDialCode(c.code);
                         return { code: dial || '+225', flag: getFlagEmoji(c.code), rawCode: c.code };
                     }));
-                    
+
                     // Filter out duplicates (if any) and set dialOptions
                     const uniqueOptions = options.reduce((acc, current) => {
                         const x = acc.find((item: any) => item.code === current.code);
@@ -258,7 +258,7 @@ export const OrganizerLogin = () => {
             }
 
             setSuccessMsg("Mot de passe modifié avec succès ! Connexion...");
-            
+
             const { error: signInError } = await supabase.auth.signInWithPassword({
                 email: formattedIdentifier,
                 password
