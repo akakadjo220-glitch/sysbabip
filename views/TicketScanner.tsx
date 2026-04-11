@@ -247,11 +247,36 @@ export const TicketScanner: React.FC = () => {
       let payload: TicketPayload | null = null;
       const online = isOnlineRef.current;
 
-      // Step 1 — Cryptographic verification (works offline)
-      const cryptoResult = await verifyTicket(token);
-      if (cryptoResult.valid && cryptoResult.payload) {
-        ticketId = cryptoResult.payload.tId;
-        payload  = cryptoResult.payload;
+      // Step 0 — NFC bare ticket ID (new format: NFC chip only stores ticket ID, not JWS)
+      // IDs look like "PHY-xxxxxxxx-xxxx" or "TIX-..." or a UUID — they never start with "eyJ"
+      const isBareTicketId = token.trim().length < 80 && !token.startsWith('eyJ');
+      if (isBareTicketId && online) {
+        const { data: ticketById } = await supabase
+          .from('tickets')
+          .select('id, status, guest_name, ticket_type, event_id')
+          .eq('id', token.trim())
+          .single();
+        if (ticketById) {
+          ticketId = ticketById.id;
+          payload  = { tId: ticketById.id, eId: ticketById.event_id || '', type: ticketById.ticket_type || 'Standard', usr: ticketById.guest_name || 'Billet Physique', iat: Date.now() };
+          setCachedStatus(ticketById.id, ticketById.status);
+        }
+      } else if (isBareTicketId && !online) {
+        // Offline: check local cache by ID directly
+        const cachedStatusForId = getCachedStatus(token.trim());
+        if (cachedStatusForId) {
+          ticketId = token.trim();
+          payload  = { tId: token.trim(), eId: '', type: 'Billet Physique', usr: 'Billet Physique', iat: Date.now() };
+        }
+      }
+
+      // Step 1 — Cryptographic verification (works offline, for QR JWS tokens)
+      if (!ticketId) {
+        const cryptoResult = await verifyTicket(token);
+        if (cryptoResult.valid && cryptoResult.payload) {
+          ticketId = cryptoResult.payload.tId;
+          payload  = cryptoResult.payload;
+        }
       }
 
       // Step 2 — Fallback: lookup by qr_code in Supabase (requires online)
