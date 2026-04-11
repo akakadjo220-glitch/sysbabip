@@ -3329,10 +3329,13 @@ const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: str
         records: [{ recordType: 'text', data: payload, lang: 'fr' }]
       });
       // Mark as encoded in Supabase
-      await supabase.from('tickets').update({
+      const { error: dbError } = await supabase.from('tickets').update({
         nfc_encoded: true,
         nfc_encoded_at: new Date().toISOString()
-      }).eq('id', ticket.id);
+      }).eq('id', ticket.id).select().single();
+
+      if (dbError) throw new Error(dbError.message || "Impossible de mettre à jour la base de données");
+
       // Update local state
       setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, nfc_encoded: true, nfc_encoded_at: new Date().toISOString() } : t));
       addToast(`✅ Bracelet encodé pour le billet ${ticket.id.slice(-6).toUpperCase()} !`, 'success');
