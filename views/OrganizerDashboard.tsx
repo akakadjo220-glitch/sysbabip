@@ -3324,9 +3324,11 @@ const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: str
     addToast('📡 Approchez le bracelet NFC du téléphone...', 'info');
     try {
       const ndef = new (window as any).NDEFReader();
-      const payload = JSON.stringify({ t: ticket.id, q: ticket.qr_code });
+      // ⚠️ On n'écrit QUE l'ID du billet (< 40 bytes) — jamais le QR JWS complet
+      // qui dépasse les ~144 bytes des puces NTAG213 et cause "IO error: null".
+      // Le scanner récupère les données complètes depuis la BDD avec cet ID.
       await ndef.write({
-        records: [{ recordType: 'text', data: payload, lang: 'fr' }]
+        records: [{ recordType: 'text', data: ticket.id, lang: 'fr' }]
       });
       // Mark as encoded in Supabase
       const { error: dbError } = await supabase.from('tickets').update({
@@ -3344,6 +3346,8 @@ const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: str
         addToast("❌ Permission NFC refusée. Activez le NFC sur votre appareil.", 'error');
       } else if (err.name === 'AbortError') {
         addToast("⏳ Encodage annulé. Réessayez.", 'error');
+      } else if (err.message?.includes('IO error') || err.message?.includes('null')) {
+        addToast("❌ Puce NFC inaccessible. Maintenez le bracelet IMMOBILE contre le téléphone et réessayez.", 'error');
       } else {
         addToast(`❌ Erreur : ${err.message}`, 'error');
       }
