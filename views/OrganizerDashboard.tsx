@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift, Lock, Upload, Filter } from 'lucide-react';
+import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift, Lock, Upload, Filter, Trophy } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { formatCurrency } from '../constants';
@@ -28,7 +28,7 @@ const MapResizer = () => {
   return null;
 };
 
-type OrganizerTab = 'overview' | 'events' | 'attendees' | 'sales' | 'marketing' | 'wallet' | 'chatbot' | 'account' | 'agents' | 'crm' | 'physical' | 'fundraising' | 'ambassadors';
+type OrganizerTab = 'overview' | 'events' | 'attendees' | 'sales' | 'marketing' | 'wallet' | 'chatbot' | 'account' | 'agents' | 'crm' | 'physical' | 'fundraising' | 'ambassadors' | 'tournaments';
 type ToastType = 'success' | 'error' | 'info';
 
 import { AccountSettingsView } from '../components/AccountSettingsView';
@@ -516,6 +516,7 @@ export const OrganizerDashboard: React.FC = () => {
           { id: 'account', icon: User, label: "Mon Compte" },
           { id: 'physical', icon: Printer, label: "Billets Physiques" },
           { id: 'fundraising', icon: Heart, label: "Collecte de Fonds" },
+          { id: 'tournaments', icon: Trophy, label: "🏆 Tournois" },
         ].map(tab => (
           <button key={tab.id} onClick={() => {
             const restrictedTabs = ['events', 'agents', 'wallet', 'physical'];
@@ -595,6 +596,7 @@ export const OrganizerDashboard: React.FC = () => {
           )
         )}
         {activeTab === 'ambassadors' && <OrganizerAmbassadorsView events={filteredEvents} addToast={addToast} />}
+        {activeTab === 'tournaments' && <TournamentsView organizerId={user?.id} events={events} addToast={addToast} />}
       </div>
 
       {showWizard && <CreateEventWizard initialData={wizardEvent} onCancel={() => { setShowWizard(false); setWizardEvent(null); }} onSave={handleSaveEvent} />}
@@ -4827,6 +4829,216 @@ const OrganizerAmbassadorsView = ({ events, addToast }: { events: any[], addToas
           </table>
         </div>
       )}
+    </div>
+  );
+};
+
+// ─── TournamentsView ───────────────────────────────────────────────────────
+const SPORT_ICONS_MAP: Record<string, string> = {
+  football: '⚽', basketball: '🏀', rugby: '🏉',
+  athletisme: '🏃', boxing: '🥊', tennis: '🎾', autre: '🏆',
+};
+
+const TournamentsView = ({ organizerId, events, addToast }: any) => {
+  const [tournaments, setTournaments] = React.useState<any[]>([]);
+  const [tourLoading, setTourLoading] = React.useState(true);
+  const [showForm, setShowForm] = React.useState(false);
+  const [selectedTournament, setSelectedTournament] = React.useState<any>(null);
+  const [linkEventId, setLinkEventId] = React.useState('');
+  const [linkingId, setLinkingId] = React.useState<string | null>(null);
+  const emptyForm = { name: '', sport_type: 'football', competition: '', start_date: '', end_date: '', logo_url: '', description: '' };
+  const [form, setForm] = React.useState(emptyForm);
+  const [saving, setSaving] = React.useState(false);
+
+  const sportEvents = events.filter((e: any) =>
+    ['Football', 'Basketball', 'Rugby', 'Athletisme', 'Sport'].some((s: string) =>
+      (e.category || '').toLowerCase().includes(s.toLowerCase())
+    )
+  );
+
+  const fetchTournaments = async () => {
+    setTourLoading(true);
+    const { data } = await supabase.from('tournaments').select('*').eq('organizer_id', organizerId).order('created_at', { ascending: false });
+    setTournaments(data || []);
+    setTourLoading(false);
+  };
+
+  const fetchTournamentMatches = async (tId: string) => {
+    const { data } = await supabase.from('events').select('id, title, date, home_team, away_team, city').eq('tournament_id', tId).order('date', { ascending: true });
+    return data || [];
+  };
+
+  React.useEffect(() => { if (organizerId) fetchTournaments(); }, [organizerId]);
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { addToast('Le nom du tournoi est requis.', 'error'); return; }
+    setSaving(true);
+    try {
+      const { getUniqueSlug } = await import('../utils/slugUtils');
+      const slug = await getUniqueSlug(form.name, 'tournaments');
+      const { error } = await supabase.from('tournaments').insert([{ ...form, organizer_id: organizerId, slug }]);
+      if (error) throw error;
+      addToast('✅ Tournoi créé !', 'success');
+      setForm(emptyForm); setShowForm(false); fetchTournaments();
+    } catch (e: any) { addToast('Erreur : ' + e.message, 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleLinkEvent = async (tournamentId: string) => {
+    if (!linkEventId) { addToast('Sélectionnez un match à lier.', 'error'); return; }
+    setLinkingId(tournamentId);
+    try {
+      const { error } = await supabase.from('events').update({ tournament_id: tournamentId }).eq('id', linkEventId);
+      if (error) throw error;
+      addToast('✅ Match lié !', 'success'); setLinkEventId('');
+      if (selectedTournament?.id === tournamentId) {
+        const matches = await fetchTournamentMatches(tournamentId);
+        setSelectedTournament((prev: any) => ({ ...prev, matches }));
+      }
+    } catch (e: any) { addToast('Erreur : ' + e.message, 'error'); }
+    finally { setLinkingId(null); }
+  };
+
+  const handleSelectTournament = async (t: any) => {
+    const matches = await fetchTournamentMatches(t.id);
+    setSelectedTournament({ ...t, matches });
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Supprimer ce tournoi ? Les matchs seront détachés.')) return;
+    await supabase.from('events').update({ tournament_id: null }).eq('tournament_id', id);
+    await supabase.from('tournaments').delete().eq('id', id);
+    addToast('Tournoi supprimé.', 'info');
+    if (selectedTournament?.id === id) setSelectedTournament(null);
+    fetchTournaments();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-white flex items-center gap-3"><Trophy className="text-orange-400" size={28} /> Gestion des Tournois</h2>
+          <p className="text-slate-400 text-sm mt-1">Créez des tournois et liez vos matchs pour une page publique dédiée.</p>
+        </div>
+        <button onClick={() => { setShowForm(!showForm); setForm(emptyForm); }}
+          className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20">
+          <Plus size={18} /> Nouveau tournoi
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-slate-900/80 border border-emerald-500/30 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
+          <h3 className="text-white font-bold text-lg">🏆 Créer un Tournoi</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Nom *</span>
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" placeholder="Ex: Ligue U20 Abidjan 2026" /></label>
+            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Sport</span>
+              <select value={form.sport_type} onChange={e => setForm({ ...form, sport_type: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500 appearance-none">
+                <option value="football">⚽ Football</option><option value="basketball">🏀 Basketball</option>
+                <option value="rugby">🏉 Rugby</option><option value="athletisme">🏃 Athlétisme</option>
+                <option value="boxing">🥊 Boxe</option><option value="tennis">🎾 Tennis</option><option value="autre">🏆 Autre</option>
+              </select></label>
+            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Compétition</span>
+              <input value={form.competition} onChange={e => setForm({ ...form, competition: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" placeholder="Ex: AFCON 2026, Ligue 1 CI..." /></label>
+            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Logo (URL)</span>
+              <input value={form.logo_url} onChange={e => setForm({ ...form, logo_url: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" placeholder="https://..." /></label>
+            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Date début</span>
+              <input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" /></label>
+            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Date fin</span>
+              <input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" /></label>
+            <label className="block sm:col-span-2"><span className="text-slate-400 text-xs font-bold mb-1 block">Description</span>
+              <textarea rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500 resize-none" placeholder="Présentation..." /></label>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 font-bold text-slate-300">Annuler</button>
+            <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all disabled:opacity-50">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Créer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tourLoading && <div className="flex justify-center py-12"><Loader2 className="animate-spin text-orange-400" size={36} /></div>}
+      {!tourLoading && tournaments.length === 0 && !showForm && (
+        <div className="text-center py-16 bg-slate-800/30 rounded-3xl border border-white/10">
+          <Trophy size={56} className="text-slate-600 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-white mb-2">Aucun tournoi créé</h3>
+          <p className="text-slate-400 mb-6">Créez votre premier tournoi pour regrouper vos matchs.</p>
+          <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold"><Plus size={18} /> Créer un tournoi</button>
+        </div>
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {tournaments.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-slate-400 font-bold text-xs uppercase tracking-wider">Mes Tournois</h3>
+            {tournaments.map(t => (
+              <div key={t.id} onClick={() => handleSelectTournament(t)}
+                className={`group p-4 rounded-2xl border cursor-pointer transition-all ${selectedTournament?.id === t.id ? 'border-emerald-500/60 bg-emerald-900/20' : 'border-white/10 bg-slate-800/50 hover:border-emerald-500/30 hover:bg-slate-800'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-2xl shrink-0">
+                    {t.logo_url ? <img src={t.logo_url} className="w-10 h-10 object-cover rounded-lg" alt="" /> : SPORT_ICONS_MAP[t.sport_type] || '🏆'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-black truncate">{t.name}</p>
+                    <p className="text-emerald-400 text-xs font-bold">{t.competition || t.sport_type}</p>
+                    {t.start_date && <p className="text-slate-500 text-xs mt-0.5">{new Date(t.start_date).toLocaleDateString('fr-FR')} → {t.end_date ? new Date(t.end_date).toLocaleDateString('fr-FR') : '...'}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a href={`/tournoi/${t.slug}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                      className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors" title="Voir la page publique"><Eye size={14} /></a>
+                    <button onClick={e => { e.stopPropagation(); handleDelete(t.id); }} className="p-2 rounded-lg bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white transition-colors"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {selectedTournament && (
+          <div className="bg-slate-800/50 border border-white/10 rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-black text-lg">{SPORT_ICONS_MAP[selectedTournament.sport_type] || '🏆'} {selectedTournament.name}</h3>
+              <a href={`/tournoi/${selectedTournament.slug}`} target="_blank" rel="noreferrer"
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"><Eye size={12} /> Page publique</a>
+            </div>
+            <div className="bg-slate-900/60 rounded-2xl border border-white/10 p-4">
+              <h4 className="text-slate-300 font-bold text-sm mb-3">+ Ajouter un match</h4>
+              <div className="flex gap-2">
+                <select value={linkEventId} onChange={e => setLinkEventId(e.target.value)}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-emerald-500 appearance-none">
+                  <option value="">Sélectionner un événement sport...</option>
+                  {sportEvents.filter((e: any) => e.tournament_id !== selectedTournament.id).map((e: any) => (
+                    <option key={e.id} value={e.id}>{e.home_team && e.away_team ? `${e.home_team} vs ${e.away_team}` : e.title} — {new Date(e.date).toLocaleDateString('fr-FR')}</option>
+                  ))}
+                </select>
+                <button onClick={() => handleLinkEvent(selectedTournament.id)} disabled={!!linkingId || !linkEventId}
+                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all disabled:opacity-50">
+                  {linkingId === selectedTournament.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Lier
+                </button>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-3">Matchs ({selectedTournament.matches?.length || 0})</h4>
+              {!selectedTournament.matches?.length
+                ? <p className="text-slate-500 text-sm italic text-center py-4">Aucun match lié</p>
+                : <div className="space-y-2">{selectedTournament.matches.map((m: any) => (
+                  <div key={m.id} className="flex items-center justify-between bg-slate-900/50 rounded-xl p-3 border border-white/5">
+                    <div>
+                      <p className="text-white font-bold text-sm">{m.home_team && m.away_team ? <>{m.home_team} <span className="text-orange-400">VS</span> {m.away_team}</> : m.title}</p>
+                      <p className="text-slate-500 text-xs mt-0.5">{new Date(m.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} {m.city && `· ${m.city}`}</p>
+                    </div>
+                    <button onClick={async () => {
+                      await supabase.from('events').update({ tournament_id: null }).eq('id', m.id);
+                      const matches = await fetchTournamentMatches(selectedTournament.id);
+                      setSelectedTournament((prev: any) => ({ ...prev, matches }));
+                      addToast('Match détaché.', 'info');
+                    }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"><X size={14} /></button>
+                  </div>
+                ))}</div>}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

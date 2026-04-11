@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { CountrySelector } from '../components/CountrySelector';
 import { supabase } from '../supabaseClient';
 import { AdCarousel } from '../components/AdCarousel';
-import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, List, SlidersHorizontal, ChevronLeft, ChevronRight, Globe, Loader2, Banknote, ShieldCheck, Ticket } from 'lucide-react';
+import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, List, SlidersHorizontal, ChevronLeft, ChevronRight, Globe, Loader2, Banknote, ShieldCheck, Ticket, Trophy } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { PublicMap } from '../components/PublicMap';
 import { saveSecureTicket } from '../utils/offlineStorage';
 import { SEO } from '../components/SEO';
@@ -407,6 +408,16 @@ const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ event, onC
         <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 text-xs font-bold text-white uppercase tracking-wider">
           {event.category}
         </div>
+        {/* Badge Tournoi */}
+        {(event as any).tournament_id && (event as any).tournament_slug && (
+          <Link
+            to={`/tournoi/${(event as any).tournament_slug}`}
+            onClick={e => e.stopPropagation()}
+            className="absolute top-3 left-3 mt-7 flex items-center gap-1 bg-emerald-500/90 backdrop-blur-md px-2 py-0.5 rounded-lg border border-emerald-400/50 text-xs font-bold text-white hover:bg-emerald-500 transition-colors"
+          >
+            <Trophy size={10} /> Tournoi
+          </Link>
+        )}
         <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md text-slate-900 px-3 py-1 rounded-lg text-xs font-bold shadow-lg flex flex-col items-center leading-tight">
           <span className="text-sm font-extrabold">{new Date(event.date).getDate()}</span>
           <span className="text-[10px] uppercase">{new Date(event.date).toLocaleString('fr-FR', { month: 'short' })}</span>

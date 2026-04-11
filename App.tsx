@@ -19,6 +19,7 @@ import { About } from './views/About';
 import { FAQ } from './views/FAQ';
 import { Privacy } from './views/Privacy';
 import { Terms } from './views/Terms';
+import { TournamentPage } from './views/TournamentPage';
 import { UserRole } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PublicChatWidget } from './components/PublicChatWidget';
@@ -94,6 +95,7 @@ const AppContent: React.FC = () => {
           <Route path="/faq" element={<FAQ />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
+          <Route path="/tournoi/:slug" element={<TournamentPage />} />
 
           <Route path="/organizer/login" element={<OrganizerLogin />} />
           <Route path="/sysbap/login" element={<AdminLogin />} />

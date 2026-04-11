@@ -20,6 +20,7 @@ import { AmbassadorWidget } from '../components/AmbassadorWidget';
 import { SEO } from '../components/SEO';
 import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { StadiumMap } from '../components/StadiumMap';
 import {
   Calendar, MapPin, Clock, ArrowLeft, Share2, Heart,
   Info, ShieldCheck, Ticket, CheckCircle, Smartphone, CreditCard,
@@ -533,6 +534,24 @@ export const EventDetails: React.FC = () => {
                       </div>
                     </div>
                   )}
+                {/* 🏟️ Plan de stade interactif — affiché si zones configurées */}
+                {(event as any).home_team && event.ticketTypes?.some((t: any) => t.stadium_zone) && (
+                  <div className="mt-2 mb-4">
+                    <StadiumMap
+                      ticketTypes={event.ticketTypes!.map((t: any) => ({
+                        id: t.id, name: t.name, price: t.price,
+                        capacity: t.available ?? t.quantity ?? t.capacity ?? 0,
+                        sold: 0,
+                        stadium_zone: t.stadium_zone
+                      }))}
+                      cart={cart}
+                      onZoneSelect={(_ticketId) => {
+                        const el = document.getElementById('ticket-section');
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                    />
+                  </div>
+                )}
                 <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300 flex items-center gap-2">
                   ✨ Ce qui vous attend...
                 </h3>
