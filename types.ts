@@ -21,6 +21,7 @@ export interface TicketCategory {
   available: number;
   type: 'standard' | 'vip' | 'early_bird' | 'group' | 'free' | 'donation';
   features: string[];
+  stadium_zone?: string; // Zone du stade (Tribune Nord, VIP, Virage, Loge...)
 }
 
 export interface Event {
@@ -59,6 +60,11 @@ export interface Event {
   views: number;
   average_rating: number;
   total_reviews: number;
+  // Champs Sport (optionnels)
+  sport_type?: string;   // 'football' | 'basketball' | 'rugby' | 'athletisme' | 'autre'
+  home_team?: string;    // Équipe domicile
+  away_team?: string;    // Équipe visiteur
+  competition?: string;  // Compétition (AFCON, Ligue 1 CI, Amical...)
 }
 
 export interface TicketType {

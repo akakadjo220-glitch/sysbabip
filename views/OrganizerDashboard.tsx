@@ -270,7 +270,7 @@ export const OrganizerDashboard: React.FC = () => {
 
   const handleSaveEvent = async (data: any) => {
     try {
-      const { ticketTypes, video, id, isEdit, dialCode, practicalInfos, supportPhone, ...eventPayload } = data;
+      const { ticketTypes, video, id, isEdit, dialCode, practicalInfos, supportPhone, sport_type, home_team, away_team, competition, ...eventPayload } = data;
 
       const totalCapacity = ticketTypes && ticketTypes.length > 0
         ? ticketTypes.reduce((sum: number, t: any) => sum + (Number(t.capacity) || 0), 0)
@@ -279,7 +279,7 @@ export const OrganizerDashboard: React.FC = () => {
         ? Math.min(...ticketTypes.map((t: any) => Number(t.price) || 0))
         : eventPayload.price || 0;
 
-      const payload: any = { ...eventPayload, capacity: totalCapacity, price: minPrice, practical_infos: practicalInfos, support_phone: supportPhone, organizer_name: user?.name, organizer_id: user?.id, video_url: video };
+      const payload: any = { ...eventPayload, capacity: totalCapacity, price: minPrice, practical_infos: practicalInfos, support_phone: supportPhone, organizer_name: user?.name, organizer_id: user?.id, video_url: video, sport_type: sport_type || null, home_team: home_team || null, away_team: away_team || null, competition: competition || null };
 
       if (payload.title) {
         payload.slug = await getUniqueSlug(payload.title, 'events', id);
@@ -298,7 +298,7 @@ export const OrganizerDashboard: React.FC = () => {
           await supabase.from('ticket_types').delete().eq('event_id', id);
           if (ticketTypes.length > 0) {
             const ticketPayloads = ticketTypes.map((t: any) => ({
-              event_id: id, name: t.name, price: t.price, quantity: t.capacity || 0, type: 'standard', features: t.features || []
+              event_id: id, name: t.name, price: t.price, quantity: t.capacity || 0, type: 'standard', features: t.features || [], stadium_zone: t.stadium_zone || null
             }));
             await supabase.from('ticket_types').insert(ticketPayloads);
           }
@@ -317,7 +317,7 @@ export const OrganizerDashboard: React.FC = () => {
 
         if (newEvt && ticketTypes && ticketTypes.length > 0) {
           const ticketPayloads = ticketTypes.map((t: any) => ({
-            event_id: newEvt.id, name: t.name, price: t.price, quantity: t.capacity || 0, type: 'standard', features: t.features || []
+            event_id: newEvt.id, name: t.name, price: t.price, quantity: t.capacity || 0, type: 'standard', features: t.features || [], stadium_zone: t.stadium_zone || null
           }));
           const { error: tErr } = await supabase.from('ticket_types').insert(ticketPayloads);
           if (tErr) console.error("Erreur insertion tickets :", tErr);
@@ -2104,6 +2104,11 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     ambassador_commission_type: 'percentage' | 'fixed';
     ambassador_commission_value: number;
     sales_close_before_minutes: number;
+    // Champs sport (optionnels)
+    sport_type: string;
+    home_team: string;
+    away_team: string;
+    competition: string;
   }>(initialData ? {
     id: initialData.id,
     isEdit: true,
@@ -2130,7 +2135,11 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     ambassador_enabled: initialData.ambassador_enabled || false,
     ambassador_commission_type: initialData.ambassador_commission_type || 'percentage',
     ambassador_commission_value: initialData.ambassador_commission_value || 10,
-    sales_close_before_minutes: initialData.sales_close_before_minutes ?? 60
+    sales_close_before_minutes: initialData.sales_close_before_minutes ?? 60,
+    sport_type: initialData.sport_type || '',
+    home_team: initialData.home_team || '',
+    away_team: initialData.away_team || '',
+    competition: initialData.competition || '',
   } : {
     title: '', date: '', location: '', city: '', country: '', price: 0, capacity: 1000,
     category: '', image: '', description: '', video: '', gallery: [],
@@ -2146,7 +2155,8 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     ambassador_enabled: false,
     ambassador_commission_type: 'percentage',
     ambassador_commission_value: 10,
-    sales_close_before_minutes: 60
+    sales_close_before_minutes: 60,
+    sport_type: '', home_team: '', away_team: '', competition: '',
   });
 
   const [countries, setCountries] = useState<{ name: string, code: string }[]>([]);
@@ -2263,6 +2273,9 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
   };
   const removePracticalInfo = (index: number) => setForm({ ...form, practicalInfos: form.practicalInfos.filter((_, i) => i !== index) });
 
+  const SPORT_CATEGORIES = ['Football', 'Basketball', 'Rugby', 'Athlétisme', 'Sport'];
+  const isSport = SPORT_CATEGORIES.some(s => form.category?.toLowerCase().includes(s.toLowerCase()));
+
   const generateMagicTiers = () => {
     const totalCap = form.capacity || 1000;
     const basePrice = Math.max(5000, form.price || 5000);
@@ -2273,6 +2286,19 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
         { id: `t${Date.now()}2`, name: 'Standard', price: basePrice, capacity: Math.floor(totalCap * 0.5), features: ['Accès standard événement'] },
         { id: `t${Date.now()}3`, name: 'VIP', price: basePrice * 3 - 100, capacity: Math.floor(totalCap * 0.2), features: ['Coupe-file', 'Zone VIP', 'Conso offerte'] },
         { id: `t${Date.now()}4`, name: 'VVIP', price: basePrice * 10 - 100, capacity: Math.floor(totalCap * 0.1), features: ['Loge privée', 'Backstage', 'Champagne'] },
+      ]
+    });
+  };
+
+  const generateSportTiers = () => {
+    const totalCap = form.capacity || 30000;
+    setForm({
+      ...form,
+      ticketTypes: [
+        { id: `t${Date.now()}1`, name: 'Virage', price: 2000, capacity: Math.floor(totalCap * 0.4), features: ['Ambiance supporters', 'Accès Virage'] },
+        { id: `t${Date.now()}2`, name: 'Tribune', price: 5000, capacity: Math.floor(totalCap * 0.35), features: ['Vue latérale', 'Siège numéroté'] },
+        { id: `t${Date.now()}3`, name: 'Tribune VIP', price: 15000, capacity: Math.floor(totalCap * 0.15), features: ['Siège premium', 'Vue centrale', 'Accès Lounge'] },
+        { id: `t${Date.now()}4`, name: 'Loge VIP', price: 75000, capacity: Math.floor(totalCap * 0.1), features: ['Loge privée', 'Catering inclus', 'Parking VIP', 'Accueil personnalisé'] },
       ]
     });
   };
@@ -2373,6 +2399,48 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                   </div>
                 )}
               </div>
+              {/* ⚽ Bloc Sport — visible seulement si catégorie sport */}
+              {isSport && (
+                <div className="mt-6 p-5 bg-gradient-to-r from-emerald-900/40 to-teal-900/40 border border-emerald-500/30 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-300">
+                  <h4 className="text-white font-bold flex items-center gap-2 mb-4">
+                    <span className="text-2xl">⚽</span> Infos du Match
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label className="block">
+                      <span className="text-slate-300 text-xs font-bold mb-1 block">Sport</span>
+                      <select value={form.sport_type} onChange={e => setForm({ ...form, sport_type: e.target.value })} className="w-full bg-slate-800 border border-emerald-500/30 rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-emerald-500 outline-none appearance-none">
+                        <option value="">Sélectionner...</option>
+                        <option value="football">⚽ Football</option>
+                        <option value="basketball">🏀 Basketball</option>
+                        <option value="rugby">🏉 Rugby</option>
+                        <option value="athletisme">🏃 Athlétisme</option>
+                        <option value="boxing">🥊 Boxe</option>
+                        <option value="tennis">🎾 Tennis</option>
+                        <option value="autre">🏆 Autre sport</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-slate-300 text-xs font-bold mb-1 block">Compétition</span>
+                      <input value={form.competition} onChange={e => setForm({ ...form, competition: e.target.value })} className="w-full bg-slate-800 border border-emerald-500/30 rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="Ex: Ligue 1 CI, AFCON 2026, Amical..." />
+                    </label>
+                    <label className="block">
+                      <span className="text-slate-300 text-xs font-bold mb-1 block">🏠 Équipe Domicile</span>
+                      <input value={form.home_team} onChange={e => setForm({ ...form, home_team: e.target.value })} className="w-full bg-slate-800 border border-emerald-500/30 rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="Ex: ASEC Mimosas" />
+                    </label>
+                    <label className="block">
+                      <span className="text-slate-300 text-xs font-bold mb-1 block">✈️ Équipe Visiteur</span>
+                      <input value={form.away_team} onChange={e => setForm({ ...form, away_team: e.target.value })} className="w-full bg-slate-800 border border-emerald-500/30 rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="Ex: Africa Sports" />
+                    </label>
+                  </div>
+                  {form.home_team && form.away_team && (
+                    <div className="mt-4 p-3 bg-slate-900/60 rounded-xl border border-white/10 text-center">
+                      <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Aperçu Affiche</p>
+                      <p className="text-white font-black text-lg">{form.home_team} <span className="text-orange-400">VS</span> {form.away_team}</p>
+                      {form.competition && <p className="text-slate-400 text-xs mt-1">🏆 {form.competition}</p>}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {step === 2 && (
@@ -2383,7 +2451,10 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                   <h3 className="text-xl font-bold text-white">Catégories de Billets</h3>
                 </div>
                 <div className="flex gap-2 w-full mb-4">
-                  <button onClick={generateMagicTiers} className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-500 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-all animate-glow-pulse">✨ Magic Tiers (IA)</button>
+                  {isSport
+                    ? <button onClick={generateSportTiers} className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all">⚽ Magic Tiers Sport</button>
+                    : <button onClick={generateMagicTiers} className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-500 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-all animate-glow-pulse">✨ Magic Tiers (IA)</button>
+                  }
                   <button onClick={addTicketType} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1 shadow-lg"><Plus size={16} /> Ajouter</button>
                 </div>
 
@@ -2396,6 +2467,28 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                         <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Prix (FCFA)</span><input type="number" value={t.price} onChange={e => updateTicketType(idx, 'price', Number(e.target.value))} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-orange-500 text-sm" /></label>
                         <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Qté dispo.</span><input type="number" value={t.capacity} onChange={e => updateTicketType(idx, 'capacity', Number(e.target.value))} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-orange-500 text-sm" /></label>
                       </div>
+                      {/* Zone de stade — visible si catégorie sport */}
+                      {isSport && (
+                        <label className="block mb-3">
+                          <span className="text-emerald-400 text-xs font-bold mb-1 block">🏟️ Zone du stade</span>
+                          <div className="flex gap-2">
+                            <select
+                              value={(t as any).stadium_zone || ''}
+                              onChange={e => updateTicketType(idx, 'stadium_zone', e.target.value)}
+                              className="flex-1 bg-slate-800 border border-emerald-500/30 rounded-lg px-3 py-2 text-white outline-none focus:border-emerald-500 text-sm appearance-none"
+                            >
+                              <option value="">Sélectionner une zone...</option>
+                              <option value="Virage Nord">Virage Nord</option>
+                              <option value="Virage Sud">Virage Sud</option>
+                              <option value="Tribune Est">Tribune Est</option>
+                              <option value="Tribune Ouest">Tribune Ouest</option>
+                              <option value="Tribune Présidentielle">Tribune Présidentielle</option>
+                              <option value="Loge VIP">Loge VIP</option>
+                              <option value="Zone Presse">Zone Presse</option>
+                            </select>
+                          </div>
+                        </label>
+                      )}
                       <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Avantages (séparés par des virgules)</span><input value={t.features.join(', ')} onChange={e => updateTicketType(idx, 'features', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-orange-500 text-sm" placeholder="Ex: Accès Backstage, Boisson offerte..." /></label>
                     </div>
                   ))}

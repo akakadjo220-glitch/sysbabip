@@ -496,6 +496,43 @@ export const EventDetails: React.FC = () => {
 
             <div className="bg-[#1e293b] rounded-3xl border border-white/5 p-8 min-h-[400px]">
               <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* ⚽ Affiche du match (sport) */}
+                  {(event as any).home_team && (event as any).away_team && (
+                    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-emerald-500/30 p-6 mb-4">
+                      <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, #10b981, transparent), radial-gradient(circle at 70% 50%, #0ea5e9, transparent)' }} />
+                      {(event as any).competition && (
+                        <p className="text-center text-emerald-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
+                          <span>🏆</span> {(event as any).competition} <span>🏆</span>
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 text-center">
+                          <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center mx-auto mb-2 text-3xl">
+                            {(event as any).sport_type === 'football' ? '⚽' : (event as any).sport_type === 'basketball' ? '🏀' : '🏆'}
+                          </div>
+                          <p className="text-white font-black text-lg leading-tight">{(event as any).home_team}</p>
+                          <p className="text-emerald-400 text-xs font-bold mt-1">🏠 Domicile</p>
+                        </div>
+                        <div className="text-center shrink-0">
+                          <div className="bg-orange-500 text-white font-black text-2xl px-5 py-2 rounded-xl shadow-[0_0_20px_rgba(249,115,22,0.5)] animate-pulse">
+                            VS
+                          </div>
+                          <p className="text-slate-400 text-xs mt-2">{new Date(event.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                        </div>
+                        <div className="flex-1 text-center">
+                          <div className="w-16 h-16 rounded-full bg-blue-500/20 border-2 border-blue-500/40 flex items-center justify-center mx-auto mb-2 text-3xl">
+                            {(event as any).sport_type === 'football' ? '⚽' : (event as any).sport_type === 'basketball' ? '🏀' : '🏆'}
+                          </div>
+                          <p className="text-white font-black text-lg leading-tight">{(event as any).away_team}</p>
+                          <p className="text-blue-400 text-xs font-bold mt-1">✈️ Visiteur</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center justify-center gap-2 text-slate-400 text-xs">
+                        <MapPin size={12} className="text-orange-400" />
+                        <span>{event.location}, {event.city}</span>
+                      </div>
+                    </div>
+                  )}
                 <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300 flex items-center gap-2">
                   ✨ Ce qui vous attend...
                 </h3>
@@ -582,6 +619,14 @@ export const EventDetails: React.FC = () => {
                             <span className="font-bold text-white">{ticket.name}</span>
                             <span className="font-bold text-emerald-400">{formatCurrency(ticket.price)}</span>
                           </div>
+                          {/* Zone de stade badge */}
+                          {(ticket as any).stadium_zone && (
+                            <div className="mb-2">
+                              <span className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                                🏟️ {(ticket as any).stadium_zone}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex flex-wrap gap-2 mb-4">
                             {ticket.features && ticket.features.map((f, i) => (
                               <span key={i} className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">{f}</span>
