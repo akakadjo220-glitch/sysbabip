@@ -4248,7 +4248,7 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
     e.preventDefault();
     if (!withdrawModal || !organizerId) return;
     const amount = Number(withdrawForm.amount);
-    const s = statsMap[withdrawModal.id] || { total_raised: 0 };
+    const s = statsMap[withdrawModal.id] || { total_raised: 0, total_net_raised: 0, total_platform_fees: 0, contributor_count: 0 };
     const gross = s.total_raised || 0;
     const net = s.total_net_raised ?? (gross * 0.95);
     const wList = withdrawalsMap[withdrawModal.id] || [];
@@ -4311,7 +4311,7 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
 
             {/* Available balance */}
             {(() => {
-              const s = statsMap[withdrawModal.id] || { total_raised: 0 };
+              const s = statsMap[withdrawModal.id] || { total_raised: 0, total_net_raised: 0, total_platform_fees: 0, contributor_count: 0 };
               const gross = s.total_raised || 0;
               const net = s.total_net_raised ?? (gross * 0.95);
               const fee = s.total_platform_fees ?? (gross * 0.05);
@@ -4553,7 +4553,7 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
                             onClick={() => setShowHistoryFor(showHistoryFor === c.id ? null : c.id)}
                             className="flex items-center gap-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors"
                           >
-                            <History size={12} /> Historique ({wList.length})
+                            <Clock size={12} /> Historique ({wList.length})
                           </button>
                         )}
                       </div>
