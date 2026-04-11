@@ -297,6 +297,64 @@ export const TicketScanner: React.FC = () => {
         setResult('error'); setErrorReason('QR Code invalide ou inconnu dans le système.'); setScanning(false); return;
       }
 
+      // Step 2b — Season Pass validation (multi-match pass)
+      if (online && ticketId) {
+        const { data: seasonTicket } = await supabase
+          .from('tickets')
+          .select('id, tournament_id, pass_id, status')
+          .eq('id', ticketId)
+          .maybeSingle();
+
+        if (seasonTicket?.tournament_id) {
+          // This is a season pass ticket — check the current event's tournament
+          const currentEvent = (window as any).__currentScanEventId;
+          if (currentEvent) {
+            const { data: currentEvt } = await supabase
+              .from('events')
+              .select('tournament_id, title')
+              .eq('id', currentEvent)
+              .single();
+
+            if (!currentEvt || currentEvt.tournament_id !== seasonTicket.tournament_id) {
+              setResult('error');
+              setErrorReason('❌ Pass Saison invalide pour ce match. Ce pass est lié à un autre tournoi.');
+              setScanning(false); return;
+            }
+          }
+
+          // Check if already checked-in for this specific event
+          if (currentEvent) {
+            const { data: existingCheckin } = await supabase
+              .from('season_pass_checkins')
+              .select('id')
+              .eq('ticket_id', ticketId)
+              .eq('event_id', currentEvent)
+              .maybeSingle();
+
+            if (existingCheckin) {
+              setResult('error');
+              setErrorReason('✅ Pass Saison déjà utilisé pour ce match.');
+              setScanning(false); return;
+            }
+
+            // Log the check-in (don't mark ticket as 'used')
+            await supabase.from('season_pass_checkins').insert([{
+              ticket_id: ticketId,
+              event_id: currentEvent,
+              pass_id: seasonTicket.pass_id,
+            }]);
+          }
+
+          // Season pass: mark local scan but DON'T mark ticket as 'used'
+          markLocalScan(ticketId);
+          setScannedPayload({ ...payload, type: '🎟️ Pass Saison' });
+          setResult('success');
+          refreshCounters();
+          setScanning(false);
+          return; // Skip Step 3–5 for season passes
+        }
+      }
+
       // Step 3 — Local double-scan check (always works offline)
       if (getLocalScans()[ticketId]) {
         setResult('error'); setErrorReason('Billet déjà scanné dans cette session !'); setScanning(false); return;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift, Lock, Upload, Filter, Trophy } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
@@ -4848,6 +4848,22 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
   const [linkingId, setLinkingId] = React.useState<string | null>(null);
   const emptyForm = { name: '', sport_type: 'football', competition: '', start_date: '', end_date: '', logo_url: '', description: '' };
   const [form, setForm] = React.useState(emptyForm);
+
+  // Score live state
+  const [scoreEditing, setScoreEditing] = React.useState<string | null>(null);
+  const [scoreForm, setScoreForm] = React.useState({ home_score: 0, away_score: 0, match_status: 'scheduled' });
+  const [scoreSaving, setScoreSaving] = React.useState(false);
+  // Season Pass state
+  const [seasonPasses, setSeasonPasses] = React.useState<any[]>([]);
+  const [showPassForm, setShowPassForm] = React.useState(false);
+  const emptyPassForm = { name: 'Pass Saison', description: '', price: 10000, capacity: 500, features: '' };
+  const [passForm, setPassForm] = React.useState(emptyPassForm);
+  const [passSaving, setPassSaving] = React.useState(false);
+
+  const fetchSeasonPasses = async (tId: string) => {
+    const { data } = await supabase.from('season_passes').select('*').eq('tournament_id', tId).order('created_at', { ascending: false });
+    setSeasonPasses(data || []);
+  };
   const [saving, setSaving] = React.useState(false);
 
   const sportEvents = events.filter((e: any) =>
@@ -4864,7 +4880,7 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
   };
 
   const fetchTournamentMatches = async (tId: string) => {
-    const { data } = await supabase.from('events').select('id, title, date, home_team, away_team, city').eq('tournament_id', tId).order('date', { ascending: true });
+    const { data } = await supabase.from('events').select('id, title, date, home_team, away_team, city, home_score, away_score, match_status').eq('tournament_id', tId).order('date', { ascending: true });
     return data || [];
   };
 
@@ -4902,6 +4918,42 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
   const handleSelectTournament = async (t: any) => {
     const matches = await fetchTournamentMatches(t.id);
     setSelectedTournament({ ...t, matches });
+    fetchSeasonPasses(t.id);
+  };
+
+  const handleScoreSave = async (eventId: string) => {
+    setScoreSaving(true);
+    try {
+      const { error } = await supabase.from('events').update({
+        home_score: scoreForm.home_score,
+        away_score: scoreForm.away_score,
+        match_status: scoreForm.match_status
+      }).eq('id', eventId);
+      if (error) throw error;
+      addToast('✅ Score mis à jour en direct !', 'success');
+      const matches = await fetchTournamentMatches(selectedTournament.id);
+      setSelectedTournament((prev: any) => ({ ...prev, matches }));
+      setScoreEditing(null);
+    } catch (e: any) { addToast('Erreur : ' + e.message, 'error'); }
+    finally { setScoreSaving(false); }
+  };
+
+  const handlePassSave = async () => {
+    if (!passForm.name.trim()) { addToast('Le nom du pass est requis.', 'error'); return; }
+    setPassSaving(true);
+    try {
+      const payload = {
+        ...passForm,
+        features: passForm.features.split(',').map(f => f.trim()).filter(Boolean),
+        tournament_id: selectedTournament.id,
+        organizer_id: organizerId
+      };
+      const { error } = await supabase.from('season_passes').insert([payload]);
+      if (error) throw error;
+      addToast('🎟️ Pass Saison créé avec succès !', 'success');
+      setPassForm(emptyPassForm); setShowPassForm(false); fetchSeasonPasses(selectedTournament.id);
+    } catch (e: any) { addToast('Erreur création pass: ' + e.message, 'error'); }
+    finally { setPassSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -5018,21 +5070,103 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
               </div>
             </div>
             <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-slate-400 font-bold text-xs uppercase tracking-wider">Pass Saison ({seasonPasses.length})</h4>
+                <button onClick={() => setShowPassForm(!showPassForm)} className="text-xs font-bold text-emerald-400 hover:text-emerald-300">
+                  {showPassForm ? 'Annuler' : '+ Ajouter un Pass'}
+                </button>
+              </div>
+
+              {showPassForm && (
+                <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-xl p-4 mb-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block"><span className="text-slate-400 text-[10px] font-bold uppercase block mb-1">Nom du Pass</span>
+                      <input value={passForm.name} onChange={e => setPassForm({...passForm, name: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" /></label>
+                    <label className="block"><span className="text-slate-400 text-[10px] font-bold uppercase block mb-1">Prix (CFA)</span>
+                      <input type="number" value={passForm.price} onChange={e => setPassForm({...passForm, price: +e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" /></label>
+                    <label className="block"><span className="text-slate-400 text-[10px] font-bold uppercase block mb-1">Capacité Max</span>
+                      <input type="number" value={passForm.capacity} onChange={e => setPassForm({...passForm, capacity: +e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" /></label>
+                    <label className="block"><span className="text-slate-400 text-[10px] font-bold uppercase block mb-1">Avantages (séparés par virgule)</span>
+                      <input value={passForm.features} onChange={e => setPassForm({...passForm, features: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" placeholder="Accès VIP, Boisson offerte..." /></label>
+                  </div>
+                  <button onClick={handlePassSave} disabled={passSaving} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
+                    {passSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Créer ce pass
+                  </button>
+                </div>
+              )}
+
+              {seasonPasses.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                  {seasonPasses.map(p => (
+                    <div key={p.id} className="bg-slate-900/50 border border-emerald-500/20 rounded-xl p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-white font-bold text-sm">🎟️ {p.name}</p>
+                          <p className="text-emerald-400 font-bold text-sm mt-0.5">{p.price} CFA</p>
+                        </div>
+                        <span className="text-xs bg-slate-800 px-2 py-1 rounded-lg text-slate-300">{p.sold || 0} / {p.capacity}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <h4 className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-3">Matchs ({selectedTournament.matches?.length || 0})</h4>
               {!selectedTournament.matches?.length
                 ? <p className="text-slate-500 text-sm italic text-center py-4">Aucun match lié</p>
-                : <div className="space-y-2">{selectedTournament.matches.map((m: any) => (
-                  <div key={m.id} className="flex items-center justify-between bg-slate-900/50 rounded-xl p-3 border border-white/5">
-                    <div>
-                      <p className="text-white font-bold text-sm">{m.home_team && m.away_team ? <>{m.home_team} <span className="text-orange-400">VS</span> {m.away_team}</> : m.title}</p>
-                      <p className="text-slate-500 text-xs mt-0.5">{new Date(m.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} {m.city && `· ${m.city}`}</p>
+                : <div className="space-y-3">{selectedTournament.matches.map((m: any) => (
+                  <div key={m.id} className="flex flex-col bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+                    <div className="flex items-center justify-between p-3">
+                      <div>
+                        <p className="text-white font-bold text-sm">{m.home_team && m.away_team ? <>{m.home_team} <span className="text-orange-400">VS</span> {m.away_team}</> : m.title}</p>
+                        <p className="text-slate-500 text-xs mt-0.5">{new Date(m.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} {m.city && `· ${m.city}`}</p>
+                        {m.home_score != null && m.away_score != null && (
+                          <span className={`inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full ${m.match_status === 'live' ? 'bg-red-500/20 text-red-400 animate-pulse' : 'bg-slate-700 text-slate-300'}`}>
+                            {m.match_status === 'scheduled' ? 'Programmé' : m.match_status === 'live' ? '🔴 LIVE' : m.match_status === 'halftime' ? 'Mi-Temps' : 'Terminé'} : {m.home_score} - {m.away_score}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => {
+                          setScoreEditing(scoreEditing === m.id ? null : m.id);
+                          setScoreForm({ home_score: m.home_score || 0, away_score: m.away_score || 0, match_status: m.match_status || 'scheduled' });
+                        }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors" title="Mettre à jour le score"><TrendingUp size={14} /></button>
+                        <button onClick={async () => {
+                          await supabase.from('events').update({ tournament_id: null }).eq('id', m.id);
+                          const matches = await fetchTournamentMatches(selectedTournament.id);
+                          setSelectedTournament((prev: any) => ({ ...prev, matches }));
+                          addToast('Match détaché.', 'info');
+                        }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"><X size={14} /></button>
+                      </div>
                     </div>
-                    <button onClick={async () => {
-                      await supabase.from('events').update({ tournament_id: null }).eq('id', m.id);
-                      const matches = await fetchTournamentMatches(selectedTournament.id);
-                      setSelectedTournament((prev: any) => ({ ...prev, matches }));
-                      addToast('Match détaché.', 'info');
-                    }} className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"><X size={14} /></button>
+
+                    {/* Édition Score Live */}
+                    {scoreEditing === m.id && (
+                      <div className="bg-slate-800 p-3 pt-0 border-t border-white/5 space-y-3">
+                        <div className="flex gap-2 items-end pt-3">
+                          <label className="flex-1"><span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Score {m.home_team || 'Domicile'}</span>
+                            <input type="number" value={scoreForm.home_score} onChange={e => setScoreForm({...scoreForm, home_score: +e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-center text-white" />
+                          </label>
+                          <label className="flex-1"><span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Score {m.away_team || 'Visiteur'}</span>
+                            <input type="number" value={scoreForm.away_score} onChange={e => setScoreForm({...scoreForm, away_score: +e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-center text-white" />
+                          </label>
+                          <label className="flex-1"><span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Statut</span>
+                            <select value={scoreForm.match_status} onChange={e => setScoreForm({...scoreForm, match_status: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white">
+                              <option value="scheduled">Programmé</option>
+                              <option value="live">🔴 En Direct</option>
+                              <option value="halftime">Mi-temps</option>
+                              <option value="fulltime">Terminé</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setScoreEditing(null)} className="flex-1 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-white transition-all">Annuler</button>
+                          <button onClick={() => handleScoreSave(m.id)} disabled={scoreSaving} className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-bold text-white transition-all flex items-center justify-center gap-1">
+                            {scoreSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Diffuser le score
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}</div>}
             </div>

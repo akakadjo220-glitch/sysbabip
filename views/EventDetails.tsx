@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { MOCK_EVENTS, formatCurrency, formatDate, convertCurrency, PAYMENT_ROUTING } from '../constants';
 import { Event, TicketCategory } from '../types';
@@ -497,6 +497,37 @@ export const EventDetails: React.FC = () => {
 
             <div className="bg-[#1e293b] rounded-3xl border border-white/5 p-8 min-h-[400px]">
               <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* 📡 Bandeau Score Live */}
+                  {(event as any).home_team && (event as any).away_team &&
+                    ((event as any).match_status === 'live' || (event as any).match_status === 'halftime' || (event as any).match_status === 'fulltime') && (
+                    <div className={`relative overflow-hidden rounded-2xl p-4 mb-2 text-center ${
+                      (event as any).match_status === 'live' ? 'bg-red-950/60 border border-red-500/40 shadow-lg shadow-red-500/10' :
+                      (event as any).match_status === 'halftime' ? 'bg-amber-950/60 border border-amber-500/40' :
+                      'bg-slate-800/60 border border-slate-600'
+                    }`}>
+                      {(event as any).match_status === 'live' && (
+                        <div className="absolute inset-0 rounded-2xl border-2 border-red-500/30 animate-pulse pointer-events-none" />
+                      )}
+                      <p className={`text-xs font-black uppercase tracking-widest mb-2 flex items-center justify-center gap-2 ${
+                        (event as any).match_status === 'live' ? 'text-red-400' :
+                        (event as any).match_status === 'halftime' ? 'text-amber-400' : 'text-slate-400'
+                      }`}>
+                        {(event as any).match_status === 'live' && <span className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />}
+                        {(event as any).match_status === 'live' ? '🔴 EN DIRECT' :
+                         (event as any).match_status === 'halftime' ? '⏸️ MI-TEMPS' : '✅ TERMINÉ'}
+                      </p>
+                      <div className="flex items-center justify-center gap-4">
+                        <span className="text-white font-black text-lg">{(event as any).home_team}</span>
+                        <span className={`font-black text-3xl tabular-nums px-4 py-1 rounded-xl ${
+                          (event as any).match_status === 'live' ? 'bg-red-500 text-white shadow-lg shadow-red-500/40' :
+                          (event as any).match_status === 'halftime' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'
+                        }`}>
+                          {(event as any).home_score ?? 0} — {(event as any).away_score ?? 0}
+                        </span>
+                        <span className="text-white font-black text-lg">{(event as any).away_team}</span>
+                      </div>
+                    </div>
+                  )}
                   {/* ⚽ Affiche du match (sport) */}
                   {(event as any).home_team && (event as any).away_team && (
                     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-emerald-500/30 p-6 mb-4">
