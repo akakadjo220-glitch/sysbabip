@@ -31,7 +31,7 @@ ALTER TABLE public.tickets
 -- 4. Table de présence par match pour les pass saison
 CREATE TABLE IF NOT EXISTS public.season_pass_checkins (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  ticket_id   uuid NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
+  ticket_id   text NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
   event_id    uuid NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   pass_id     uuid REFERENCES public.season_passes(id) ON DELETE SET NULL,
   scanned_at  timestamptz DEFAULT now(),
