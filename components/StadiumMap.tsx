@@ -17,13 +17,13 @@ interface StadiumMapProps {
 
 // Map zone name → SVG path id
 const ZONE_KEY_MAP: Record<string, string[]> = {
-  'Virage Nord':              ['virage-nord'],
-  'Virage Sud':               ['virage-sud'],
-  'Tribune Est':              ['tribune-est'],
-  'Tribune Ouest':            ['tribune-ouest'],
-  'Tribune Présidentielle':   ['tribune-presidentielle'],
-  'Loge VIP':                 ['loges-vip'],
-  'Zone Presse':              ['zone-presse'],
+  'Virage Nord': ['virage-nord'],
+  'Virage Sud': ['virage-sud'],
+  'Tribune Est': ['tribune-est'],
+  'Tribune Ouest': ['tribune-ouest'],
+  'Tribune Présidentielle': ['tribune-presidentielle'],
+  'Loge VIP': ['loges-vip'],
+  'Zone Presse': ['zone-presse'],
 };
 
 const getAvailability = (t: TicketZone) => {
@@ -37,10 +37,10 @@ const getAvailability = (t: TicketZone) => {
 
 const ZONE_COLORS = {
   'available': { fill: '#10b981', stroke: '#34d399', label: 'Disponible' },
-  'low':       { fill: '#f59e0b', stroke: '#fbbf24', label: 'Presque complet' },
-  'critical':  { fill: '#ef4444', stroke: '#f87171', label: 'Dernières places' },
-  'sold-out':  { fill: '#374151', stroke: '#4b5563', label: 'Complet' },
-  'inactive':  { fill: '#1e293b', stroke: '#334155', label: 'Non configuré' },
+  'low': { fill: '#f59e0b', stroke: '#fbbf24', label: 'Presque complet' },
+  'critical': { fill: '#ef4444', stroke: '#f87171', label: 'Dernières places' },
+  'sold-out': { fill: '#374151', stroke: '#4b5563', label: 'Complet' },
+  'inactive': { fill: '#1e293b', stroke: '#334155', label: 'Non configuré' },
 };
 
 export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZoneSelect }) => {
@@ -168,10 +168,7 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
       </div>
 
       <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-900/80 shadow-2xl">
-        {/* Enable horizontal scroll on mobile to keep the stadium readable */}
-        <div className="w-full overflow-x-auto overflow-y-hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="min-w-[600px] md:min-w-full">
-            <svg viewBox="0 0 560 380" width="100%" className="block mx-auto">
+        <svg viewBox="0 0 560 380" width="100%" className="block">
           <defs>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="coloredBlur" />
@@ -226,8 +223,6 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
             TERRAIN
           </text>
         </svg>
-        </div>
-        </div>
 
         {/* Tooltip on hover */}
         {hovered && zoneTicketMap[hovered] && (

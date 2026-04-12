@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Plus, Users, Calendar, ArrowRight, Save, Image as ImageIcon, MapPin, CheckCircle, Search, QrCode, Tag, LayoutDashboard, Clock, Eye, Trash2, Globe, Loader2, DollarSign, X, Check, Edit2, Shield, Activity, TrendingUp, Wallet, Banknote, MessageSquare, Send, User, Store, ShieldCheck, Key, Printer, Building2, Heart, Link, Target, XOctagon, Download, AlertTriangle, Gift, Lock, Upload, Filter, Trophy } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
@@ -2305,7 +2306,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     });
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[99999] flex justify-center items-center p-4">
       <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm pointer-events-auto" onClick={onCancel} />
       <div className="bg-slate-800 w-full max-w-3xl rounded-3xl border border-white/10 shadow-[0_0_4rem_rgba(99,102,241,0.2)] overflow-hidden relative z-10 pointer-events-auto flex flex-col max-h-[90vh]">
@@ -2716,13 +2717,14 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
             <button onClick={() => onSave(form)} className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:scale-105 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform text-lg"><CheckCircle size={20} /> {form.isEdit ? 'Enregistrer' : 'Créer l\'événement'}</button>}
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: any = { published: 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]', draft: 'bg-slate-700 text-slate-200', pending_review: 'bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.5)]', ended: 'bg-red-500 text-white' };
-  return <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border tracking-widest uppercase ${styles[status] || styles.draft}`}>{status.replace('_', ' ')}</span>;
+  const labels: any = { published: 'Publié', draft: 'Brouillon', pending_review: 'En attente', ended: 'Terminé' };
+  return <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border tracking-widest uppercase ${styles[status] || styles.draft}`}>{labels[status] || status.replace('_', ' ')}</span>;
 };
 
 const ChatbotView = ({ events, addToast }: any) => {
