@@ -168,7 +168,10 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
       </div>
 
       <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-900/80 shadow-2xl">
-        <svg viewBox="0 0 560 380" width="100%" className="block">
+        {/* Enable horizontal scroll on mobile to keep the stadium readable */}
+        <div className="w-full overflow-x-auto overflow-y-hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="min-w-[600px] md:min-w-full">
+            <svg viewBox="0 0 560 380" width="100%" className="block mx-auto">
           <defs>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="coloredBlur" />
@@ -223,6 +226,8 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
             TERRAIN
           </text>
         </svg>
+        </div>
+        </div>
 
         {/* Tooltip on hover */}
         {hovered && zoneTicketMap[hovered] && (
