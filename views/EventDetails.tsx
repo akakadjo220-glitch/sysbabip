@@ -537,31 +537,31 @@ export const EventDetails: React.FC = () => {
                           <span>🏆</span> {(event as any).competition} <span>🏆</span>
                         </p>
                       )}
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 text-center">
-                          <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center mx-auto mb-2 text-3xl">
+                      <div className="flex items-center justify-between gap-2 sm:gap-4">
+                        <div className="flex-1 flex flex-col items-center justify-start">
+                          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center mb-2 text-2xl sm:text-3xl shrink-0">
                             {(event as any).sport_type === 'football' ? '⚽' : (event as any).sport_type === 'basketball' ? '🏀' : '🏆'}
                           </div>
-                          <p className="text-white font-black text-lg leading-tight">{(event as any).home_team}</p>
-                          <p className="text-emerald-400 text-xs font-bold mt-1">🏠 Domicile</p>
+                          <p className="text-white font-black text-xs sm:text-lg leading-tight text-center break-words max-w-full">{(event as any).home_team}</p>
+                          <p className="text-emerald-400 text-[10px] sm:text-xs font-bold mt-1 text-center">🏠 Domicile</p>
                         </div>
-                        <div className="text-center shrink-0">
-                          <div className="bg-orange-500 text-white font-black text-2xl px-5 py-2 rounded-xl shadow-[0_0_20px_rgba(249,115,22,0.5)] animate-pulse">
+                        <div className="text-center shrink-0 flex flex-col items-center justify-center">
+                          <div className="bg-orange-500 text-white font-black text-lg sm:text-2xl px-3 py-1.5 sm:px-5 sm:py-2 rounded-xl shadow-[0_0_20px_rgba(249,115,22,0.5)] animate-pulse">
                             VS
                           </div>
-                          <p className="text-slate-400 text-xs mt-2">{new Date(event.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                          <p className="text-slate-400 text-[10px] sm:text-xs mt-2 whitespace-nowrap">{new Date(event.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                         </div>
-                        <div className="flex-1 text-center">
-                          <div className="w-16 h-16 rounded-full bg-blue-500/20 border-2 border-blue-500/40 flex items-center justify-center mx-auto mb-2 text-3xl">
+                        <div className="flex-1 flex flex-col items-center justify-start">
+                          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-500/20 border-2 border-blue-500/40 flex items-center justify-center mb-2 text-2xl sm:text-3xl shrink-0">
                             {(event as any).sport_type === 'football' ? '⚽' : (event as any).sport_type === 'basketball' ? '🏀' : '🏆'}
                           </div>
-                          <p className="text-white font-black text-lg leading-tight">{(event as any).away_team}</p>
-                          <p className="text-blue-400 text-xs font-bold mt-1">✈️ Visiteur</p>
+                          <p className="text-white font-black text-xs sm:text-lg leading-tight text-center break-words max-w-full">{(event as any).away_team}</p>
+                          <p className="text-blue-400 text-[10px] sm:text-xs font-bold mt-1 text-center">✈️ Visiteur</p>
                         </div>
                       </div>
-                      <div className="mt-4 flex items-center justify-center gap-2 text-slate-400 text-xs">
-                        <MapPin size={12} className="text-orange-400" />
-                        <span>{event.location}, {event.city}</span>
+                      <div className="mt-4 flex items-center justify-center gap-1.5 text-slate-400 text-[10px] sm:text-xs text-center">
+                        <MapPin size={12} className="text-orange-400 shrink-0" />
+                        <span className="truncate">{event.location}, {event.city}</span>
                       </div>
                     </div>
                   )}
