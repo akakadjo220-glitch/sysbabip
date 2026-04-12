@@ -153,14 +153,14 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
 
   return (
     <div className="w-full space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-white font-black text-base flex items-center gap-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <h4 className="text-white font-black text-base flex items-center gap-2 shrink-0">
           🏟️ Plan du Stade
         </h4>
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] sm:text-xs">
           {Object.entries(ZONE_COLORS).filter(([k]) => k !== 'inactive').map(([k, v]) => (
-            <span key={k} className="flex items-center gap-1 text-slate-400">
-              <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: v.fill, opacity: 0.7 }} />
+            <span key={k} className="flex items-center gap-1.5 text-slate-400 whitespace-nowrap">
+              <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm inline-block shrink-0" style={{ backgroundColor: v.fill, opacity: 0.7 }} />
               {v.label}
             </span>
           ))}
