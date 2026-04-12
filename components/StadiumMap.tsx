@@ -98,57 +98,48 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
           style={{ transition: 'all 0.2s ease' }}
           filter={isHovered ? 'url(#glow)' : undefined}
         />
-        {/* We adjust text Y position dynamically so overlapping zones (like Presidente over Nord) don't mix up texts */}
-        {zoneName !== 'Virage Nord' && zoneName !== 'Tribune Ouest' && zoneName !== 'Tribune Est' ? (
-          <>
-            <text
-              x={x + w / 2} y={y + h / 2 - 6}
-              textAnchor="middle" dominantBaseline="middle"
-              fill="white" fontFamily="Inter, sans-serif"
-              fontSize={w < 80 ? 9 : 11} fontWeight="700"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              {zoneName.replace('Tribune ', 'Trib. ')}
-            </text>
-            {ticket && (
+        {/* Texts */}
+        {(() => {
+          let textY1 = y + h / 2 - 6;
+          let textY2 = y + h / 2 + 9;
+
+          if (zoneName === 'Virage Nord') {
+            textY1 = y + h - 18;
+            textY2 = y + h - 6;
+          } else if (zoneName === 'Tribune Ouest') {
+            textY1 = 120;
+            textY2 = 132;
+          } else if (zoneName === 'Tribune Est') {
+            textY1 = 126;
+            textY2 = 138;
+          }
+
+          return (
+            <>
               <text
-                x={x + w / 2} y={y + h / 2 + 9}
+                x={x + w / 2} y={textY1}
                 textAnchor="middle" dominantBaseline="middle"
-                fill="rgba(255,255,255,0.8)" fontFamily="Inter, sans-serif"
-                fontSize={9}
+                fill="white" fontFamily="Inter, sans-serif"
+                fontSize={w < 80 ? 9 : 11} fontWeight="700"
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               >
-                {ticket.capacity - (ticket.sold || 0)} pl. · {ticket.price >= 1000 ? `${Math.round(ticket.price / 1000)}k` : ticket.price} FCFA
+                {zoneName.replace('Tribune ', 'Trib. ')}
               </text>
-            )}
-          </>
-        ) : (
-          /* For background zones that have sub-zones layered on top, we shift their text to not overlap */
-          <>
-            <text
-              x={x + w / 2}
-              y={zoneName === 'Virage Nord' ? y + h - 14 : zoneName === 'Tribune Ouest' ? y + 25 : zoneName === 'Tribune Est' ? y + 25 : y + h / 2 - 6}
-              textAnchor="middle" dominantBaseline="middle"
-              fill="white" fontFamily="Inter, sans-serif"
-              fontSize={w < 80 ? 9 : 11} fontWeight="700"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              {zoneName.replace('Tribune ', 'Trib. ')}
-            </text>
-            {ticket && (
-              <text
-                x={x + w / 2}
-                y={zoneName === 'Virage Nord' ? y + h - 4 : zoneName === 'Tribune Ouest' ? y + 38 : zoneName === 'Tribune Est' ? y + 38 : y + h / 2 + 9}
-                textAnchor="middle" dominantBaseline="middle"
-                fill="rgba(255,255,255,0.8)" fontFamily="Inter, sans-serif"
-                fontSize={9}
-                style={{ pointerEvents: 'none', userSelect: 'none' }}
-              >
-                {ticket.capacity - (ticket.sold || 0)} pl. · {ticket.price >= 1000 ? `${Math.round(ticket.price / 1000)}k` : ticket.price} FCFA
-              </text>
-            )}
-          </>
-        )}
+              {ticket && (
+                <text
+                  x={x + w / 2} y={textY2}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fill="rgba(255,255,255,0.8)" fontFamily="Inter, sans-serif"
+                  fontSize={9}
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  {ticket.capacity - (ticket.sold || 0)} pl. · {ticket.price >= 1000 ? `${Math.round(ticket.price / 1000)}k` : ticket.price} FCFA
+                </text>
+              )}
+            </>
+          );
+        })()}
+
         {inCart && (
           <circle cx={x + w - 10} cy={y + 10} r={8} fill="#f97316" stroke="white" strokeWidth={1.5}>
             <animate attributeName="r" values="7;9;7" dur="1.5s" repeatCount="indefinite" />
@@ -211,7 +202,7 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
 
           {/* ─── Zones Tribunes ─── */}
           {/* Virage Nord (haut) */}
-          <ZoneRect zoneName="Virage Nord" x={160} y={12} w={240} h={62} />
+          <ZoneRect zoneName="Virage Nord" x={160} y={12} w={240} h={76} />
           {/* Virage Sud (bas) */}
           <ZoneRect zoneName="Virage Sud" x={160} y={306} w={240} h={62} />
           {/* Tribune Ouest (gauche) */}
@@ -221,9 +212,10 @@ export const StadiumMap: React.FC<StadiumMapProps> = ({ ticketTypes, cart, onZon
           {/* Tribune Présidentielle (haut-centre overlay) */}
           <ZoneRect zoneName="Tribune Présidentielle" x={200} y={18} w={160} h={44} rx={6} />
           {/* Loges VIP (gauche, overlay) */}
-          <ZoneRect zoneName="Loge VIP" x={18} y={142} w={76} h={96} rx={6} />
+          <ZoneRect zoneName="Loge VIP" x={18} y={146} w={76} h={96} rx={6} />
           {/* Zone Presse (droite, overlay) */}
           <ZoneRect zoneName="Zone Presse" x={466} y={158} w={70} h={64} rx={6} />
+
 
           {/* Label centre terrain */}
           <text x="280" y="193" textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="11"
