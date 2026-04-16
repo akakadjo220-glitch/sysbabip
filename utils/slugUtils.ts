@@ -4,11 +4,11 @@ import { generateSlug } from '../constants';
 /**
  * Generates a unique slug for a given table by checking against existing records.
  * @param title The base title to convert to a slug.
- * @param tableName 'events' or 'fundraising_campaigns'
+ * @param tableName 'events', 'fundraising_campaigns', or 'tournaments'
  * @param existingId If updating an existing record, pass its ID to ignore it in collision checks.
  * @returns A guaranteed unique slug (e.g. "my-title" or "my-title-1")
  */
-export const getUniqueSlug = async (title: string, tableName: 'events' | 'fundraising_campaigns', existingId?: string): Promise<string> => {
+export const getUniqueSlug = async (title: string, tableName: 'events' | 'fundraising_campaigns' | 'tournaments', existingId?: string): Promise<string> => {
   const baseSlug = generateSlug(title) || 'sans-titre';
   let slug = baseSlug;
   let counter = 1;

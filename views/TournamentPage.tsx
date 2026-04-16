@@ -118,11 +118,16 @@ export const TournamentPage: React.FC = () => {
       {/* Hero */}
       <div className="relative overflow-hidden min-h-[340px] flex flex-col justify-end p-6 md:p-12">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-emerald-950/40 to-slate-950" />
-        {tournament.logo_url && (
+        
+        {tournament.banner_url ? (
+          <img src={tournament.banner_url} alt={tournament.name}
+            className="absolute inset-0 w-full h-full object-cover opacity-50" />
+        ) : tournament.logo_url ? (
           <img src={tournament.logo_url} alt={tournament.name}
             className="absolute inset-0 w-full h-full object-cover opacity-10 blur-sm" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent" />
+        ) : null}
+        
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/80 to-transparent" />
 
         <button onClick={() => navigate(-1)}
           className="absolute top-6 left-6 z-10 bg-white/10 backdrop-blur-md p-3 rounded-full text-white hover:bg-white/20 transition border border-white/10">

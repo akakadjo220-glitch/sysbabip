@@ -4848,8 +4848,34 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
   const [selectedTournament, setSelectedTournament] = React.useState<any>(null);
   const [linkEventId, setLinkEventId] = React.useState('');
   const [linkingId, setLinkingId] = React.useState<string | null>(null);
-  const emptyForm = { name: '', sport_type: 'football', competition: '', start_date: '', end_date: '', logo_url: '', description: '' };
+  const emptyForm = { name: '', sport_type: 'football', competition: '', start_date: '', end_date: '', logo_url: '', banner_url: '', description: '' };
   const [form, setForm] = React.useState(emptyForm);
+
+  // Upload states
+  const [uploadingLogo, setUploadingLogo] = React.useState(false);
+  const [uploadingBanner, setUploadingBanner] = React.useState(false);
+  const logoRef = React.useRef<HTMLInputElement>(null);
+  const bannerRef = React.useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (file: File, type: 'logo_url' | 'banner_url') => {
+    if (!file.type.startsWith('image/')) { addToast('Format invalide. Choisissez une image.', 'error'); return; }
+    if (file.size > 5 * 1024 * 1024) { addToast('Image trop lourde (max 5 Mo).', 'error'); return; }
+    
+    type === 'logo_url' ? setUploadingLogo(true) : setUploadingBanner(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const filename = `tournaments/${type}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('events').upload(filename, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('events').getPublicUrl(filename);
+      setForm((prev: any) => ({ ...prev, [type]: urlData.publicUrl }));
+      addToast('Image uploadée !', 'success');
+    } catch (err: any) {
+      addToast('Erreur upload: ' + err.message, 'error');
+    } finally {
+      type === 'logo_url' ? setUploadingLogo(false) : setUploadingBanner(false);
+    }
+  };
 
   // Score live state
   const [scoreEditing, setScoreEditing] = React.useState<string | null>(null);
@@ -4984,7 +5010,7 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
         <div className="bg-slate-900/80 border border-emerald-500/30 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
           <h3 className="text-white font-bold text-lg">🏆 Créer un Tournoi</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Nom *</span>
+            <label className="block sm:col-span-2"><span className="text-slate-400 text-xs font-bold mb-1 block">Nom *</span>
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" placeholder="Ex: Ligue U20 Abidjan 2026" /></label>
             <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Sport</span>
               <select value={form.sport_type} onChange={e => setForm({ ...form, sport_type: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500 appearance-none">
@@ -4994,8 +5020,31 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
               </select></label>
             <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Compétition</span>
               <input value={form.competition} onChange={e => setForm({ ...form, competition: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" placeholder="Ex: AFCON 2026, Ligue 1 CI..." /></label>
-            <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Logo (URL)</span>
-              <input value={form.logo_url} onChange={e => setForm({ ...form, logo_url: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" placeholder="https://..." /></label>
+            
+            <div className="block">
+              <span className="text-slate-400 text-xs font-bold mb-1 block">Logo (Carré recommandé)</span>
+              <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f, 'logo_url'); }} />
+              <div onClick={() => logoRef.current?.click()} className="relative cursor-pointer rounded-xl border-2 border-dashed border-slate-700 hover:border-emerald-500/60 hover:bg-emerald-500/5 transition-all overflow-hidden h-32 flex items-center justify-center">
+                {uploadingLogo ? <Loader2 size={24} className="animate-spin text-emerald-400" /> : form.logo_url ? (
+                  <img src={form.logo_url} alt="Logo" className="h-full w-full object-contain p-2" />
+                ) : (
+                  <div className="text-center"><Plus size={20} className="mx-auto text-slate-500 mb-1" /><span className="text-xs text-slate-500">Ajouter un logo</span></div>
+                )}
+              </div>
+            </div>
+
+            <div className="block">
+              <span className="text-slate-400 text-xs font-bold mb-1 block">Bannière (Paysage recommandé)</span>
+              <input ref={bannerRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f, 'banner_url'); }} />
+              <div onClick={() => bannerRef.current?.click()} className="relative cursor-pointer rounded-xl border-2 border-dashed border-slate-700 hover:border-emerald-500/60 hover:bg-emerald-500/5 transition-all overflow-hidden h-32 flex items-center justify-center">
+                {uploadingBanner ? <Loader2 size={24} className="animate-spin text-emerald-400" /> : form.banner_url ? (
+                  <img src={form.banner_url} alt="Bannière" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="text-center"><Plus size={20} className="mx-auto text-slate-500 mb-1" /><span className="text-xs text-slate-500">Ajouter une bannière</span></div>
+                )}
+              </div>
+            </div>
+
             <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Date début</span>
               <input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500" /></label>
             <label className="block"><span className="text-slate-400 text-xs font-bold mb-1 block">Date fin</span>
