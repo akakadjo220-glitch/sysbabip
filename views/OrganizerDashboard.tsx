@@ -1338,8 +1338,8 @@ const MarketingView = ({ transactions }: any) => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[500px]">
-        <div className="lg:col-span-3 bg-slate-900/50 border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:h-[500px]">
+        <div className="lg:col-span-3 h-[400px] lg:h-auto bg-slate-900/50 border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
           <MapContainer center={[5.345317, -4.024429]} zoom={12} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }} className="z-10">
             <MapResizer />
             <TileLayer
