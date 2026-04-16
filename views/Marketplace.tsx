@@ -155,86 +155,63 @@ export const Marketplace: React.FC = () => {
         description="Découvrez et réservez instantanément vos billets d'événements (concerts, festivals, sports). Transactions 100% sécurisées et anti-fraude. Réservez ici ✓"
         keywords="billetterie afrique, achat ticket concert, événements sécurisés, billets sport, réservation en ligne"
       />
-      {/* Immersive Hero Section */}
-      <section className="relative rounded-3xl overflow-hidden min-h-[400px] md:min-h-[500px] flex flex-col justify-end p-6 md:p-12 border border-white/10 shadow-2xl group">
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=2070&auto=format&fit=crop"
-            alt="Hero"
-            className="w-full h-full object-cover transition-transform duration-[20s] group-hover:scale-110"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/70 to-transparent" />
+      {/* 📢 Main Hero Carousel Area */}
+      <section className="relative flex flex-col gap-4 animate-in slide-in-from-bottom-4 fade-in duration-700 mt-2">
+        {/* Top Pills */}
+        <div className="flex flex-wrap items-center gap-2 md:gap-3 px-2 z-20">
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-300 text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md">
+            La billetterie #1 en Afrique
+          </div>
+          <button
+            onClick={() => setUserCountry('')}
+            className="inline-flex items-center gap-1.5 md:gap-2 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-colors"
+          >
+            <Globe size={12} />
+            {userCountry === 'Global' ? 'Monde Entier' : userCountry}
+          </button>
+          <button
+            onClick={() => navigate('/organizer/login')}
+            className="inline-flex items-center gap-1.5 md:gap-2 px-4 py-1.5 rounded-full bg-orange-600 hover:bg-orange-500 border border-orange-400 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-all shadow-lg shadow-orange-500/30"
+          >
+            Créer votre événement
+          </button>
         </div>
 
-        <div className="relative z-20 max-w-4xl space-y-4 md:space-y-6 animate-in slide-in-from-bottom-10 fade-in duration-700">
-          <div className="flex flex-wrap items-center gap-2 md:gap-3">
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-300 text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md">
-              La billetterie #1 en Afrique
-            </div>
-            {/* Change Country Button */}
-            <button
-              onClick={() => setUserCountry('')} // Resetting country triggers the selector
-              className="inline-flex items-center gap-1.5 md:gap-2 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-colors"
-            >
-              <Globe size={12} />
-              {userCountry === 'Global' ? 'Monde Entier' : userCountry}
-            </button>
+        {/* The Carousel */}
+        <div className="w-full shadow-2xl relative z-10">
+          <AdCarousel />
+        </div>
 
-            {/* CTA Organizer */}
-            <button
-              onClick={() => navigate('/organizer/login')}
-              className="inline-flex items-center gap-1.5 md:gap-2 px-4 py-1.5 rounded-full bg-orange-600 hover:bg-orange-500 border border-orange-400 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-all shadow-lg shadow-orange-500/30"
-            >
-              Créer votre événement
-            </button>
+        {/* Floating Search Dock (Below Carousel) */}
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-2 rounded-2xl md:rounded-full flex flex-col sm:flex-row gap-2 mt-2 md:mt-4 z-30 mx-4 md:mx-auto md:w-11/12 lg:w-3/4 shadow-2xl relative">
+          <div className="flex-1 relative w-full sm:w-auto">
+            <Search className="absolute left-4 top-3.5 text-slate-300" size={20} />
+            <input
+              type="text"
+              placeholder="Quel événement cherchez-vous ?"
+              className="w-full bg-slate-900/60 border border-white/10 rounded-xl md:rounded-full pl-12 pr-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm md:text-base"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tight leading-none text-white drop-shadow-lg">
-            Vivez l'instant <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-rose-400 shimmer-text bg-[length:200%_auto]">
-              Inoubliable
-            </span>
-          </h1>
-          <p className="text-lg md:text-xl text-slate-200 font-light max-w-2xl drop-shadow-md">
-            Accédez aux meilleurs événements {userCountry !== 'Global' ? `en ${userCountry}` : 'partout dans le monde'}. De l'effervescence des concerts live aux conférences inspirantes, garantissez votre place en quelques clics via notre billetterie 100% sécurisée.
-          </p>
-
-          {/* Floating Search Dock */}
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-2 rounded-2xl md:rounded-full flex flex-col sm:flex-row gap-2 mt-6 md:mt-8 shadow-2xl max-w-3xl">
-            <div className="flex-1 relative w-full sm:w-auto">
-              <Search className="absolute left-4 top-3.5 text-slate-300" size={20} />
-              <input
-                type="text"
-                placeholder="Quel événement cherchez-vous ?"
-                className="w-full bg-slate-900/60 border border-white/10 rounded-xl md:rounded-full pl-12 pr-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm md:text-base"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="relative min-w-[140px] w-full sm:w-auto">
+              <MapPin className="absolute left-3 top-3.5 text-slate-300" size={18} />
+              <select
+                className="w-full bg-slate-900/60 border border-white/10 rounded-xl md:rounded-full pl-10 pr-4 py-3 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm md:text-base"
+                value={cityFilter}
+                onChange={(e) => setCityFilter(e.target.value)}
+              >
+                {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
+              </select>
             </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <div className="relative min-w-[140px] w-full sm:w-auto">
-                <MapPin className="absolute left-3 top-3.5 text-slate-300" size={18} />
-                <select
-                  className="w-full bg-slate-900/60 border border-white/10 rounded-xl md:rounded-full pl-10 pr-4 py-3 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm md:text-base"
-                  value={cityFilter}
-                  onChange={(e) => setCityFilter(e.target.value)}
-                >
-                  {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
-                </select>
-              </div>
-              <button className="w-full sm:w-auto bg-orange-600 text-white px-8 py-3 rounded-xl md:rounded-full font-bold transition-all flex items-center justify-center text-sm md:text-base hover:scale-110 active:scale-95 animate-glow-pulse">
-                Rechercher
-              </button>
-            </div>
+            <button className="w-full sm:w-auto bg-orange-600 text-white px-8 py-3 rounded-xl md:rounded-full font-bold transition-all flex items-center justify-center text-sm md:text-base hover:scale-110 active:scale-95 animate-glow-pulse">
+              Rechercher
+            </button>
           </div>
         </div>
       </section>
-
-      {/* 📢 Ad Banners Carousel */}
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: '200ms' }}>
-        <AdCarousel />
-      </div>
 
       {/* Control Bar */}
       <div className="sticky top-0 z-30 py-3 md:py-4 bg-[#0f172a]/95 backdrop-blur-xl border-b border-white/10 -mx-4 px-4 md:mx-0 md:px-0 md:rounded-xl md:border-none md:bg-transparent md:backdrop-blur-none flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl md:shadow-none">
