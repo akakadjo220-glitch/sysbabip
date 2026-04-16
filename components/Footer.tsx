@@ -67,21 +67,21 @@ export const Footer = () => {
             </div>
           </div>
 
-          {/* Colonne 2 : La Maison */}
+          {/* Colonne 2 : Babipass */}
           <div>
             <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
               <span className="w-8 h-1 bg-orange-500 rounded-full inline-block"></span>
-              La Maison
+              Babipass
             </h3>
             <ul className="space-y-4">
               <li>
                 <Link to="/about" className="text-slate-400 hover:text-orange-400 transition-colors text-sm flex items-center gap-2">
-                   Notre Histoire
+                   À propos
                 </Link>
               </li>
               <li>
                 <Link to="/faq" className="text-slate-400 hover:text-orange-400 transition-colors text-sm flex items-center gap-2">
-                   Le Palabre (FAQ)
+                   FAQ
                 </Link>
               </li>
               <li>
@@ -92,11 +92,11 @@ export const Footer = () => {
             </ul>
           </div>
 
-          {/* Colonne 3 : La Chefferie (Légal) */}
+          {/* Colonne 3 : Légal */}
           <div>
             <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
               <span className="w-8 h-1 bg-indigo-500 rounded-full inline-block"></span>
-              La Chefferie
+              Légal
             </h3>
             <ul className="space-y-4">
               <li>
@@ -106,7 +106,7 @@ export const Footer = () => {
               </li>
               <li>
                 <Link to="/privacy" className="text-slate-400 hover:text-indigo-400 transition-colors text-sm">
-                  Sécurité & Données
+                  Confidentialité & Données
                 </Link>
               </li>
               <li>
@@ -117,11 +117,11 @@ export const Footer = () => {
             </ul>
           </div>
 
-          {/* Colonne 4 : Contact Info */}
+          {/* Colonne 4 : Support */}
           <div>
             <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
               <span className="w-8 h-1 bg-emerald-500 rounded-full inline-block"></span>
-              Assistance
+              Support
             </h3>
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
@@ -150,7 +150,7 @@ export const Footer = () => {
           </p>
           <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
             <span className="flex items-center gap-1">
-              Fait avec ❤️ sous le soleil d'Afrique
+              Babipass — La billetterie #1 en Afrique 🌍
             </span>
           </div>
         </div>

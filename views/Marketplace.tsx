@@ -158,7 +158,7 @@ export const Marketplace: React.FC = () => {
       {/* 📢 Main Hero Carousel Area */}
       <section className="relative flex flex-col gap-4 animate-in slide-in-from-bottom-4 fade-in duration-700 mt-2">
         {/* Top Pills */}
-        <div className="flex flex-wrap items-center gap-2 md:gap-3 px-2 z-20">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3 px-2 z-20 pt-2 md:pt-8">
           <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-300 text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md">
             La billetterie #1 en Afrique
           </div>
@@ -174,6 +174,13 @@ export const Marketplace: React.FC = () => {
             className="inline-flex items-center gap-1.5 md:gap-2 px-4 py-1.5 rounded-full bg-orange-600 hover:bg-orange-500 border border-orange-400 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-all shadow-lg shadow-orange-500/30"
           >
             Créer votre événement
+          </button>
+          <button
+            onClick={() => navigate('/tickets')}
+            className="inline-flex items-center gap-1.5 md:gap-2 px-4 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-all shadow-lg shadow-rose-500/30"
+          >
+            <Ticket size={12} />
+            Mes Billets
           </button>
         </div>
 
