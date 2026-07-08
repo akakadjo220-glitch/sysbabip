@@ -1,5 +1,6 @@
 import { EMAIL_TEMPLATES } from '../constants';
 import { getPlatformSetting } from '../utils/platformSettings';
+import { SERVER_URL } from '../config';
 
 export const EmailService = {
   /**
@@ -16,7 +17,7 @@ export const EmailService = {
       console.log(`[EmailService] Preparing to use SMTP: ${smtpConfig.host}:${smtpConfig.port || 465}`);
       console.log(`[EmailService] Sending to: ${email}`);
 
-      const relayUrl = 'https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/send-email';
+      const relayUrl = `${SERVER_URL}/api/send-email`;
 
       const response = await fetch(relayUrl, {
         method: 'POST',

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X, Send, Sparkles, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useLocation } from 'react-router-dom';
+import { SERVER_URL } from '../config';
 
 export const PublicChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -53,7 +53,7 @@ export const PublicChatWidget = () => {
       // via WhatsAppAIBot.handleWebChatMessage()
       const pageContext = `Le visiteur est sur la page: ${document.title} (${window.location.pathname})`;
       
-      const response = await fetch('https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/chat', {
+      const response = await fetch(`${SERVER_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

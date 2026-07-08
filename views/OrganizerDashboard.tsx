@@ -8,6 +8,7 @@ import { formatCurrency } from '../constants';
 import { Event } from '../types';
 import { getPlatformSettings, getPlatformSetting } from '../utils/platformSettings';
 import { supabase } from '../supabaseClient';
+import { SERVER_URL } from '../config';
 import { Pagination } from '../components/Pagination';
 import { useAuth } from '../context/AuthContext';
 import { MapPicker } from '../components/MapPicker';
@@ -240,7 +241,7 @@ export const OrganizerDashboard: React.FC = () => {
       fetchProfile();
 
       // 2. Request a unique, secure session from the backend
-      const response = await fetch('https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/didit/session', {
+      const response = await fetch(`${SERVER_URL}/api/didit/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

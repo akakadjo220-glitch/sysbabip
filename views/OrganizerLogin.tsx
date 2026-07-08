@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Phone, ArrowRight, Loader2, Calendar, ShieldCheck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { SERVER_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { EmailService } from '../services/EmailService';
@@ -246,7 +247,7 @@ export const OrganizerLogin = () => {
             const formattedIdentifier = resolvedResetEmail || getFormattedIdentifier();
             console.log('[ResetConfirm] Email utilisé:', formattedIdentifier);
 
-            const res = await fetch('https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io/api/auth/reset-password', {
+            const res = await fetch(`${SERVER_URL}/api/auth/reset-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: formattedIdentifier, otp_code: otpCode, new_password: password })
@@ -386,7 +387,7 @@ export const OrganizerLogin = () => {
 
                 <div className="relative z-10 p-12 max-w-2xl text-center space-y-6">
                     <div className="inline-flex items-center justify-center w-36 h-36 bg-orange-500/10 rounded-3xl border-2 border-orange-400/30 backdrop-blur-xl shadow-2xl mb-6 overflow-hidden">
-                        <img src="https://supabasekong-l4cw40oks4kso84ko44ogkkw.188.241.58.227.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass Logo" className="w-full h-full object-contain p-2" />
+                        <img src="https://supabasekong-pb8ykq5lxueompxiu9p5ust2.51.255.162.88.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass Logo" className="w-full h-full object-contain p-2" />
                     </div>
                     <h1 className="text-5xl font-black text-white leading-tight drop-shadow-2xl">
                         Gérez vos événements <br />avec <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400">Babipass Pro</span>
@@ -403,7 +404,7 @@ export const OrganizerLogin = () => {
 
                     <div className="flex flex-col items-center mb-2">
                         <div className="w-28 h-28 md:w-24 md:h-24 rounded-2xl overflow-hidden shadow-lg shadow-orange-500/20 mb-3">
-                            <img src="https://supabasekong-l4cw40oks4kso84ko44ogkkw.188.241.58.227.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass" className="w-full h-full object-contain" />
+                            <img src="https://supabasekong-pb8ykq5lxueompxiu9p5ust2.51.255.162.88.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass" className="w-full h-full object-contain" />
                         </div>
                         <h2 className="text-3xl font-bold text-white mb-1">
                             {isResetMode ? "Mot de passe oublié" : isSignUp ? "Créer un compte" : "Espace Organisateur"}

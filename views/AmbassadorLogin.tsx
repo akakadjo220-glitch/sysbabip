@@ -5,8 +5,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { getCountryDialCode } from '../utils/countryCodes';
-
-const SERVER_URL = 'https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io';
+import { SERVER_URL } from '../config';
 
 export const AmbassadorLogin = () => {
     const [searchParams] = useSearchParams();

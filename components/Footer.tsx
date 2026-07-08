@@ -45,7 +45,7 @@ export const Footer = () => {
           <div className="space-y-6">
             <Link to="/" className="group flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
-                <img src="https://supabasekong-l4cw40oks4kso84ko44ogkkw.188.241.58.227.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass" className="w-full h-full object-contain" />
+                <img src="https://supabasekong-pb8ykq5lxueompxiu9p5ust2.51.255.162.88.sslip.io/storage/v1/object/public/events/verso.png" alt="Babipass" className="w-full h-full object-contain" />
               </div>
               <span className="font-black text-2xl tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
                 Babipass

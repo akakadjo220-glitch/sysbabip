@@ -1,20 +1,40 @@
-# Setup optimal pour Coolify / Docker
-FROM node:20-alpine
+# Étape 1 : Construction de l'application React/Vite
+FROM node:20-alpine AS builder
 
-# Crée le dossier app
 WORKDIR /app
 
-# Copie les fichiers de dépendances
+# Copie des fichiers de dépendances et installation (y compris devDependencies pour tsc et vite)
 COPY package*.json ./
+RUN npm install
 
-# Installe les dépendances de prod
-RUN npm install --production
-
-# Copie le code source
+# Copie du reste du code
 COPY . .
 
-# Expose le port par défaut (Express écoute sur 3001 ou PORT)
-EXPOSE 3001
+# Arguments de construction pour injecter les variables d'environnement dans le bundle
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_SERVER_URL
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-# Démarre l'app
-CMD ["node", "index.js"]
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV VITE_SERVER_URL=$VITE_SERVER_URL
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+# Générer le build de production (dossier dist)
+RUN npm run build
+
+# Étape 2 : Serveur Nginx de production
+FROM nginx:alpine
+
+# Copie du dossier de build Nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copie de la configuration Nginx personnalisée
+COPY nginx.template.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

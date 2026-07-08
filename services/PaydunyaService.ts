@@ -3,8 +3,7 @@
  * Sends payment requests to the secure Express proxy server.
  * Secret keys never leave the server.
  */
-
-const SERVER_URL = 'https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io';
+import { SERVER_URL } from '../config';
 
 export const PaydunyaService = {
     processMobilePayment: async ({ phone, amount, provider }: { phone: string; amount: number; provider: string }) => {

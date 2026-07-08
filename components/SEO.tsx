@@ -13,7 +13,7 @@ interface SEOProps {
 export const SEO: React.FC<SEOProps> = ({
     title = "Babipass - La Billetterie de Demain",
     description = "Babipass est la plateforme africaine premium pour découvrir, acheter et revendre vos billets d'événements en toute sécurité.",
-    image = "https://supabasekong-l4cw40oks4kso84ko44ogkkw.188.241.58.227.sslip.io/storage/v1/object/public/events/verso.png",
+    image = "https://supabasekong-pb8ykq5lxueompxiu9p5ust2.51.255.162.88.sslip.io/storage/v1/object/public/events/verso.png",
     url = "https://afritix.com",
     type = "website",
     keywords = "billetterie afrique, tickets eventi africain, concert abidjan, dakar"

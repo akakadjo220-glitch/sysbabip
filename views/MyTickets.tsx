@@ -8,10 +8,8 @@ import { generateTicketPDF } from '../utils/pdfGenerator';
 import QRCode from 'qrcode';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-
 import { useNavigate } from 'react-router-dom';
-
-const SERVER_URL = 'https://qg4skow800g8kookksgswsg4.188.241.58.227.sslip.io';
+import { SERVER_URL } from '../config';
 
 export const MyTickets: React.FC = () => {
   const { user } = useAuth();
