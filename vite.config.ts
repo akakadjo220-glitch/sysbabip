@@ -38,6 +38,23 @@ export default defineConfig(({ mode }) => {
           'Cross-Origin-Resource-Policy': 'cross-origin',
         }
       },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules')) {
+                if (id.includes('mapbox-gl')) {
+                  return 'mapbox';
+                }
+                if (id.includes('jspdf') || id.includes('html2canvas')) {
+                  return 'pdf-generator';
+                }
+                return 'vendor';
+              }
+            }
+          }
+        }
+      },
       plugins: [react(), basicSsl()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
