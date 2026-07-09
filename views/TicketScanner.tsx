@@ -70,6 +70,8 @@ export const TicketScanner: React.FC = () => {
   const [syncing, setSyncing]                 = useState(false);
   const [cacheSize, setCacheSize]             = useState(0);
   const [lastSyncInfo, setLastSyncInfo]       = useState('');
+  const [devicesList, setDevicesList]         = useState<any[]>([]);
+  const [currentDeviceIndex, setCurrentDeviceIndex] = useState<number>(0);
 
   // Keep a stable ref for processToken to use in camera/NFC callbacks
   const processTokenRef = useRef<((token: string) => Promise<void>) | null>(null);
@@ -178,41 +180,53 @@ export const TicketScanner: React.FC = () => {
             
             // 1. Récupérer la liste des caméras physiques pour cibler précisément la caméra arrière
             const devices = await Html5Qrcode.getCameras().catch(() => [] as any[]);
+            if (mounted) {
+              setDevicesList(devices);
+            }
             
             let selectedCameraId: any = { facingMode: 'environment' };
             
             if (devices && devices.length > 0) {
-              // Étape A : Trouver les caméras arrière explicites
-              const rearCameras = devices.filter(d => {
-                const label = (d.label || '').toLowerCase();
-                return label.includes('back') || 
-                       label.includes('rear') || 
-                       label.includes('arrière') || 
-                       label.includes('arriere') || 
-                       label.includes('environment') || 
-                       label.includes('environnement');
-              });
-              
-              if (rearCameras.length > 0) {
-                // On prend la première caméra arrière identifiée (la principale)
-                selectedCameraId = rearCameras[0].id;
+              // Si nous avons déjà un index de caméra sélectionné (notamment via changement manuel)
+              if (currentDeviceIndex >= 0 && currentDeviceIndex < devices.length) {
+                selectedCameraId = devices[currentDeviceIndex].id;
               } else {
-                // Étape B : Exclure les caméras selfie/frontales
-                const nonFrontCameras = devices.filter(d => {
+                // Trouver la caméra arrière par défaut
+                const rearCameras = devices.filter(d => {
                   const label = (d.label || '').toLowerCase();
-                  return d.label && 
-                         !label.includes('front') && 
-                         !label.includes('selfie') && 
-                         !label.includes('avant') && 
-                         !label.includes('user');
+                  return label.includes('back') || 
+                         label.includes('rear') || 
+                         label.includes('arrière') || 
+                         label.includes('arriere') || 
+                         label.includes('environment') || 
+                         label.includes('environnement');
                 });
                 
-                if (nonFrontCameras.length > 0) {
-                  selectedCameraId = nonFrontCameras[0].id;
+                let defaultIndex = 0;
+                if (rearCameras.length > 0) {
+                  defaultIndex = devices.findIndex(d => d.id === rearCameras[0].id);
                 } else {
-                  // Étape C : Par défaut, si pas d'info, on prend la dernière caméra (qui est souvent la caméra arrière principale)
-                  selectedCameraId = devices[devices.length - 1].id;
+                  // Exclure les caméras frontales/selfie
+                  const nonFrontCameras = devices.filter(d => {
+                    const label = (d.label || '').toLowerCase();
+                    return d.label && 
+                           !label.includes('front') && 
+                           !label.includes('selfie') && 
+                           !label.includes('avant') && 
+                           !label.includes('user');
+                  });
+                  
+                  if (nonFrontCameras.length > 0) {
+                    defaultIndex = devices.findIndex(d => d.id === nonFrontCameras[0].id);
+                  } else {
+                    defaultIndex = devices.length - 1; // Prendre la dernière par défaut
+                  }
                 }
+                
+                if (mounted) {
+                  setCurrentDeviceIndex(defaultIndex);
+                }
+                selectedCameraId = devices[defaultIndex]?.id || { facingMode: 'environment' };
               }
             }
             
@@ -292,7 +306,7 @@ export const TicketScanner: React.FC = () => {
       };
       cleanup();
     };
-  }, [cameraActive]);
+  }, [cameraActive, currentDeviceIndex]);
 
   // ─── NFC ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -652,7 +666,20 @@ export const TicketScanner: React.FC = () => {
                     <button type="submit" disabled={!manualToken.trim() || scanning} className="bg-emerald-600 hover:bg-emerald-500 text-white p-3 rounded-xl disabled:opacity-50 transition-colors"><KeyRound size={20} /></button>
                   </form>
                 </div>
-                <button onClick={() => setCameraActive(false)} className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 bg-slate-800 text-white px-6 py-2 rounded-full font-bold shadow-lg border border-slate-700">Fermer Caméra</button>
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+                  {devicesList.length > 1 && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setCurrentDeviceIndex(prev => (prev + 1) % devicesList.length);
+                      }} 
+                      className="bg-orange-600 hover:bg-orange-500 text-white px-5 py-2.5 rounded-full font-bold shadow-lg border border-orange-500 flex items-center gap-2 text-sm whitespace-nowrap transition-colors"
+                    >
+                      <RefreshCw size={16} /> Changer Caméra
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setCameraActive(false)} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-full font-bold shadow-lg border border-slate-700 text-sm whitespace-nowrap transition-colors">Fermer Caméra</button>
+                </div>
               </>
             )}
 
