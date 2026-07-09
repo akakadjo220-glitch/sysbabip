@@ -387,7 +387,7 @@ export const OrganizerLogin = () => {
 
                 <div className="relative z-10 p-12 max-w-2xl text-center space-y-6">
                     <div className="inline-flex items-center justify-center w-36 h-36 bg-orange-500/10 rounded-3xl border-2 border-orange-400/30 backdrop-blur-xl shadow-2xl mb-6 overflow-hidden">
-                        <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass Logo" className="w-full h-full object-contain p-2" />
+                        <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass Logo" className="w-full h-full object-cover scale-[1.35]" />
                     </div>
                     <h1 className="text-5xl font-black text-white leading-tight drop-shadow-2xl">
                         Gérez vos événements <br />avec <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400">Babipass Pro</span>
@@ -404,7 +404,7 @@ export const OrganizerLogin = () => {
 
                     <div className="flex flex-col items-center mb-2">
                         <div className="w-28 h-28 md:w-24 md:h-24 rounded-2xl overflow-hidden shadow-lg shadow-orange-500/20 mb-3">
-                            <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass" className="w-full h-full object-contain" />
+                            <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass" className="w-full h-full object-cover scale-[1.35]" />
                         </div>
                         <h2 className="text-3xl font-bold text-white mb-1">
                             {isResetMode ? "Mot de passe oublié" : isSignUp ? "Créer un compte" : "Espace Organisateur"}
