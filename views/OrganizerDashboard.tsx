@@ -3560,6 +3560,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
   const [quantity, setQuantity] = useState<number>(50);
   const [columns, setColumns] = useState<number>(3);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [maxBatchLimit, setMaxBatchLimit] = useState<number>(5000);
 
   // KYC States
   const [kycFile, setKycFile] = useState<File | null>(null);
@@ -3668,10 +3669,14 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       if (selectedEventId) {
         // Strict global rule: always use the platform setting for physical tickets
         const globalPhysicalRate = await getPlatformSetting('default_physical_commission_rate');
+        const limitVal = await getPlatformSetting('max_physical_tickets_per_batch');
 
         // Fallback to 8% only if no global setting exists
         const raw = globalPhysicalRate !== null ? Number(globalPhysicalRate) : 8;
         setCommissionRate(raw > 1 ? raw / 100 : raw);
+        if (limitVal !== null) {
+          setMaxBatchLimit(Number(limitVal));
+        }
       }
 
       // 3. Refresh analytics
@@ -3758,8 +3763,8 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       addToast("Veuillez remplir tous les champs correctement.", "error");
       return;
     }
-    if (quantity > 200) {
-      addToast("Limité à 200 billets par génération simultanée (Performances Navigateur).", "error");
+    if (quantity > maxBatchLimit) {
+      addToast(`Limité à ${maxBatchLimit} billets par génération simultanée (Performances Navigateur).`, "error");
       return;
     }
 
@@ -4055,7 +4060,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                   required
                   type="number"
                   min="1"
-                  max="5000"
+                  max={maxBatchLimit}
                   value={quantity}
                   onChange={e => setQuantity(Number(e.target.value))}
                   className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none"

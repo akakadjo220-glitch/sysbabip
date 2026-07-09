@@ -2100,6 +2100,7 @@ const SettingsTab = () => {
 
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(EXCHANGE_RATES);
   const [globalRates, setGlobalRates] = useState({ commission: 8, advance: 30, physical: 2.0, fundraising: 5.0 });
+  const [maxPhysicalTicketsPerBatch, setMaxPhysicalTicketsPerBatch] = useState(5000);
 
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -2113,7 +2114,7 @@ const SettingsTab = () => {
           'feexpay_config', 'intouch_config', 'paydunya_config',
           'affiliate_config', 'payment_toggles', 'exchange_rates',
           'default_commission_rate', 'default_advance_rate', 'default_physical_commission_rate', 'openrouter_api_key', 'support_config',
-          'enable_auto_reminders', 'enable_auto_thanks', 'chevereto_config']);
+          'enable_auto_reminders', 'enable_auto_thanks', 'chevereto_config', 'max_physical_tickets_per_batch']);
 
       if (data) {
         const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
@@ -2130,6 +2131,9 @@ const SettingsTab = () => {
         if (map.exchange_rates) setExchangeRates(map.exchange_rates);
         if (map.support_config) setSupportConfig(map.support_config);
         if (map.chevereto_config) setCheveretoConfig(map.chevereto_config);
+        if (map.max_physical_tickets_per_batch !== undefined && map.max_physical_tickets_per_batch !== null) {
+          setMaxPhysicalTicketsPerBatch(Number(map.max_physical_tickets_per_batch));
+        }
         setEmailToggles({
           reminders: map.enable_auto_reminders === 'true' || map.enable_auto_reminders === true,
           thanks: map.enable_auto_thanks === 'true' || map.enable_auto_thanks === true
@@ -2172,6 +2176,7 @@ const SettingsTab = () => {
       { key: 'enable_auto_reminders', value: emailToggles.reminders },
       { key: 'enable_auto_thanks', value: emailToggles.thanks },
       { key: 'chevereto_config', value: cheveretoConfig },
+      { key: 'max_physical_tickets_per_batch', value: maxPhysicalTicketsPerBatch },
     ];
 
     try {
@@ -2312,6 +2317,16 @@ const SettingsTab = () => {
               value={globalRates.fundraising}
               onChange={(e) => setGlobalRates({ ...globalRates, fundraising: parseFloat(e.target.value) || 0 })}
               className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Limite Max Billets Physiques / Lot</label>
+            <input
+              type="number"
+              step="1"
+              value={maxPhysicalTicketsPerBatch}
+              onChange={(e) => setMaxPhysicalTicketsPerBatch(parseInt(e.target.value) || 5000)}
+              className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
             />
           </div>
         </div>
