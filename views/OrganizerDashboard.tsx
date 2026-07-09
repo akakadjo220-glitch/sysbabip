@@ -3059,15 +3059,15 @@ const AgentModal = ({ onClose, events, onSave, agent }: any) => {
   } : { name: '', phone: '', email: '', pin: '', event_id: 'all', agent_type: 'POS' });
   const isPOS = form.agent_type === 'POS';
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm pointer-events-auto" onClick={onClose} />
-      <div className="bg-slate-800 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl relative z-10 overflow-hidden pointer-events-auto">
-        <div className="p-6 border-b border-white/10 bg-slate-900/50 flex justify-between items-center">
+      <div className="bg-slate-800 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl relative z-10 overflow-hidden pointer-events-auto flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-white/10 bg-slate-900/50 flex justify-between items-center shrink-0">
           <h3 className="text-xl font-bold text-white flex items-center gap-2"><Key size={20} className="text-orange-400" /> {agent ? 'Modifier l\'Agent' : 'Nouvel Agent POS'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
         </div>
-        <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="p-6 space-y-4">
+        <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="p-6 space-y-4 overflow-y-auto flex-1">
           {/* Sélecteur de type */}
           <div>
             <span className="text-slate-400 text-sm font-semibold mb-2 block">Type d'agent</span>
@@ -3122,7 +3122,7 @@ const AgentModal = ({ onClose, events, onSave, agent }: any) => {
               : <>L'agent <strong>Scanneur</strong> se connecte sur <strong>/agent/login</strong> et est redirigé vers l'interface de scan de billets à l'entrée uniquement.</>
             }</p>
           </div>
-          <div className="pt-4 flex justify-end gap-3">
+          <div className="pt-4 flex justify-end gap-3 shrink-0">
             <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-300 hover:text-white">Annuler</button>
             <button type="submit" className="bg-orange-600 hover:bg-orange-500 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2">
               {agent ? 'Enregistrer les modifications' : 'Déployer l\'Agent'}
@@ -3130,7 +3130,8 @@ const AgentModal = ({ onClose, events, onSave, agent }: any) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
