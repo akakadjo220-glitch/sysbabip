@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import QRCode from 'qrcode';
 
 export const generateMassTicketsPDF = async (
     tickets: { id: string, qrCode: string }[],
@@ -7,111 +7,146 @@ export const generateMassTicketsPDF = async (
     categoryName: string,
     cols: number = 3
 ) => {
-    // 1. Create a hidden DOM element to render the grid
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    // A4 dimensions at 96 DPI are approximately 794x1123 pixels
-    container.style.width = '794px';
-    container.style.backgroundColor = 'white';
-    container.style.display = 'flex';
-    container.style.flexWrap = 'wrap';
-    container.style.justifyContent = 'flex-start';
-    container.style.alignContent = 'flex-start';
-    container.style.padding = '20px'; // page margin
-    container.style.boxSizing = 'border-box';
-
-    const qrMargin = 10;
-    // Calculate item width taking padding and margins into account
-    const containerInnerWidth = 794 - 40; // 20px padding left/right
-    const itemWidth = Math.floor((containerInnerWidth / cols) - (qrMargin * 2));
-
-    // Build the grid of QR codes
-    const gridHtml = tickets.map((t, index) => {
-        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(t.qrCode)}`;
-
-        return `
-      <div style="width: ${itemWidth}px; margin: ${qrMargin}px; padding: 10px; border: 1px dashed #ccc; text-align: center; box-sizing: border-box; page-break-inside: avoid; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-        <p style="margin: 0 0 5px 0; font-size: ${cols > 4 ? '8px' : '10px'}; font-weight: bold; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">
-          ${eventName}
-        </p>
-        <div style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; display: inline-block; margin-bottom: 8px;">
-           <span style="font-size: ${cols > 4 ? '7px' : '9px'}; font-weight: bold; color: #ea580c;">${categoryName}</span>
-        </div>
-        
-        <img src="${qrCodeUrl}" style="width: 100%; max-width: 150px; aspect-ratio: 1/1; object-fit: contain; display: block; margin: 0 auto;" crossorigin="anonymous" />
-        
-        <p style="margin: 8px 0 0 0; font-size: ${cols > 4 ? '6px' : '7px'}; color: #64748b; font-family: monospace; word-break: break-all; width: 100%;">
-          ${t.qrCode.substring(0, 40)}...
-        </p>
-        <p style="margin: 2px 0 0 0; font-size: ${cols > 4 ? '6px' : '8px'}; font-weight: bold; color: #000;">
-          ID: ${t.id.substring(0, 8).toUpperCase()}
-        </p>
-      </div>
-    `;
-    }).join('');
-
-    container.innerHTML = gridHtml;
-    document.body.appendChild(container);
-
     try {
-        // 2. Wait for all images to load
-        const images = Array.from(container.querySelectorAll('img'));
-        await Promise.all(images.map(img => {
-            return new Promise((resolve) => {
-                if (img.complete) resolve(true);
-                img.onload = () => resolve(true);
-                img.onerror = () => resolve(true);
-            });
-        }));
-
-        // 3. Render container to canvas
-        const canvas = await html2canvas(container, {
-            scale: 2, // High resolution for printing
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-        });
-
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-
-        // 4. Create PDF Document (A4)
         const pdf = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
             format: 'a4'
         });
 
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const margin = 10;
 
-        // Handle multipage if content is taller than an A4 page
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        let heightLeft = pdfHeight;
-        let position = 0;
+        const availableWidth = pageWidth - (margin * 2);
+        const availableHeight = pageHeight - (margin * 2);
 
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
+        // Determine cell dimensions based on column count
+        let cellWidth = availableWidth / cols;
+        let cellHeight = 85; // default for 3 cols
+        let rows = 3;
 
-        while (heightLeft >= 0) {
-            position = heightLeft - pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pageHeight;
+        if (cols === 2) {
+            cellHeight = 120;
+            rows = 2;
+        } else if (cols === 3) {
+            cellHeight = 85;
+            rows = 3;
+        } else if (cols === 4) {
+            cellHeight = 65;
+            rows = 4;
+        } else if (cols === 6) {
+            cellHeight = 43;
+            rows = 6;
+        } else if (cols === 8) {
+            cellHeight = 33;
+            rows = 8;
         }
 
-        // 5. Download
+        const ticketsPerPage = cols * rows;
+
+        for (let i = 0; i < tickets.length; i++) {
+            const ticket = tickets[i];
+
+            if (i > 0 && i % ticketsPerPage === 0) {
+                pdf.addPage();
+            }
+
+            const pageIndex = i % ticketsPerPage;
+            const colIndex = pageIndex % cols;
+            const rowIndex = Math.floor(pageIndex / cols);
+
+            // Calculate absolute x, y coordinates on the page
+            const x = margin + (colIndex * cellWidth);
+            const y = margin + (rowIndex * cellHeight);
+
+            // Draw a light grey cell border
+            pdf.setDrawColor(220, 224, 230);
+            pdf.setLineWidth(0.2);
+            pdf.rect(x + 1, y + 1, cellWidth - 2, cellHeight - 2);
+
+            // Font configurations based on column layout
+            let titleFontSize = 10;
+            let catFontSize = 8;
+            let textFontSize = 6;
+            let idFontSize = 8;
+
+            if (cols === 2) {
+                titleFontSize = 12;
+                catFontSize = 9;
+                textFontSize = 7;
+                idFontSize = 10;
+            } else if (cols >= 4) {
+                titleFontSize = 7;
+                catFontSize = 6;
+                textFontSize = 5;
+                idFontSize = 6;
+            }
+
+            // Draw Event Title (centered)
+            pdf.setTextColor(30, 41, 59); // Slate-800
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(titleFontSize);
+            const cleanEventName = eventName.length > (cols === 2 ? 35 : cols === 3 ? 24 : 14)
+                ? eventName.substring(0, cols === 2 ? 32 : cols === 3 ? 21 : 12) + '...'
+                : eventName;
+            pdf.text(cleanEventName, x + (cellWidth / 2), y + (cols === 2 ? 8 : cols === 3 ? 7 : 5), { align: 'center' });
+
+            // Draw Category Badge
+            const headerHeight = cols === 2 ? 18 : cols === 3 ? 15 : 11;
+            const cleanCatName = categoryName.substring(0, cols === 2 ? 22 : cols === 3 ? 16 : 10);
+            
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(catFontSize);
+            const textWidth = pdf.getTextWidth(cleanCatName);
+            const badgeWidth = textWidth + 4;
+            const badgeHeight = catFontSize / 2 + 2;
+            const badgeX = x + (cellWidth / 2) - (badgeWidth / 2);
+            const badgeY = y + (cols === 2 ? 11 : cols === 3 ? 9 : 7);
+
+            // Badge Background
+            pdf.setFillColor(234, 88, 12); // Brand orange
+            pdf.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1, 1, 'F');
+            
+            // Badge Text
+            pdf.setTextColor(255, 255, 255);
+            pdf.text(cleanCatName, x + (cellWidth / 2), badgeY + (badgeHeight / 2) + (catFontSize / 4) - 0.2, { align: 'center' });
+
+            // Calculate dynamic size and position for QR Code
+            const footerHeight = cols === 2 ? 14 : cols === 3 ? 12 : 9;
+            const maxQrSize = Math.min(cellWidth - 8, cellHeight - headerHeight - footerHeight - 4);
+            const qrSize = maxQrSize;
+            const qrX = x + (cellWidth / 2) - (qrSize / 2);
+            const qrY = y + headerHeight + ((cellHeight - headerHeight - footerHeight - qrSize) / 2);
+
+            // Generate Local offline QR Code as PNG Base64 Data URL
+            const qrDataUrl = await QRCode.toDataURL(ticket.qrCode, {
+                margin: 1,
+                errorCorrectionLevel: 'L',
+                width: 180
+            });
+
+            pdf.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+            // Draw Ticket Secret Code (small monospace)
+            pdf.setTextColor(100, 116, 139); // Slate-500
+            pdf.setFont('courier', 'normal');
+            pdf.setFontSize(textFontSize);
+            const displayCode = ticket.qrCode.substring(0, cols === 2 ? 35 : cols === 3 ? 24 : 14) + '...';
+            pdf.text(displayCode, x + (cellWidth / 2), y + cellHeight - (cols === 2 ? 8 : cols === 3 ? 7 : 5), { align: 'center' });
+
+            // Draw Ticket ID
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(idFontSize);
+            pdf.text(`ID: ${ticket.id.substring(0, 8).toUpperCase()}`, x + (cellWidth / 2), y + cellHeight - (cols === 2 ? 3 : cols === 3 ? 2.5 : 1.8), { align: 'center' });
+        }
+
         const filename = `Babipass_Mass_Tickets_${eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
         pdf.save(filename);
-
         return true;
     } catch (error) {
         console.error("Error generating mass PDF:", error);
         return false;
-    } finally {
-        if (document.body.contains(container)) {
-            document.body.removeChild(container);
-        }
     }
 };

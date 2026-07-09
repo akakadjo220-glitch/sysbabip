@@ -4043,7 +4043,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                   required
                   type="number"
                   min="1"
-                  max="200"
+                  max="5000"
                   value={quantity}
                   onChange={e => setQuantity(Number(e.target.value))}
                   className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none"
