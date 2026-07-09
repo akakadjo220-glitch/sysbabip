@@ -24,11 +24,39 @@ export const WhatsAppService = {
                 evolutionUrl: string;
                 evolutionInstance: string;
                 evolutionApiKey: string;
+                openwaUrl?: string;
+                openwaSessionId?: string;
+                openwaToken?: string;
             }>('wa_config');
 
             if (!waConfig) throw new Error("WaSender configuration missing. Please configure in Admin Settings.");
 
-            if (waConfig.provider === 'evolution') {
+            if (waConfig.provider === 'openwa') {
+                if (!waConfig.openwaUrl || !waConfig.openwaSessionId) {
+                    throw new Error("Configuration Open WA API incomplète.");
+                }
+                console.log(`[WhatsAppService/OpenWA] Sending to ${cleanPhone} via Session ${waConfig.openwaSessionId}`);
+
+                const response = await fetch(`${waConfig.openwaUrl}/api/sessions/${waConfig.openwaSessionId}/messages/send-text`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(waConfig.openwaToken ? { 'X-API-Key': waConfig.openwaToken } : {})
+                    },
+                    body: JSON.stringify({
+                        chatId: `${cleanPhone}@c.us`,
+                        text: message
+                    })
+                });
+
+                if (!response.ok) {
+                    const errBody = await response.text().catch(() => '');
+                    throw new Error(`Open WA API Error (${response.status}): ${errBody || response.statusText}`);
+                }
+                const data = await response.json();
+                console.log('[Open WA API Response]', data);
+                return { success: true, message: `Message envoyé à ${cleanPhone}`, data };
+            } else if (waConfig.provider === 'evolution') {
                 if (!waConfig.evolutionUrl || !waConfig.evolutionInstance || !waConfig.evolutionApiKey) {
                     throw new Error("Configuration Evolution API incomplète.");
                 }
@@ -101,11 +129,42 @@ export const WhatsAppService = {
                 evolutionUrl: string;
                 evolutionInstance: string;
                 evolutionApiKey: string;
+                openwaUrl?: string;
+                openwaSessionId?: string;
+                openwaToken?: string;
             }>('wa_config');
 
             if (!waConfig) throw new Error("WaSender configuration missing.");
 
-            if (waConfig.provider === 'evolution') {
+            if (waConfig.provider === 'openwa') {
+                if (!waConfig.openwaUrl || !waConfig.openwaSessionId) {
+                    throw new Error("Configuration Open WA API incomplète.");
+                }
+                console.log(`[WhatsAppService/OpenWA] Sending Media to ${cleanPhone} via Session ${waConfig.openwaSessionId}`);
+                console.log(`[Media Payload]`, { mediaUrl, message });
+
+                const response = await fetch(`${waConfig.openwaUrl}/api/sessions/${waConfig.openwaSessionId}/messages/send-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(waConfig.openwaToken ? { 'X-API-Key': waConfig.openwaToken } : {})
+                    },
+                    body: JSON.stringify({
+                        chatId: `${cleanPhone}@c.us`,
+                        url: mediaUrl,
+                        caption: message,
+                        filename: 'ticket.png'
+                    })
+                });
+
+                if (!response.ok) {
+                    const errBody = await response.text().catch(() => '');
+                    throw new Error(`Open WA API Error (${response.status}): ${errBody || response.statusText}`);
+                }
+                const data = await response.json();
+                console.log('[WhatsAppService/OpenWA API Media Response]', data);
+                return { success: true, data };
+            } else if (waConfig.provider === 'evolution') {
                 if (!waConfig.evolutionUrl || !waConfig.evolutionInstance || !waConfig.evolutionApiKey) {
                     throw new Error("Configuration Evolution API incomplète.");
                 }

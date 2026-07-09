@@ -1980,7 +1980,10 @@ const SettingsTab = () => {
     token: '',
     evolutionUrl: '',
     evolutionInstance: '',
-    evolutionApiKey: ''
+    evolutionApiKey: '',
+    openwaUrl: '',
+    openwaSessionId: '',
+    openwaToken: ''
   });
   const [cheveretoConfig, setCheveretoConfig] = useState({
     enabled: false,
@@ -2253,6 +2256,12 @@ const SettingsTab = () => {
               >
                 Evolution API
               </button>
+              <button
+                onClick={() => setWaConfig({ ...waConfig, provider: 'openwa' })}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${waConfig.provider === 'openwa' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                Open WA
+              </button>
             </div>
           </div>
 
@@ -2290,7 +2299,7 @@ const SettingsTab = () => {
                   />
                 </div>
               </>
-            ) : (
+            ) : waConfig.provider === 'evolution' ? (
               <>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Base URL de l'API</label>
@@ -2320,6 +2329,41 @@ const SettingsTab = () => {
                       value={waConfig.evolutionApiKey || ''}
                       onChange={e => setWaConfig({ ...waConfig, evolutionApiKey: e.target.value })}
                       placeholder="••••••••••••••••"
+                      className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Base URL de l'API Open WA</label>
+                  <input
+                    type="text"
+                    value={waConfig.openwaUrl || ''}
+                    onChange={e => setWaConfig({ ...waConfig, openwaUrl: e.target.value })}
+                    placeholder="https://84.234.99.41.sslip.io"
+                    className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">ID de Session</label>
+                    <input
+                      type="text"
+                      value={waConfig.openwaSessionId || ''}
+                      onChange={e => setWaConfig({ ...waConfig, openwaSessionId: e.target.value })}
+                      placeholder="Ex: session_name"
+                      className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Clé API (X-API-Key)</label>
+                    <input
+                      type="password"
+                      value={waConfig.openwaToken || ''}
+                      onChange={e => setWaConfig({ ...waConfig, openwaToken: e.target.value })}
+                      placeholder="YOUR_API_KEY"
                       className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
                     />
                   </div>
