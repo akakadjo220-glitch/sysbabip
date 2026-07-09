@@ -174,11 +174,14 @@ export const generateMassTicketsPDF = async (
 
 /**
  * Génère un fichier ZIP contenant chaque ticket sous forme d'image JPG compressée.
+ * Si qrOnly est activé, génère uniquement le QR Code brut sous format PNG aux dimensions spécifiées.
  */
 export const generateMassTicketsZipJPG = async (
     tickets: { id: string, qrCode: string }[],
     eventName: string,
-    categoryName: string
+    categoryName: string,
+    qrOnly: boolean = false,
+    qrSize: number = 200
 ) => {
     try {
         const zip = new JSZip();
@@ -190,100 +193,119 @@ export const generateMassTicketsZipJPG = async (
         const width = 600;
         const height = 850;
         
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error("Impossible de créer le contexte 2D du canvas");
+        let canvas: HTMLCanvasElement | null = null;
+        let ctx: CanvasRenderingContext2D | null = null;
+        
+        if (!qrOnly) {
+            canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error("Impossible de créer le contexte 2D du canvas");
+        }
 
         for (let i = 0; i < tickets.length; i++) {
             const ticket = tickets[i];
             
-            // Fond blanc
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, width, height);
-            
-            // Bordure grise
-            ctx.strokeStyle = '#E2E8F0'; // Slate-200
-            ctx.lineWidth = 6;
-            ctx.strokeRect(3, 3, width - 6, height - 6);
-            
-            // Titre de l'événement (police standard)
-            ctx.fillStyle = '#1E293B'; // Slate-800
-            ctx.font = 'bold 24px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            
-            let displayTitle = sanitizedEventName;
-            if (displayTitle.length > 30) {
-                displayTitle = displayTitle.substring(0, 27) + '...';
-            }
-            ctx.fillText(displayTitle, width / 2, 45);
-            
-            // Badge Catégorie
-            ctx.font = 'bold 18px sans-serif';
-            const textWidth = ctx.measureText(sanitizedCatName).width;
-            const badgeWidth = textWidth + 24;
-            const badgeHeight = 36;
-            const badgeX = (width / 2) - (badgeWidth / 2);
-            const badgeY = 95;
-            
-            // Dessiner le fond du badge
-            ctx.fillStyle = '#EA580C'; // Orange
-            ctx.beginPath();
-            ctx.roundRect ? ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 6) : ctx.rect(badgeX, badgeY, badgeWidth, badgeHeight);
-            ctx.fill();
-            
-            // Texte du badge
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(sanitizedCatName, width / 2, badgeY + 8);
-            
-            // QR Code
-            const qrDataUrl = await QRCode.toDataURL(ticket.qrCode, {
-                margin: 1,
-                errorCorrectionLevel: 'L',
-                width: 420
-            });
-            
-            const qrImg = new Image();
-            qrImg.src = qrDataUrl;
-            await new Promise((resolve) => {
-                qrImg.onload = resolve;
-            });
-            
-            const qrSize = 420;
-            const qrX = (width / 2) - (qrSize / 2);
-            const qrY = 165;
-            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-            
-            // Code secret du ticket (Monospace)
-            ctx.fillStyle = '#64748B'; // Slate-500
-            ctx.font = '16px monospace';
-            let displayCode = ticket.qrCode;
-            if (displayCode.length > 38) {
-                displayCode = displayCode.substring(0, 35) + '...';
-            }
-            ctx.fillText(displayCode, width / 2, 630);
-            
-            // ID du ticket en bas
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 22px sans-serif';
-            ctx.fillText(`ID: ${ticket.id.toUpperCase()}`, width / 2, 770);
-            
-            // Conversion en Blob JPG (compression 0.85)
-            const blob = await new Promise<Blob | null>((resolve) => {
-                canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
-            });
-            
-            if (blob) {
-                const filename = `ticket_${ticket.id.toUpperCase()}.jpg`;
+            if (qrOnly) {
+                // Générer le QR Code à la taille spécifiée (85, 200, 500, 800)
+                const qrDataUrl = await QRCode.toDataURL(ticket.qrCode, {
+                    margin: 1,
+                    errorCorrectionLevel: 'L',
+                    width: qrSize
+                });
+                
+                const response = await fetch(qrDataUrl);
+                const blob = await response.blob();
+                
+                const filename = `qrcode_${ticket.id.toUpperCase()}_${qrSize}x${qrSize}.png`;
                 zip.file(filename, blob);
+            } else {
+                // Fond blanc
+                ctx!.fillStyle = '#FFFFFF';
+                ctx!.fillRect(0, 0, width, height);
+                
+                // Bordure grise
+                ctx!.strokeStyle = '#E2E8F0'; // Slate-200
+                ctx!.lineWidth = 6;
+                ctx!.strokeRect(3, 3, width - 6, height - 6);
+                
+                // Titre de l'événement
+                ctx!.fillStyle = '#1E293B'; // Slate-800
+                ctx!.font = 'bold 24px sans-serif';
+                ctx!.textAlign = 'center';
+                ctx!.textBaseline = 'top';
+                
+                let displayTitle = sanitizedEventName;
+                if (displayTitle.length > 30) {
+                    displayTitle = displayTitle.substring(0, 27) + '...';
+                }
+                ctx!.fillText(displayTitle, width / 2, 45);
+                
+                // Badge Catégorie
+                ctx!.font = 'bold 18px sans-serif';
+                const textWidth = ctx!.measureText(sanitizedCatName).width;
+                const badgeWidth = textWidth + 24;
+                const badgeHeight = 36;
+                const badgeX = (width / 2) - (badgeWidth / 2);
+                const badgeY = 95;
+                
+                ctx!.fillStyle = '#EA580C'; // Orange
+                ctx!.beginPath();
+                ctx!.roundRect ? ctx!.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 6) : ctx!.rect(badgeX, badgeY, badgeWidth, badgeHeight);
+                ctx!.fill();
+                
+                ctx!.fillStyle = '#FFFFFF';
+                ctx!.fillText(sanitizedCatName, width / 2, badgeY + 8);
+                
+                // QR Code
+                const qrDataUrl = await QRCode.toDataURL(ticket.qrCode, {
+                    margin: 1,
+                    errorCorrectionLevel: 'L',
+                    width: 420
+                });
+                
+                const qrImg = new Image();
+                qrImg.src = qrDataUrl;
+                await new Promise((resolve) => {
+                    qrImg.onload = resolve;
+                });
+                
+                const qrSizeImg = 420;
+                const qrX = (width / 2) - (qrSizeImg / 2);
+                const qrY = 165;
+                ctx!.drawImage(qrImg, qrX, qrY, qrSizeImg, qrSizeImg);
+                
+                // Code secret du ticket (Monospace)
+                ctx!.fillStyle = '#64748B'; // Slate-500
+                ctx!.font = '16px monospace';
+                let displayCode = ticket.qrCode;
+                if (displayCode.length > 38) {
+                    displayCode = displayCode.substring(0, 35) + '...';
+                }
+                ctx!.fillText(displayCode, width / 2, 630);
+                
+                // ID du ticket en bas
+                ctx!.fillStyle = '#000000';
+                ctx!.font = 'bold 22px sans-serif';
+                ctx!.fillText(`ID: ${ticket.id.toUpperCase()}`, width / 2, 770);
+                
+                // Conversion en Blob JPG
+                const blob = await new Promise<Blob | null>((resolve) => {
+                    canvas!.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
+                });
+                
+                if (blob) {
+                    const filename = `ticket_${ticket.id.toUpperCase()}.jpg`;
+                    zip.file(filename, blob);
+                }
             }
         }
         
         // Génération du fichier ZIP
         const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const zipFilename = `Babipass_Tickets_${sanitizedEventName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`;
+        const prefix = qrOnly ? 'QRCodes_Bruts_' : 'Tickets_';
+        const zipFilename = `Babipass_${prefix}${sanitizedEventName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`;
         
         // Déclencher le téléchargement du ZIP
         const link = document.createElement('a');

@@ -3562,6 +3562,8 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
   const [isGenerating, setIsGenerating] = useState(false);
   const [maxBatchLimit, setMaxBatchLimit] = useState<number>(5000);
   const [exportFormat, setExportFormat] = useState<string>('pdf');
+  const [qrOnly, setQrOnly] = useState<boolean>(false);
+  const [qrSize, setQrSize] = useState<number>(200);
 
   // KYC States
   const [kycFile, setKycFile] = useState<File | null>(null);
@@ -3742,7 +3744,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       } else {
         addToast("✅ Signatures créées ! Préparation de l'archive ZIP...", "info");
         const { generateMassTicketsZipJPG } = await import('../utils/pdfMassGenerator');
-        success = await generateMassTicketsZipJPG(tickets, selectedEvent.title, catName);
+        success = await generateMassTicketsZipJPG(tickets, selectedEvent.title, catName, qrOnly, qrSize);
       }
 
       if (success) {
@@ -4076,21 +4078,6 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-300">Taille QR / Page</label>
-                <select
-                  value={columns}
-                  onChange={e => setColumns(Number(e.target.value))}
-                  className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
-                >
-                  <option value="2">2 colonnes (Format Géant)</option>
-                  <option value="3">3 colonnes (Recommandé)</option>
-                  <option value="4">4 colonnes (Compact)</option>
-                  <option value="6">6 colonnes (Petits QR)</option>
-                  <option value="8">8 colonnes (Format Mini)</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-300">Format d'export</label>
                 <select
                   value={exportFormat}
@@ -4101,6 +4088,53 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                   <option value="zip">Images JPG compressées (ZIP)</option>
                 </select>
               </div>
+
+              {exportFormat === 'pdf' ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-300">Taille QR / Page</label>
+                  <select
+                    value={columns}
+                    onChange={e => setColumns(Number(e.target.value))}
+                    className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
+                  >
+                    <option value="2">2 colonnes (Format Géant)</option>
+                    <option value="3">3 colonnes (Recommandé)</option>
+                    <option value="4">4 colonnes (Compact)</option>
+                    <option value="6">6 colonnes (Petits QR)</option>
+                    <option value="8">8 colonnes (Format Mini)</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-2 flex items-center pt-8">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-300 text-sm font-bold select-none">
+                    <input
+                      type="checkbox"
+                      checked={qrOnly}
+                      onChange={e => setQrOnly(e.target.checked)}
+                      className="w-5 h-5 rounded border-white/10 bg-slate-950 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 focus:outline-none"
+                    />
+                    <span>QR Code brut uniquement</span>
+                  </label>
+                </div>
+              )}
+
+              {exportFormat === 'zip' && qrOnly ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-300">Résolution QR (px)</label>
+                  <select
+                    value={qrSize}
+                    onChange={e => setQrSize(Number(e.target.value))}
+                    className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
+                  >
+                    <option value="85">85 x 85 (Micro)</option>
+                    <option value="200">200 x 200 (Standard)</option>
+                    <option value="500">500 x 500 (HD)</option>
+                    <option value="800">800 x 800 (Ultra HD)</option>
+                  </select>
+                </div>
+              ) : exportFormat === 'zip' ? (
+                <div className="hidden lg:block" />
+              ) : null}
 
               {/* Commission Banner */}
               {selectedEventId && selectedCategoryId && (
