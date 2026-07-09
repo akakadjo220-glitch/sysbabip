@@ -74,6 +74,7 @@ export const TicketScanner: React.FC = () => {
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState<number>(0);
   const [cameraError, setCameraError]         = useState<string>('');
   const cameraStoppingRef = useRef<Promise<void> | null>(null);
+  const [fileDecoding, setFileDecoding]       = useState(false);
 
   // Keep a stable ref for processToken to use in camera/NFC callbacks
   const processTokenRef = useRef<((token: string) => Promise<void>) | null>(null);
@@ -193,113 +194,139 @@ export const TicketScanner: React.FC = () => {
           try {
             html5QrCode = new Html5Qrcode('qr-reader');
             
-            // 1. Récupérer la liste des caméras physiques pour cibler précisément la caméra arrière
-            const devices = await Html5Qrcode.getCameras().catch(() => [] as any[]);
+            // 1. Récupérer la liste des caméras physiques
+            const allDevices = await Html5Qrcode.getCameras().catch(() => [] as any[]);
+            
+            // FILTRAGE STRICT : Exclure à 100% les caméras frontales/selfie
+            const devices = allDevices.filter(d => {
+              const label = (d.label || '').toLowerCase();
+              return !label.includes('front') && 
+                     !label.includes('selfie') && 
+                     !label.includes('avant') && 
+                     !label.includes('user');
+            });
+
             if (mounted) {
               setDevicesList(devices);
             }
             
-            let selectedCameraId: any = { facingMode: 'environment' };
+            // 2. Classer les objectifs en mettant les caméras arrière explicites en premier
+            const rearCameras = devices.filter(d => {
+              const label = (d.label || '').toLowerCase();
+              return label.includes('back') || 
+                     label.includes('rear') || 
+                     label.includes('arrière') || 
+                     label.includes('arriere') || 
+                     label.includes('environment') || 
+                     label.includes('environnement');
+            });
             
-            if (devices && devices.length > 0) {
-              // Si nous avons déjà un index de caméra sélectionné (notamment via changement manuel)
-              if (currentDeviceIndex >= 0 && currentDeviceIndex < devices.length) {
-                selectedCameraId = devices[currentDeviceIndex].id;
-              } else {
-                // Trouver la caméra arrière par défaut
-                const rearCameras = devices.filter(d => {
-                  const label = (d.label || '').toLowerCase();
-                  return label.includes('back') || 
-                         label.includes('rear') || 
-                         label.includes('arrière') || 
-                         label.includes('arriere') || 
-                         label.includes('environment') || 
-                         label.includes('environnement');
-                });
-                
-                let defaultIndex = 0;
-                if (rearCameras.length > 0) {
-                  defaultIndex = devices.findIndex(d => d.id === rearCameras[0].id);
-                } else {
-                  // Exclure les caméras frontales/selfie
-                  const nonFrontCameras = devices.filter(d => {
-                    const label = (d.label || '').toLowerCase();
-                    return d.label && 
-                           !label.includes('front') && 
-                           !label.includes('selfie') && 
-                           !label.includes('avant') && 
-                           !label.includes('user');
-                  });
-                  
-                  if (nonFrontCameras.length > 0) {
-                    defaultIndex = devices.findIndex(d => d.id === nonFrontCameras[0].id);
-                  } else {
-                    defaultIndex = devices.length - 1; // Prendre la dernière par défaut
-                  }
-                }
-                
-                if (mounted) {
-                  setCurrentDeviceIndex(defaultIndex);
-                }
-                selectedCameraId = devices[defaultIndex]?.id || { facingMode: 'environment' };
+            const orderedDevices = [
+              ...rearCameras,
+              ...devices.filter(d => !rearCameras.includes(d))
+            ];
+            
+            if (orderedDevices.length === 0) {
+              // Si aucun objectif n'est trouvé après filtrage strict, essayer en facingMode natif arrière
+              try {
+                const promiseFallback = html5QrCode.start(
+                  { facingMode: 'environment' },
+                  { fps: 15 },
+                  (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+                  () => {}
+                );
+                initPromise = promiseFallback;
+                await promiseFallback;
+                return;
+              } catch (fallbackErr) {
+                throw new Error("Aucun objectif arrière compatible détecté.");
               }
             }
             
-            // 2. Tenter le démarrage de la caméra arrière sélectionnée
-            // Tentative 1 : Résolution HD pour les QR Codes denses
-            try {
-              const promise = html5QrCode.start(
-                selectedCameraId,
-                { 
-                  fps: 15,
-                  videoConstraints: selectedCameraId.facingMode ? undefined : {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                  }
-                },
-                (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
-                () => {}
-              );
-              initPromise = promise;
-              await promise;
-              return;
-            } catch (hdErr) {
-              console.warn("Échec du démarrage de la caméra choisie en HD, tentative en standard...", hdErr);
+            // Déterminer l'index cible dans la liste ordonnée ou la liste brute
+            let activeIndex = currentDeviceIndex;
+            if (currentDeviceIndex < 0 || currentDeviceIndex >= devices.length) {
+              // Par défaut, prendre la première caméra arrière ordonnée
+              const bestDefaultDevice = orderedDevices[0];
+              activeIndex = devices.findIndex(d => d.id === bestDefaultDevice.id);
+              if (mounted) {
+                setCurrentDeviceIndex(activeIndex);
+              }
             }
             
-            if (!mounted) return;
+            // 3. Boucle d'Auto-Healing :
+            // Si l'objectif choisi refuse de s'ouvrir, on tente automatiquement les autres de la liste
+            let success = false;
+            let targetIndex = activeIndex;
+            let attempts = 0;
             
-            // Tentative 2 : Résolution Standard (sans contraintes de taille, pour compatibilité maximale)
-            const promiseStd = html5QrCode.start(
-              selectedCameraId,
-              { fps: 15 },
-              (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
-              () => {}
-            );
-            initPromise = promiseStd;
-            await promiseStd;
+            while (!success && attempts < devices.length && mounted) {
+              const deviceId = devices[targetIndex].id;
+              try {
+                // Tentative 1 : HD
+                try {
+                  const promise = html5QrCode.start(
+                    deviceId,
+                    { 
+                      fps: 15,
+                      videoConstraints: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                      }
+                    },
+                    (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+                    () => {}
+                  );
+                  initPromise = promise;
+                  await promise;
+                  success = true;
+                  if (mounted) setCurrentDeviceIndex(targetIndex);
+                  break;
+                } catch (hdErr) {
+                  // Tentative 2 : Résolution Standard (sur le même objectif)
+                  const promiseStd = html5QrCode.start(
+                    deviceId,
+                    { fps: 15 },
+                    (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+                    () => {}
+                  );
+                  initPromise = promiseStd;
+                  await promiseStd;
+                  success = true;
+                  if (mounted) setCurrentDeviceIndex(targetIndex);
+                  break;
+                }
+              } catch (err) {
+                console.warn(`L'objectif arrière à l'index ${targetIndex} a échoué. Tentative sur l'objectif suivant...`, err);
+                targetIndex = (targetIndex + 1) % devices.length;
+                attempts++;
+              }
+            }
+            
+            // 4. Si toutes les tentatives matérielles ont échoué, ultime secours facingMode natif
+            if (!success && mounted) {
+              try {
+                const promiseFallback = html5QrCode.start(
+                  { facingMode: 'environment' },
+                  { fps: 15 },
+                  (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+                  () => {}
+                );
+                initPromise = promiseFallback;
+                await promiseFallback;
+                success = true;
+              } catch (fallbackErr) {
+                console.error("Ultimate fallback facingMode failed:", fallbackErr);
+              }
+            }
+            
+            if (!success && mounted) {
+              setCameraError("Impossible d'activer la caméra arrière. Veuillez autoriser l'accès ou utiliser l'option 'Prendre une Photo' de secours.");
+            }
           } catch (err: any) {
             if (!mounted) return;
             console.error('Camera error:', err);
-            
-            // Tentative 3 ultime de secours globale : facingMode générique
-            try {
-              const promiseFallback = html5QrCode.start(
-                { facingMode: 'environment' },
-                { fps: 15 },
-                (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
-                () => {}
-              );
-              initPromise = promiseFallback;
-              await promiseFallback;
-              return;
-            } catch (fallbackErr) {
-              console.error("Ultimate fallback failed:", fallbackErr);
-            }
-            
-            if (mounted) {
-              setCameraError("Impossible d'accéder à cet objectif. Veuillez essayer de changer de caméra.");
-            }
+            setCameraError("Impossible d'accéder à la caméra arrière. Veuillez utiliser l'importation de photo.");
           }
         };
 
@@ -544,8 +571,42 @@ export const TicketScanner: React.FC = () => {
     setScanning(false);
   };
 
-  // Keep ref up to date every render (no dep array needed)
   useEffect(() => { processTokenRef.current = processToken; });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setFileDecoding(true);
+    setCameraActive(false);
+    
+    let fileDecoder: Html5Qrcode | null = null;
+    try {
+      let tempEl = document.getElementById('qr-reader-temp');
+      if (!tempEl) {
+        tempEl = document.createElement('div');
+        tempEl.id = 'qr-reader-temp';
+        tempEl.style.display = 'none';
+        document.body.appendChild(tempEl);
+      }
+      
+      fileDecoder = new Html5Qrcode('qr-reader-temp');
+      const decodedText = await fileDecoder.scanFile(file, true);
+      
+      if (processTokenRef.current) {
+        await processTokenRef.current(decodedText);
+      }
+    } catch (err) {
+      console.error("Erreur de décodage de l'image:", err);
+      setResult('error');
+      setErrorReason("Impossible de lire le QR code sur l'image. Assurez-vous que l'image est bien nette et centrée sur le QR Code.");
+    } finally {
+      setFileDecoding(false);
+      if (fileDecoder) {
+        try { fileDecoder.clear(); } catch (_) {}
+      }
+    }
+  };
 
   // ─── Handlers ────────────────────────────────────────────────────────────
   const reset = () => {
@@ -663,7 +724,14 @@ export const TicketScanner: React.FC = () => {
                   <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-slate-950/95 text-center space-y-4">
                     <XCircle className="text-red-500 animate-pulse" size={48} />
                     <p className="text-white font-semibold text-base px-4">{cameraError}</p>
-                    <p className="text-slate-400 text-xs max-w-xs">Cet objectif est peut-être désactivé, non supporté ou déjà utilisé par une autre application en arrière-plan.</p>
+                    <p className="text-slate-400 text-xs max-w-xs mb-2">Cet objectif est peut-être désactivé, non supporté ou déjà utilisé par une autre application en arrière-plan.</p>
+                    <button 
+                      type="button"
+                      onClick={() => document.getElementById('qr-file-input')?.click()}
+                      className="bg-orange-600 hover:bg-orange-500 text-white px-6 py-2.5 rounded-full font-bold shadow-lg border border-orange-500 flex items-center gap-2 text-sm transition-colors"
+                    >
+                      <Camera size={16} /> Prendre une Photo de Secours
+                    </button>
                   </div>
                 )}
                 <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
@@ -709,13 +777,23 @@ export const TicketScanner: React.FC = () => {
             {/* Idle screen */}
             {!cameraActive && result === 'idle' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-slate-900 space-y-5">
-                {scanning
-                  ? <div className="flex flex-col items-center gap-4"><Loader2 size={48} className="text-orange-500 animate-spin" /><p className="text-white font-bold">Validation en cours...</p></div>
+                {scanning || fileDecoding
+                  ? <div className="flex flex-col items-center gap-4">
+                      <Loader2 size={48} className="text-orange-500 animate-spin" />
+                      <p className="text-white font-bold">{fileDecoding ? "Décodage de la photo..." : "Validation en cours..."}</p>
+                    </div>
                   : <>
                     <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center"><Camera size={40} className="text-slate-400" /></div>
-                    <button onClick={() => setCameraActive(true)} className="bg-orange-600 hover:bg-orange-500 text-white px-8 py-3 rounded-xl font-bold w-full shadow-lg flex justify-center items-center gap-2">
-                      <Camera size={20} /> Lancer la Caméra
-                    </button>
+                    <div className="w-full space-y-3">
+                      <button onClick={() => setCameraActive(true)} className="bg-orange-600 hover:bg-orange-500 text-white px-8 py-3 rounded-xl font-bold w-full shadow-lg flex justify-center items-center gap-2 transition-all">
+                        <Camera size={20} /> Lancer le Scan Vidéo
+                      </button>
+                      <button onClick={() => document.getElementById('qr-file-input')?.click()} className="bg-slate-850 hover:bg-slate-750 text-white px-8 py-3 rounded-xl font-bold w-full shadow-lg border border-slate-700/60 flex justify-center items-center gap-2 transition-all">
+                        <Camera size={20} /> Prendre une Photo / Importer
+                      </button>
+                    </div>
+                    <input type="file" id="qr-file-input" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+                    
                     <div className="w-full bg-slate-800/50 border border-slate-700 p-4 rounded-xl text-left">
                       <p className="text-xs text-slate-400 mb-2 uppercase font-bold tracking-wider flex items-center gap-1"><KeyRound size={12} /> Saisie manuelle</p>
                       <form onSubmit={handleManualSubmit} className="flex gap-2">
