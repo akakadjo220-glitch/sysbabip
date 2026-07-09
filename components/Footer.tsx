@@ -45,7 +45,7 @@ export const Footer = () => {
           <div className="space-y-6">
             <Link to="/" className="group flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
-                <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass" className="w-full h-full object-cover scale-[1.35]" />
+                <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass" className="w-full h-full object-cover scale-[1.65]" />
               </div>
               <span className="font-black text-2xl tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
                 Babipass

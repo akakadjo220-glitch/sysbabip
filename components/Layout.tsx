@@ -36,7 +36,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex justify-between items-center max-w-7xl mx-auto">
           <Link to="/" className="group flex items-center gap-4">
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl flex items-center justify-center overflow-hidden shadow-xl shadow-orange-500/30 group-hover:scale-105 transition-transform">
-              <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass" className="w-full h-full object-cover scale-[1.35]" />
+              <img src="https://insforgeinst.site/images/2026/07/09/Design-sans-titre-32.png" alt="Babipass" className="w-full h-full object-cover scale-[1.65]" />
             </div>
             <div className="flex flex-col">
               <span className="font-black text-3xl md:text-4xl tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
