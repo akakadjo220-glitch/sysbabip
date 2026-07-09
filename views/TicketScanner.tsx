@@ -121,7 +121,7 @@ export const TicketScanner: React.FC = () => {
         query = query.eq('event_id', agent.event_id);
       }
       
-      const { data } = await query.limit(5000);
+      const { data } = await query.limit(40000);
       if (data) {
         const cache: Record<string, TicketCacheEntry> = {};
         const now = Date.now();
@@ -365,29 +365,61 @@ export const TicketScanner: React.FC = () => {
       if (cachedStatus === 'revoked') { setResult('error'); setErrorReason("Ce billet a été révoqué par l'organisateur."); setScanning(false); return; }
       if (cachedStatus === 'used')    { setResult('error'); setErrorReason('Billet déjà utilisé ! Accès refusé.'); setScanning(false); return; }
 
-      // Step 4b — Check Supabase if online
+      // Step 4b — Atomic verification and update if online
+      let updateSuccess = false;
+
       if (online) {
-        const { data: ticketData, error: ticketError } = await supabase.from('tickets').select('id, status').eq('id', ticketId).maybeSingle();
-        if (!ticketError && ticketData) {
-          setCachedStatus(ticketId, ticketData.status);
-          if (ticketData.status === 'revoked') { setResult('error'); setErrorReason("Ce billet a été révoqué par l'organisateur."); setScanning(false); return; }
-          if (ticketData.status === 'used')    { setResult('error'); setErrorReason('Billet déjà utilisé ! Accès refusé.'); setScanning(false); return; }
+        // Atomic conditional update: only mark as used if it is currently 'valid'
+        // This is safe against parallel/concurrent scans (Postgres write lock)
+        const { data: updatedData, error: updateError } = await supabase
+          .from('tickets')
+          .update({ status: 'used' })
+          .eq('id', ticketId)
+          .eq('status', 'valid')
+          .select('id, status');
+
+        if (updateError) {
+          console.error("Atomic update failed:", updateError);
+          setResult('error'); setErrorReason('Erreur de connexion avec le serveur.'); setScanning(false); return;
         }
-      }
 
-      // Step 5 — Mark as used
-      markLocalScan(ticketId);
-      setCachedStatus(ticketId, 'used');
+        if (updatedData && updatedData.length > 0) {
+          // Success: Ticket status updated from 'valid' to 'used'
+          updateSuccess = true;
+          setCachedStatus(ticketId, 'used');
+        } else {
+          // Non-matching query: ticket could be used, revoked, or non-existent
+          // Query the exact status to give the correct reason to the agent
+          const { data: ticketData } = await supabase
+            .from('tickets')
+            .select('status')
+            .eq('id', ticketId)
+            .maybeSingle();
 
-      if (online) {
-        await supabase.from('tickets').update({ status: 'used' }).eq('id', ticketId);
+          const actualStatus = ticketData?.status || 'unknown';
+          setCachedStatus(ticketId, actualStatus as any);
+
+          if (actualStatus === 'revoked') {
+            setResult('error'); setErrorReason("Ce billet a été révoqué par l'organisateur."); setScanning(false); return;
+          } else if (actualStatus === 'used') {
+            setResult('error'); setErrorReason('Billet déjà utilisé ! Accès refusé.'); setScanning(false); return;
+          } else {
+            setResult('error'); setErrorReason('Billet non trouvé ou invalide.'); setScanning(false); return;
+          }
+        }
       } else {
-        addPendingSync(ticketId); // will sync when back online
+        // Offline mode: mark locally and add to pending sync queue
+        addPendingSync(ticketId);
+        setCachedStatus(ticketId, 'used');
+        updateSuccess = true;
       }
 
-      setScannedPayload(payload);
-      setResult('success');
-      refreshCounters();
+      if (updateSuccess) {
+        markLocalScan(ticketId);
+        setScannedPayload(payload);
+        setResult('success');
+        refreshCounters();
+      }
 
     } catch (err) {
       console.error('processToken error:', err);
