@@ -172,23 +172,45 @@ export const TicketScanner: React.FC = () => {
         const el = document.getElementById('qr-reader');
         if (!el) return;
         
-        try {
-          html5QrCode = new Html5Qrcode('qr-reader');
-          // On demande la caméra haute résolution pour lire les QR JWS denses
-          initPromise = html5QrCode.start(
-            { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } as MediaTrackConstraints,
-            { fps: 15 }, // Pas de qrbox = scanne toute l'image HD, idéal pour QR denses
-            (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
-            () => {}
-          ).catch((err) => {
+        const startCamera = async () => {
+          try {
+            html5QrCode = new Html5Qrcode('qr-reader');
+            
+            // Tentative 1 : Caméra HD (idéale pour QR Codes JWS denses)
+            try {
+              const promise = html5QrCode.start(
+                { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } as MediaTrackConstraints,
+                { fps: 15 },
+                (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+                () => {}
+              );
+              initPromise = promise;
+              await promise;
+              return;
+            } catch (hdErr) {
+              console.warn("Échec de la caméra HD, tentative en résolution standard...", hdErr);
+            }
+            
+            if (!mounted) return;
+            
+            // Tentative 2 : Caméra standard (compatibilité universelle pour tous téléphones)
+            const promiseStd = html5QrCode.start(
+              { facingMode: 'environment' },
+              { fps: 15 },
+              (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+              () => {}
+            );
+            initPromise = promiseStd;
+            await promiseStd;
+          } catch (err: any) {
             if (!mounted) return;
             console.error('Camera error:', err);
-            alert("Erreur d'accès à la caméra. Vérifiez les permissions et utilisez HTTPS.");
+            alert("Erreur d'accès à la caméra.\n\n1. Veuillez vérifier que vous avez autorisé l'accès à l'appareil photo pour ce navigateur.\n2. Assurez-vous que l'appareil photo n'est pas utilisé par une autre application.\n3. Utilisez une connexion sécurisée HTTPS.");
             setCameraActive(false);
-          });
-        } catch (e) {
-          console.error("Camera init crash", e);
-        }
+          }
+        };
+
+        startCamera();
       }, 500); // Wait slightly longer for DOM to settle
     }
 
