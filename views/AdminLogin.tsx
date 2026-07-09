@@ -75,7 +75,7 @@ export const AdminLogin: React.FC = () => {
             <div className="w-full max-w-md bg-slate-900/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/10 relative z-10">
                 <div className="flex justify-center mb-6">
                     <div className="w-28 h-28 md:w-20 md:h-20 rounded-2xl flex items-center justify-center overflow-hidden border border-amber-500/30">
-                        <img src="https://insforgeinst.site/images/2026/07/09/log-babipass.png" alt="Babipass Logo" className="w-full h-full object-cover scale-[1.65]" />
+                        <img src="https://insforgeinst.site/images/2026/07/09/log-babipass.png" alt="Babipass Logo" className="w-full h-full object-contain p-1" />
                     </div>
                 </div>
 
