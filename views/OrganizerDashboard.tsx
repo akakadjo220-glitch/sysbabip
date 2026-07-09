@@ -3616,7 +3616,13 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
 
   const selectedCategory = categories.find((c: any) => c.id === selectedCategoryId);
   const ticketPrice = Number(selectedCategory?.price || selectedEvent?.price || 0);
-  const commissionDue = Math.round(quantity * ticketPrice * commissionRate);
+
+  const freeGranted = Number(profile?.free_physical_tickets_granted || 0);
+  const freeUsed = Number(profile?.free_physical_tickets_used || 0);
+  const remainingFreeQuota = Math.max(0, freeGranted - freeUsed);
+  const billableQuantity = Math.max(0, quantity - remainingFreeQuota);
+
+  const commissionDue = Math.round(billableQuantity * ticketPrice * commissionRate);
   const balanceSufficient = walletBalance >= commissionDue;
 
   // Physical tickets for analytics — fetched directly from Supabase
@@ -3727,6 +3733,12 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       const success = await generateMassTicketsPDF(tickets, selectedEvent.title, catName, columns);
 
       if (success) {
+        const consumedFree = Math.min(quantity, remainingFreeQuota);
+        if (consumedFree > 0) {
+          const newUsed = freeUsed + consumedFree;
+          await supabase.from('profiles').update({ free_physical_tickets_used: newUsed }).eq('id', user?.id);
+          await fetchProfile();
+        }
         addToast("🖨️ Fichier PDF généré avec succès !", "success");
         setQuantity(50);
         fetchPhysicalTxs(selectedEventId || undefined);
@@ -4069,7 +4081,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
               {selectedEventId && selectedCategoryId && (
                 <div className={`lg:col-span-5 rounded-2xl p-4 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${ticketPrice === 0
                   ? 'bg-slate-700/40 border-slate-600/40'
-                  : balanceSufficient
+                  : balanceSufficient || remainingFreeQuota >= quantity
                     ? 'bg-emerald-500/10 border-emerald-500/30'
                     : 'bg-orange-500/10 border-orange-500/30'
                   }`}>
@@ -4077,18 +4089,30 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                     <div className="flex items-center gap-2 mb-1">
                       {ticketPrice === 0 ? (
                         <span className="text-slate-400 text-sm font-bold">🎁 Événement gratuit — aucune commission</span>
+                      ) : remainingFreeQuota >= quantity ? (
+                        <span className="text-emerald-400 text-sm font-bold">🎉 Quota de tickets gratuits consommé ({quantity}/{remainingFreeQuota} restants) — 0 FCFA de commission</span>
+                      ) : remainingFreeQuota > 0 ? (
+                        <span className="text-emerald-400 text-sm font-bold">✅ Quota partiel appliqué ({remainingFreeQuota} gratuits) + Solde payé par wallet</span>
                       ) : balanceSufficient ? (
                         <span className="text-emerald-400 text-sm font-bold">✅ Commission payée par déduction wallet</span>
                       ) : (
-                        <span className="text-orange-400 text-sm font-bold">⚠️ Paiement externe requis</span>
+                        <span className="text-orange-400 text-sm font-bold">⚠️ Paiement externe requis (Solde insuffisant)</span>
                       )}
                     </div>
                     {ticketPrice > 0 && (
                       <p className="text-xs text-slate-400 font-mono">
-                        {quantity} billets × {ticketPrice.toLocaleString('fr-FR')} FCFA × {(commissionRate * 100).toFixed(0)}%
+                        {remainingFreeQuota > 0 
+                          ? `${Math.max(0, quantity - remainingFreeQuota)} billables × ${ticketPrice.toLocaleString('fr-FR')} FCFA × ${(commissionRate * 100).toFixed(0)}%`
+                          : `${quantity} billets × ${ticketPrice.toLocaleString('fr-FR')} FCFA × ${(commissionRate * 100).toFixed(0)}%`
+                        }
                         {' = '}
                         <span className="text-white font-bold">{commissionDue.toLocaleString('fr-FR')} FCFA</span>
                         {' · '}Votre wallet : <span className={balanceSufficient ? 'text-emerald-400' : 'text-orange-400'}>{walletBalance.toLocaleString('fr-FR')} FCFA</span>
+                        {remainingFreeQuota > 0 && (
+                          <>
+                            {' · '}Quota Restant : <span className="text-emerald-400 font-bold">{remainingFreeQuota}</span>
+                          </>
+                        )}
                       </p>
                     )}
                   </div>

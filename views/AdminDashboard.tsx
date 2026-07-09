@@ -68,13 +68,26 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveUser = async (user: UserProfile) => {
     const isNew = user.id.startsWith('new-');
     if (!isNew) {
-      const { error } = await supabase.from('profiles').update({ name: user.name, role: user.role, status: user.status, avatar: user.avatar }).eq('id', user.id);
+      const { error } = await supabase.from('profiles').update({ 
+        name: user.name, 
+        role: user.role, 
+        status: user.status, 
+        avatar: user.avatar,
+        free_physical_tickets_granted: (user as any).free_physical_tickets_granted || 0
+      }).eq('id', user.id);
       if (error) throw new Error(error.message);
       addToast('Profil mis à jour !', 'success');
     } else {
       const { data: authData, error: authError } = await supabase.auth.signUp({ email: user.email, password: 'Babipass2024!', options: { data: { name: user.name, role: user.role } } });
       if (authError || !authData.user) throw new Error(authError?.message || 'Impossible de créer compte');
-      await supabase.from('profiles').upsert([{ id: authData.user.id, name: user.name, email: user.email, role: user.role, status: 'active' }]);
+      await supabase.from('profiles').upsert([{ 
+        id: authData.user.id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role, 
+        status: 'active',
+        free_physical_tickets_granted: (user as any).free_physical_tickets_granted || 0
+      }]);
       addToast('Utilisateur créé !', 'success');
     }
   };
@@ -109,6 +122,14 @@ export const AdminDashboard: React.FC = () => {
     }).eq('id', id);
     if (error) { addToast(`Erreur bypass KYC: ${error.message}`, 'error'); return; }
     addToast('✅ KYC bypassé avec succès — l\'organisateur a maintenant accès complet.', 'success');
+  };
+
+  const bypassKyb = async (id: string) => {
+    const { error } = await supabase.from('profiles').update({
+      business_status: 'verified'
+    }).eq('id', id);
+    if (error) { addToast(`Erreur bypass KYB: ${error.message}`, 'error'); return; }
+    addToast('✅ KYB bypassé avec succès — l\'entreprise est maintenant vérifiée.', 'success');
   };
 
   const handleEventAction = async (id: string, action: 'approve' | 'reject' | 'delete') => {
@@ -229,7 +250,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="relative z-20 block">
         {activeTab === 'overview' && <OverviewTab stats={stats} />}
         {activeTab === 'ambassadors' && <AdminAmbassadorsTab addToast={addToast} />}
-        {activeTab === 'users' && <UsersTab onSave={handleSaveUser} onDelete={handleDeleteUser} onToggleBan={toggleBanUser} onApprove={approveUser} onBypassKyc={bypassKyc} addToast={addToast} />}
+        {activeTab === 'users' && <UsersTab onSave={handleSaveUser} onDelete={handleDeleteUser} onToggleBan={toggleBanUser} onApprove={approveUser} onBypassKyc={bypassKyc} onBypassKyb={bypassKyb} addToast={addToast} />}
         {activeTab === 'events' && <EventsTab onAction={handleEventAction} onSave={handleSaveEvent} addToast={addToast} />}
         {activeTab === 'finance' && <FinanceTab stats={stats} addToast={addToast} />}
         {activeTab === 'kyb' && <KybReviewTab addToast={addToast} />}
@@ -546,7 +567,7 @@ const EventsTab = ({ onAction, onSave, addToast }: any) => {
 };
 
 // ─── Users Tab ───
-const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, onBypassKyc, addToast }: any) => {
+const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, onBypassKyc, onBypassKyb, addToast }: any) => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -582,6 +603,10 @@ const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, onBypassKyc, addTo
       id: u.id, name: u.name || u.full_name || 'Utilisateur', email: u.email || '',
       role: (u.role as UserRole) || UserRole.USER, status: u.status || 'active',
       joinedAt: u.created_at, avatar: u.avatar || u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'U')}&background=6366f1&color=fff`,
+      is_verified: !!u.is_verified,
+      business_status: u.business_status || 'none',
+      free_physical_tickets_granted: u.free_physical_tickets_granted || 0,
+      free_physical_tickets_used: u.free_physical_tickets_used || 0
     })));
     setTotalCount(count || 0);
     setLoading(false);
@@ -614,6 +639,11 @@ const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, onBypassKyc, addTo
 
   const handleBypassKyc = async (id: string) => {
     await onBypassKyc(id);
+    fetchUsers();
+  };
+
+  const handleBypassKyb = async (id: string) => {
+    await onBypassKyb(id);
     fetchUsers();
   };
 
@@ -651,6 +681,11 @@ const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, onBypassKyc, addTo
                       <div>
                         <div className="text-white font-bold">{user.name}</div>
                         <div className="text-slate-400 text-xs mt-0.5">{user.email}</div>
+                        {user.role === 'ORGANIZER' && (
+                          <div className="text-[10px] text-orange-400 font-semibold mt-1 bg-orange-500/10 px-2 py-0.5 rounded-md inline-block border border-orange-500/20">
+                            Tickets Gratuits : {(user as any).free_physical_tickets_granted - (user as any).free_physical_tickets_used} / {(user as any).free_physical_tickets_granted}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -670,13 +705,30 @@ const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, onBypassKyc, addTo
                           </button>
                         )}
                         {user.role === 'ORGANIZER' && (
-                          <button
-                            onClick={() => handleBypassKyc(user.id)}
-                            title="Bypass KYC - Valider l'identité manuellement"
-                            className="px-3 py-1.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/30 font-bold text-xs flex items-center gap-1.5 transition-all"
-                          >
-                            <Shield size={14} /> KYC ✓
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleBypassKyc(user.id)}
+                              title={user.is_verified ? "KYC déjà vérifié" : "Bypass KYC - Valider l'identité manuellement"}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all ${
+                                user.is_verified
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30'
+                              }`}
+                            >
+                              <Shield size={14} /> {user.is_verified ? 'KYC Validé ✓' : 'Bypass KYC'}
+                            </button>
+                            <button
+                              onClick={() => handleBypassKyb(user.id)}
+                              title={user.business_status === 'verified' ? "KYB déjà vérifié" : "Bypass KYB - Valider l'entreprise manuellement"}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all ${
+                                user.business_status === 'verified'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                                  : 'bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30'
+                              }`}
+                            >
+                              <Building2 size={14} /> {user.business_status === 'verified' ? 'KYB Validé ✓' : 'Bypass KYB'}
+                            </button>
+                          </>
                         )}
                         <button onClick={() => { setEditingUser(user); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Edit2 size={16} /></button>
                         <button onClick={() => handleBan(user.id)} className={`p-2 rounded-lg transition-colors ${user.status === 'banned' ? 'text-emerald-400 hover:bg-emerald-400/10' : 'text-slate-400 hover:text-amber-400 hover:bg-amber-400/10'}`}>
@@ -1501,7 +1553,13 @@ const FinanceTab = ({ stats, addToast }: any) => {
 
 // ─── Modals (Z-Index 50 to override all) ───
 const UserModal = ({ user, onClose, onSave }: any) => {
-  const [form, setForm] = useState(user || { name: '', email: '', role: UserRole.USER, status: 'active' });
+  const [form, setForm] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    role: user?.role || UserRole.USER,
+    status: user?.status || 'active',
+    free_physical_tickets_granted: user?.free_physical_tickets_granted || 0
+  });
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -1539,6 +1597,12 @@ const UserModal = ({ user, onClose, onSave }: any) => {
               {Object.values(UserRole).map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
+          {form.role === UserRole.ORGANIZER && (
+            <label className="block">
+              <span className="text-slate-400 text-sm font-semibold mb-1 block">Tickets physiques gratuits accordés</span>
+              <input type="number" min="0" value={form.free_physical_tickets_granted} onChange={e => setForm({ ...form, free_physical_tickets_granted: parseInt(e.target.value) || 0 })} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none" />
+            </label>
+          )}
           <div className="pt-4 flex justify-end gap-3">
             <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-300 hover:text-white">Annuler</button>
             <button type="submit" disabled={saving} className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2">
