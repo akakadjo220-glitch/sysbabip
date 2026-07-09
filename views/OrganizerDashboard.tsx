@@ -3561,6 +3561,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
   const [columns, setColumns] = useState<number>(3);
   const [isGenerating, setIsGenerating] = useState(false);
   const [maxBatchLimit, setMaxBatchLimit] = useState<number>(5000);
+  const [exportFormat, setExportFormat] = useState<string>('pdf');
 
   // KYC States
   const [kycFile, setKycFile] = useState<File | null>(null);
@@ -3734,8 +3735,15 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
         }
       }
 
-      addToast("✅ Signatures créées ! Préparation du PDF...", "info");
-      const success = await generateMassTicketsPDF(tickets, selectedEvent.title, catName, columns);
+      let success = false;
+      if (exportFormat === 'pdf') {
+        addToast("✅ Signatures créées ! Préparation du PDF...", "info");
+        success = await generateMassTicketsPDF(tickets, selectedEvent.title, catName, columns);
+      } else {
+        addToast("✅ Signatures créées ! Préparation de l'archive ZIP...", "info");
+        const { generateMassTicketsZipJPG } = await import('../utils/pdfMassGenerator');
+        success = await generateMassTicketsZipJPG(tickets, selectedEvent.title, catName);
+      }
 
       if (success) {
         const consumedFree = Math.min(quantity, remainingFreeQuota);
@@ -3744,11 +3752,11 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
           await supabase.from('profiles').update({ free_physical_tickets_used: newUsed }).eq('id', user?.id);
           await fetchProfile();
         }
-        addToast("🖨️ Fichier PDF généré avec succès !", "success");
+        addToast(exportFormat === 'pdf' ? "🖨️ Fichier PDF généré avec succès !" : "📦 Archive ZIP d'images JPG générée avec succès !", "success");
         setQuantity(50);
         fetchPhysicalTxs(selectedEventId || undefined);
       } else {
-        throw new Error("Erreur lors de la génération du PDF");
+        throw new Error(exportFormat === 'pdf' ? "Erreur lors de la génération du PDF" : "Erreur lors de la génération des images JPG (ZIP)");
       }
     } catch (err: any) {
       addToast(`Erreur : ${err.message}`, "error");
@@ -4021,7 +4029,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
               Une commission Babipass est automatiquement calculée sur chaque lot imprimé.
             </p>
 
-            <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 relative z-10">
+            <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 relative z-10">
 
               <div className="space-y-2 lg:col-span-2">
                 <label className="text-sm font-bold text-slate-300">Événement</label>
@@ -4082,9 +4090,21 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                 </select>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-300">Format d'export</label>
+                <select
+                  value={exportFormat}
+                  onChange={e => setExportFormat(e.target.value)}
+                  className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-orange-500 outline-none"
+                >
+                  <option value="pdf">Document PDF (Imprimable)</option>
+                  <option value="zip">Images JPG compressées (ZIP)</option>
+                </select>
+              </div>
+
               {/* Commission Banner */}
               {selectedEventId && selectedCategoryId && (
-                <div className={`lg:col-span-5 rounded-2xl p-4 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${ticketPrice === 0
+                <div className={`lg:col-span-6 rounded-2xl p-4 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${ticketPrice === 0
                   ? 'bg-slate-700/40 border-slate-600/40'
                   : balanceSufficient || remainingFreeQuota >= quantity
                     ? 'bg-emerald-500/10 border-emerald-500/30'
@@ -4124,7 +4144,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                 </div>
               )}
 
-              <div className="lg:col-span-5 border-t border-white/5 pt-6 mt-2 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="lg:col-span-6 border-t border-white/5 pt-6 mt-2 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
                   <ShieldCheck size={16} /> QR Codes JWS Haute Sécurité Inclus
                 </div>
