@@ -101,6 +101,16 @@ export const AdminDashboard: React.FC = () => {
     addToast('Organisateur approuvé.', 'success');
   };
 
+  const bypassKyc = async (id: string) => {
+    const { error } = await supabase.from('profiles').update({
+      is_verified: true,
+      didit_status: 'verified',
+      address_status: 'verified'
+    }).eq('id', id);
+    if (error) { addToast(`Erreur bypass KYC: ${error.message}`, 'error'); return; }
+    addToast('✅ KYC bypassé avec succès — l\'organisateur a maintenant accès complet.', 'success');
+  };
+
   const handleEventAction = async (id: string, action: 'approve' | 'reject' | 'delete') => {
     if (action === 'delete') {
       if (!window.confirm('Supprimer cet événement définitivement ?')) return false;
@@ -219,7 +229,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="relative z-20 block">
         {activeTab === 'overview' && <OverviewTab stats={stats} />}
         {activeTab === 'ambassadors' && <AdminAmbassadorsTab addToast={addToast} />}
-        {activeTab === 'users' && <UsersTab onSave={handleSaveUser} onDelete={handleDeleteUser} onToggleBan={toggleBanUser} onApprove={approveUser} addToast={addToast} />}
+        {activeTab === 'users' && <UsersTab onSave={handleSaveUser} onDelete={handleDeleteUser} onToggleBan={toggleBanUser} onApprove={approveUser} onBypassKyc={bypassKyc} addToast={addToast} />}
         {activeTab === 'events' && <EventsTab onAction={handleEventAction} onSave={handleSaveEvent} addToast={addToast} />}
         {activeTab === 'finance' && <FinanceTab stats={stats} addToast={addToast} />}
         {activeTab === 'kyb' && <KybReviewTab addToast={addToast} />}
@@ -536,7 +546,7 @@ const EventsTab = ({ onAction, onSave, addToast }: any) => {
 };
 
 // ─── Users Tab ───
-const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, addToast }: any) => {
+const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, onBypassKyc, addToast }: any) => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -602,6 +612,11 @@ const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, addToast }: any) =
     fetchUsers();
   };
 
+  const handleBypassKyc = async (id: string) => {
+    await onBypassKyc(id);
+    fetchUsers();
+  };
+
   return (
     <div className="space-y-6 block">
       <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 backdrop-blur-md relative z-30">
@@ -652,6 +667,15 @@ const UsersTab = ({ onSave, onDelete, onToggleBan, onApprove, addToast }: any) =
                         {user.status === 'pending' && user.role === 'ORGANIZER' && (
                           <button onClick={() => handleApprove(user.id)} className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 font-bold text-xs flex items-center gap-1.5 transition-all mr-2">
                             <Check size={14} /> Valider
+                          </button>
+                        )}
+                        {user.role === 'ORGANIZER' && (
+                          <button
+                            onClick={() => handleBypassKyc(user.id)}
+                            title="Bypass KYC - Valider l'identité manuellement"
+                            className="px-3 py-1.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/30 font-bold text-xs flex items-center gap-1.5 transition-all"
+                          >
+                            <Shield size={14} /> KYC ✓
                           </button>
                         )}
                         <button onClick={() => { setEditingUser(user); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Edit2 size={16} /></button>
