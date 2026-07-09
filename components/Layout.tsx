@@ -1,33 +1,12 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import React from 'react';
+import { Link } from 'react-router-dom';
 import { Footer } from './Footer';
-import { UserRole } from '../types';
-import {
-  LayoutDashboard,
-  Shield,
-  QrCode,
-  ShoppingBag,
-  Layers,
-  X,
-  Ticket,
-  Gift
-} from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { role } = useAuth();
-  const navigate = useNavigate();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const handleSwitch = (path: string) => {
-    navigate(path);
-    setIsMenuOpen(false);
-  };
-
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 relative selection:bg-orange-500/30">
 
@@ -55,106 +34,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       <Footer />
-
-      {/* Floating Action Button (FAB) Menu */}
-      <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-4 pointer-events-none">
-
-        {/* Menu Items */}
-        <div className={`flex flex-col items-end gap-3 transition-all duration-300 ${isMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
-
-          <FabItem
-            label="Espace Admin"
-            icon={Shield}
-            color="bg-amber-500"
-            active={role === UserRole.ADMIN}
-            onClick={() => handleSwitch('/sysbap')}
-          />
-
-          <FabItem
-            label="Organisateur (Dash)"
-            icon={LayoutDashboard}
-            color="bg-orange-600"
-            active={role === UserRole.ORGANIZER}
-            onClick={() => handleSwitch('/organizer')}
-          />
-
-          <FabItem
-            label="Organisateur (Login)"
-            icon={LayoutDashboard}
-            color="bg-slate-700"
-            active={false}
-            onClick={() => { setIsMenuOpen(false); navigate('/organizer/login'); }}
-          />
-
-          <FabItem
-            label="Staff / Scanner"
-            icon={QrCode}
-            color="bg-emerald-600"
-            active={role === UserRole.STAFF}
-            onClick={() => handleSwitch('/scanner')}
-          />
-
-          <FabItem
-            label="Ambassadeur"
-            icon={Gift}
-            color="bg-indigo-600"
-            active={role === UserRole.AMBASSADOR}
-            onClick={() => handleSwitch('/ambassador')}
-          />
-
-          <FabItem
-            label="Mes Billets (Offline)"
-            icon={Ticket}
-            color="bg-rose-600"
-            active={false}
-            onClick={() => handleSwitch('/tickets')}
-          />
-
-          <FabItem
-            label="Acheteur (Marketplace)"
-            icon={ShoppingBag}
-            color="bg-slate-700"
-            active={role === UserRole.GUEST || role === UserRole.USER}
-            onClick={() => handleSwitch('/')}
-          />
-
-        </div>
-
-        {/* Main Toggle Button */}
-        <button
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className={`group flex items-center justify-center w-16 h-16 rounded-full shadow-2xl transition-all duration-300 pointer-events-auto ${isMenuOpen ? 'bg-slate-800 rotate-90' : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:scale-110'}`}
-        >
-          {isMenuOpen ? (
-            <X size={28} className="text-white" />
-          ) : (
-            <Layers size={28} className="text-white" />
-          )}
-        </button>
-      </div>
-
-      {/* Backdrop for menu */}
-      {isMenuOpen && (
-        <div
-          onClick={() => setIsMenuOpen(false)}
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
-        />
-      )}
     </div>
   );
 };
-
-// Sub-component for Menu Items
-const FabItem = ({ label, icon: Icon, color, onClick, active }: any) => (
-  <button
-    onClick={onClick}
-    className="group flex items-center gap-4 pl-4 pr-1 py-1 rounded-full hover:bg-white/5 transition-all"
-  >
-    <span className="text-sm font-bold text-white bg-slate-900/80 px-3 py-1.5 rounded-lg backdrop-blur-md shadow-lg border border-white/10 group-hover:-translate-x-1 transition-transform">
-      {label}
-    </span>
-    <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2 transition-all ${active ? 'border-white scale-110' : 'border-transparent group-hover:scale-110'} ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-  </button>
-);
