@@ -18,6 +18,7 @@ import { getUniqueSlug } from '../utils/slugUtils';
 import { getCountryDialCode } from '../utils/countryCodes';
 import { PaystackService } from '../services/PaystackService';
 import { PawaPayService } from '../services/PawaPayService';
+import { uploadFile } from '../services/uploadService';
 
 const MapResizer = () => {
   const map = useMap();
@@ -2175,9 +2176,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
     setUploadingVideo(true);
     const fileName = `${Date.now()}-trailer-${file.name.replace(/\s+/g, '-')}`;
     try {
-      const { data, error } = await supabase.storage.from('events').upload(`videos/${fileName}`, file, { cacheControl: '3600', upsert: false });
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('events').getPublicUrl(data.path);
+      const publicUrl = await uploadFile(file, 'events', `videos/${fileName}`);
       setForm({ ...form, video: publicUrl });
     } catch (err: any) {
       console.error("Video upload error:", err);
@@ -2623,10 +2622,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                     if (!file) return;
                     const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
                     try {
-                      // Note : Le bucket 'events' doit avoir été créé avec les bonnes politiques publiques
-                      const { data, error } = await supabase.storage.from('events').upload(`covers/${fileName}`, file, { cacheControl: '3600', upsert: false });
-                      if (error) throw error;
-                      const { data: { publicUrl } } = supabase.storage.from('events').getPublicUrl(data.path);
+                      const publicUrl = await uploadFile(file, 'events', `covers/${fileName}`);
                       setForm({ ...form, image: publicUrl });
                     } catch (err) {
                       console.error("Erreur d'upload :", err);
@@ -2659,9 +2655,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                         if (!file) return;
                         const fileName = `${Date.now()}-gal-${file.name.replace(/\s+/g, '-')}`;
                         try {
-                          const { data, error } = await supabase.storage.from('events').upload(`gallery/${fileName}`, file);
-                          if (error) throw error;
-                          const { data: { publicUrl } } = supabase.storage.from('events').getPublicUrl(data.path);
+                          const publicUrl = await uploadFile(file, 'events', `gallery/${fileName}`);
                           updateGalleryImage(i, publicUrl);
                         } catch (err) {
                           console.error("Erreur d'upload :", err);
@@ -3581,13 +3575,10 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       const ext = kycFile.name.split('.').pop();
       const filePath = `${user.id}/address_verif_${Date.now()}.${ext}`;
 
-      const { error: uploadErr } = await supabase.storage.from('kyc_documents').upload(filePath, kycFile);
-      if (uploadErr) throw uploadErr;
-
-      const { data: urlData } = supabase.storage.from('kyc_documents').getPublicUrl(filePath);
+      const publicUrl = await uploadFile(kycFile, 'kyc_documents', filePath);
 
       const { error: profileErr } = await supabase.from('profiles').update({
-        address_doc_url: urlData.publicUrl,
+        address_doc_url: publicUrl,
         address_status: 'pending'
       }).eq('id', user.id);
 
@@ -4243,10 +4234,8 @@ const FundraisingTab: React.FC<{ organizerId: string | undefined; addToast: (m: 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const filename = `fundraising/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('events').upload(filename, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('events').getPublicUrl(filename);
-      setForm((prev: any) => ({ ...prev, image: urlData.publicUrl }));
+      const publicUrl = await uploadFile(file, 'events', filename);
+      setForm((prev: any) => ({ ...prev, image: publicUrl }));
       addToast('Image uploadée !', 'success');
     } catch (err: any) {
       addToast('Erreur upload: ' + err.message, 'error');
@@ -4866,10 +4855,8 @@ const TournamentsView = ({ organizerId, events, addToast }: any) => {
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const filename = `tournaments/${type}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('events').upload(filename, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('events').getPublicUrl(filename);
-      setForm((prev: any) => ({ ...prev, [type]: urlData.publicUrl }));
+      const publicUrl = await uploadFile(file, 'events', filename);
+      setForm((prev: any) => ({ ...prev, [type]: publicUrl }));
       addToast('Image uploadée !', 'success');
     } catch (err: any) {
       addToast('Erreur upload: ' + err.message, 'error');

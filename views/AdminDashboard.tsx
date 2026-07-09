@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift, Filter, Star } from 'lucide-react';
+import { Shield, CheckCircle, Search, Users, Calendar, CreditCard, XCircle, Trash2, Edit2, Ban, Plus, Save, X, Check, Loader2, Eye, AlertCircle, RefreshCw, Globe, Settings, Smartphone, Mail, Banknote, User, Coins, Building2, FileText, MapPin, Clock, AlertTriangle, CheckCircle2, Tags, Heart, Download, Gift, Filter, Star, Image } from 'lucide-react';
 import { formatCurrency, EXCHANGE_RATES } from '../constants';
 import { UserRole, UserProfile, Event } from '../types';
 import { supabase } from '../supabaseClient';
@@ -10,6 +10,7 @@ import { AccountSettingsView } from '../components/AccountSettingsView';
 import { Pagination } from '../components/Pagination';
 import { getPlatformSettings, clearSettingsCache } from '../utils/platformSettings';
 import { getUniqueSlug } from '../utils/slugUtils';
+import { uploadFile } from '../services/uploadService';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b'];
 type AdminTab = 'overview' | 'users' | 'events' | 'finance' | 'kyb' | 'kyc' | 'ads' | 'countries' | 'templates' | 'settings' | 'account' | 'categories' | 'fundraising' | 'refunds' | 'ambassadors' | 'reviews';
@@ -1981,6 +1982,11 @@ const SettingsTab = () => {
     evolutionInstance: '',
     evolutionApiKey: ''
   });
+  const [cheveretoConfig, setCheveretoConfig] = useState({
+    enabled: false,
+    apiUrl: 'https://insforgeinst.site/api/1/upload',
+    apiKey: ''
+  });
   const [openrouterApiKey, setOpenrouterApiKey] = useState('');
   const [supportConfig, setSupportConfig] = useState({ whatsapp: '', email: '' });
   const [smtpConfig, setSmtpConfig] = useState({ host: '', user: '', pass: '', port: '', senderName: 'Babipass' });
@@ -2016,7 +2022,7 @@ const SettingsTab = () => {
           'feexpay_config', 'intouch_config', 'paydunya_config',
           'affiliate_config', 'payment_toggles', 'exchange_rates',
           'default_commission_rate', 'default_advance_rate', 'default_physical_commission_rate', 'openrouter_api_key', 'support_config',
-          'enable_auto_reminders', 'enable_auto_thanks']);
+          'enable_auto_reminders', 'enable_auto_thanks', 'chevereto_config']);
 
       if (data) {
         const map = Object.fromEntries(data.map((r: any) => [r.key, r.value]));
@@ -2032,6 +2038,7 @@ const SettingsTab = () => {
         if (map.payment_toggles) setPaymentToggles(map.payment_toggles);
         if (map.exchange_rates) setExchangeRates(map.exchange_rates);
         if (map.support_config) setSupportConfig(map.support_config);
+        if (map.chevereto_config) setCheveretoConfig(map.chevereto_config);
         setEmailToggles({
           reminders: map.enable_auto_reminders === 'true' || map.enable_auto_reminders === true,
           thanks: map.enable_auto_thanks === 'true' || map.enable_auto_thanks === true
@@ -2073,6 +2080,7 @@ const SettingsTab = () => {
       { key: 'support_config', value: supportConfig },
       { key: 'enable_auto_reminders', value: emailToggles.reminders },
       { key: 'enable_auto_thanks', value: emailToggles.thanks },
+      { key: 'chevereto_config', value: cheveretoConfig },
     ];
 
     try {
@@ -2318,6 +2326,54 @@ const SettingsTab = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+
+        {/* Chevereto API Configuration */}
+        <div className="bg-slate-900/50 backdrop-blur-xl p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl lg:col-span-2">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-amber-500/20 text-amber-500 rounded-xl flex items-center justify-center">
+                <Image size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Hébergement d'images Chevereto</h3>
+                <p className="text-slate-400 text-sm">Passerelle de stockage pour toutes les images et vidéos</p>
+              </div>
+            </div>
+            {/* Toggle switch */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-400">Activer Chevereto</span>
+              <button
+                type="button"
+                onClick={() => setCheveretoConfig({ ...cheveretoConfig, enabled: !cheveretoConfig.enabled })}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${cheveretoConfig.enabled ? 'bg-amber-500' : 'bg-slate-750'}`}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${cheveretoConfig.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">API Upload URL</label>
+              <input
+                type="text"
+                value={cheveretoConfig.apiUrl || ''}
+                onChange={e => setCheveretoConfig({ ...cheveretoConfig, apiUrl: e.target.value })}
+                placeholder="https://insforgeinst.site/api/1/upload"
+                className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">API Key</label>
+              <input
+                type="password"
+                value={cheveretoConfig.apiKey || ''}
+                onChange={e => setCheveretoConfig({ ...cheveretoConfig, apiKey: e.target.value })}
+                placeholder="YOUR_API_KEY"
+                className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
+              />
+            </div>
           </div>
         </div>
 
@@ -3134,10 +3190,8 @@ const AdBannersTab: React.FC<{ addToast: (msg: string, type?: any) => void }> = 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
       const filename = `banners_videos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('events').upload(filename, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('events').getPublicUrl(filename);
-      setForm((prev: any) => ({ ...prev, video_url: urlData.publicUrl }));
+      const publicUrl = await uploadFile(file, 'events', filename);
+      setForm((prev: any) => ({ ...prev, video_url: publicUrl }));
       addToast('Vidéo uploadée !', 'success');
     } catch (err: any) {
       addToast('Erreur upload : ' + err.message, 'error');
@@ -3153,10 +3207,8 @@ const AdBannersTab: React.FC<{ addToast: (msg: string, type?: any) => void }> = 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const filename = `banners/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('events').upload(filename, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('events').getPublicUrl(filename);
-      setForm((prev: any) => ({ ...prev, image_url: urlData.publicUrl }));
+      const publicUrl = await uploadFile(file, 'events', filename);
+      setForm((prev: any) => ({ ...prev, image_url: publicUrl }));
       addToast('Image uploadée !', 'success');
     } catch (err: any) {
       addToast('Erreur upload : ' + err.message, 'error');

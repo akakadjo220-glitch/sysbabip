@@ -2,6 +2,7 @@ import { User, Lock, Save, Loader2, Shield, LogOut, Building2, FileText, MapPin,
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import { uploadFile } from '../services/uploadService';
 import { useContext, useState, useEffect } from 'react';
 
 export const AccountSettingsView = ({ userMode }: { userMode: 'admin' | 'organizer' }) => {
@@ -180,26 +181,22 @@ export const AccountSettingsView = ({ userMode }: { userMode: 'admin' | 'organiz
         try {
             // Upload business doc
             const bizPath = `kyb/${user?.id}/business_doc_${Date.now()}`;
-            const { error: bizErr } = await supabase.storage.from('documents').upload(bizPath, businessDocFile, { upsert: true });
-            if (bizErr) throw bizErr;
-            const { data: bizUrl } = supabase.storage.from('documents').getPublicUrl(bizPath);
+            const bizPublicUrl = await uploadFile(businessDocFile, 'documents', bizPath);
 
             // Upload address proof
             const addrPath = `kyb/${user?.id}/address_proof_${Date.now()}`;
-            const { error: addrErr } = await supabase.storage.from('documents').upload(addrPath, addressProofFile, { upsert: true });
-            if (addrErr) throw addrErr;
-            const { data: addrUrl } = supabase.storage.from('documents').getPublicUrl(addrPath);
+            const addrPublicUrl = await uploadFile(addressProofFile, 'documents', addrPath);
 
             // Update profile
             const { error: profileErr } = await supabase.from('profiles').update({
                 business_status: 'pending',
-                business_doc_url: bizUrl.publicUrl,
-                address_proof_url: addrUrl.publicUrl,
+                business_doc_url: bizPublicUrl,
+                address_proof_url: addrPublicUrl,
                 business_rejection_reason: null
             }).eq('id', user?.id);
             if (profileErr) throw profileErr;
 
-            setKyb(prev => ({ ...prev, businessStatus: 'pending', businessDocUrl: bizUrl.publicUrl, addressProofUrl: addrUrl.publicUrl }));
+            setKyb(prev => ({ ...prev, businessStatus: 'pending', businessDocUrl: bizPublicUrl, addressProofUrl: addrPublicUrl }));
             setKybSuccess('Documents soumis ! Un administrateur les examinera sous peu.');
             setBusinessDocFile(null);
             setAddressProofFile(null);
