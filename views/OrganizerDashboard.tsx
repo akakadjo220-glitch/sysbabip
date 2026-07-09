@@ -2919,6 +2919,20 @@ const PosTeamView = ({ events, transactions, addToast }: any) => {
     }
   };
 
+  const handleDeleteAgent = async (agentId: string) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet agent ? Cette action est irréversible.")) return;
+
+    try {
+      const { error } = await supabase.from('agents').delete().eq('id', agentId);
+      if (error) throw error;
+      
+      setAgents(prev => prev.filter(a => a.id !== agentId));
+      addToast("Agent supprimé avec succès !", "success");
+    } catch (err: any) {
+      addToast("Erreur lors de la suppression: " + err.message, "error");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white/5 p-6 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-xl">
@@ -2947,7 +2961,10 @@ const PosTeamView = ({ events, transactions, addToast }: any) => {
                     <p className="text-orange-400 text-xs font-medium">{agent.role}</p>
                   </div>
                 </div>
-                <button onClick={() => { setEditingAgent(agent); setShowModal(true); }} className="text-slate-500 hover:text-white p-2 bg-white/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 size={14} /></button>
+                <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { setEditingAgent(agent); setShowModal(true); }} className="text-slate-500 hover:text-white p-2 bg-white/5 rounded-full"><Edit2 size={14} /></button>
+                  <button onClick={() => handleDeleteAgent(agent.id)} className="text-red-500 hover:text-red-400 p-2 bg-white/5 rounded-full"><Trash2 size={14} /></button>
+                </div>
               </div>
 
               <div className="space-y-3 mb-6 bg-slate-800/50 p-4 rounded-xl border border-white/5">
