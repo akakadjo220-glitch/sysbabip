@@ -15,4 +15,4 @@ export const SUPABASE_ANON_KEY =
 export const SERVER_URL = 
   import.meta.env.VITE_SERVER_URL || 
   import.meta.env.NEXT_PUBLIC_SERVER_URL || 
-  'http://b48akzszflzxiselelieqfdr.51.255.162.88.sslip.io'; // Sera écrasé par la variable VITE_SERVER_URL sur Cloudflare/Coolify
+  'https://b48akzszflzxiselelieqfdr.51.255.162.88.sslip.io'; // Sera écrasé par la variable VITE_SERVER_URL sur Cloudflare/Coolify
