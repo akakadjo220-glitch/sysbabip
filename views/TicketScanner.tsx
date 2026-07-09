@@ -176,13 +176,54 @@ export const TicketScanner: React.FC = () => {
           try {
             html5QrCode = new Html5Qrcode('qr-reader');
             
-            // Tentative 1 : face arrière (environment) en HD (idéal pour QR codes denses)
+            // 1. Récupérer la liste des caméras physiques pour cibler précisément la caméra arrière
+            const devices = await Html5Qrcode.getCameras().catch(() => [] as any[]);
+            
+            let selectedCameraId: any = { facingMode: 'environment' };
+            
+            if (devices && devices.length > 0) {
+              // Étape A : Trouver les caméras arrière explicites
+              const rearCameras = devices.filter(d => {
+                const label = (d.label || '').toLowerCase();
+                return label.includes('back') || 
+                       label.includes('rear') || 
+                       label.includes('arrière') || 
+                       label.includes('arriere') || 
+                       label.includes('environment') || 
+                       label.includes('environnement');
+              });
+              
+              if (rearCameras.length > 0) {
+                // On prend la première caméra arrière identifiée (la principale)
+                selectedCameraId = rearCameras[0].id;
+              } else {
+                // Étape B : Exclure les caméras selfie/frontales
+                const nonFrontCameras = devices.filter(d => {
+                  const label = (d.label || '').toLowerCase();
+                  return d.label && 
+                         !label.includes('front') && 
+                         !label.includes('selfie') && 
+                         !label.includes('avant') && 
+                         !label.includes('user');
+                });
+                
+                if (nonFrontCameras.length > 0) {
+                  selectedCameraId = nonFrontCameras[0].id;
+                } else {
+                  // Étape C : Par défaut, si pas d'info, on prend la dernière caméra (qui est souvent la caméra arrière principale)
+                  selectedCameraId = devices[devices.length - 1].id;
+                }
+              }
+            }
+            
+            // 2. Tenter le démarrage de la caméra arrière sélectionnée
+            // Tentative 1 : Résolution HD pour les QR Codes denses
             try {
               const promise = html5QrCode.start(
-                { facingMode: 'environment' },
+                selectedCameraId,
                 { 
                   fps: 15,
-                  videoConstraints: {
+                  videoConstraints: selectedCameraId.facingMode ? undefined : {
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
                   }
@@ -194,58 +235,39 @@ export const TicketScanner: React.FC = () => {
               await promise;
               return;
             } catch (hdErr) {
-              console.warn("Échec de la caméra HD facingMode, tentative en standard...", hdErr);
+              console.warn("Échec du démarrage de la caméra choisie en HD, tentative en standard...", hdErr);
             }
             
             if (!mounted) return;
             
-            // Tentative 2 : face arrière (environment) en résolution standard (très compatible pour tous mobiles)
-            try {
-              const promiseStd = html5QrCode.start(
-                { facingMode: 'environment' },
-                { fps: 15 },
-                (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
-                () => {}
-              );
-              initPromise = promiseStd;
-              await promiseStd;
-              return;
-            } catch (stdErr) {
-              console.warn("Échec du facingMode standard, tentative par ID matériel...", stdErr);
-            }
-            
-            if (!mounted) return;
-            
-            // Tentative 3 : Recherche matérielle (cas WebView / navigateurs anciens sans support de facingMode)
-            const devices = await Html5Qrcode.getCameras();
-            if (!devices || devices.length === 0) {
-              throw new Error("Aucune caméra trouvée.");
-            }
-            
-            // On cherche le capteur arrière par mot clé dans son nom
-            let backCamera = devices.find(device => {
-              const label = device.label.toLowerCase();
-              return label.includes('back') || 
-                     label.includes('rear') || 
-                     label.includes('arrière') || 
-                     label.includes('arriere') || 
-                     label.includes('environment') ||
-                     label.includes('environnement');
-            });
-            
-            const selectedCameraId = backCamera ? backCamera.id : devices[devices.length - 1].id;
-            
-            const promiseId = html5QrCode.start(
+            // Tentative 2 : Résolution Standard (sans contraintes de taille, pour compatibilité maximale)
+            const promiseStd = html5QrCode.start(
               selectedCameraId,
               { fps: 15 },
               (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
               () => {}
             );
-            initPromise = promiseId;
-            await promiseId;
+            initPromise = promiseStd;
+            await promiseStd;
           } catch (err: any) {
             if (!mounted) return;
             console.error('Camera error:', err);
+            
+            // Tentative 3 ultime de secours globale : facingMode générique
+            try {
+              const promiseFallback = html5QrCode.start(
+                { facingMode: 'environment' },
+                { fps: 15 },
+                (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+                () => {}
+              );
+              initPromise = promiseFallback;
+              await promiseFallback;
+              return;
+            } catch (fallbackErr) {
+              console.error("Ultimate fallback failed:", fallbackErr);
+            }
+            
             alert("Erreur d'accès à la caméra.\n\n1. Veuillez vérifier que vous avez autorisé l'accès à l'appareil photo pour ce navigateur.\n2. Assurez-vous que l'appareil photo n'est pas utilisé par une autre application.\n3. Utilisez une connexion sécurisée HTTPS.");
             setCameraActive(false);
           }
