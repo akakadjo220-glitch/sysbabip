@@ -194,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         // Pas de session Supabase
                         if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
                             // Ne pas effacer le rôle STAFF (agents authentifiés via RPC, sans session Supabase)
+                            const savedRole = localStorage.getItem('afritix_user_role') as UserRole;
                             const expiration = localStorage.getItem('afritix_agent_session_expires_at');
                             const isExpired = expiration ? Date.now() > Number(expiration) : false;
                             const isAgentSession = savedRole === UserRole.STAFF && localStorage.getItem('afritix_current_agent') && !isExpired;
