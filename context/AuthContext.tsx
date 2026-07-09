@@ -63,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('afritix_auth_token');
         localStorage.removeItem('afritix_user_role');
         localStorage.removeItem('afritix_current_agent');
+        localStorage.removeItem('afritix_agent_session_expires_at');
         setUser(null);
         await supabase.auth.signOut();
     }, []);
@@ -125,6 +126,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Priority 2: localStorage (persists across refreshes)
         const savedRole = localStorage.getItem('afritix_user_role') as UserRole;
         if (savedRole && Object.values(UserRole).includes(savedRole) && savedRole !== UserRole.GUEST) {
+            if (savedRole === UserRole.STAFF) {
+                const expiration = localStorage.getItem('afritix_agent_session_expires_at');
+                const isExpired = expiration ? Date.now() > Number(expiration) : false;
+                if (isExpired) {
+                    localStorage.removeItem('afritix_user_role');
+                    localStorage.removeItem('afritix_current_agent');
+                    localStorage.removeItem('afritix_agent_session_expires_at');
+                    setRole(UserRole.GUEST);
+                    setUser(null);
+                    return;
+                }
+                
+                const storedAgent = localStorage.getItem('afritix_current_agent');
+                if (storedAgent) {
+                    try {
+                        setUser(JSON.parse(storedAgent));
+                    } catch (e) {
+                        console.error("Error parsing stored agent:", e);
+                    }
+                }
+            }
             setRole(savedRole);
             return;
         }
@@ -172,14 +194,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         // Pas de session Supabase
                         if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
                             // Ne pas effacer le rôle STAFF (agents authentifiés via RPC, sans session Supabase)
-                            const savedRole = localStorage.getItem('afritix_user_role') as UserRole;
-                            const isAgentSession = savedRole === UserRole.STAFF && localStorage.getItem('afritix_current_agent');
+                            const expiration = localStorage.getItem('afritix_agent_session_expires_at');
+                            const isExpired = expiration ? Date.now() > Number(expiration) : false;
+                            const isAgentSession = savedRole === UserRole.STAFF && localStorage.getItem('afritix_current_agent') && !isExpired;
 
-                            if (!isAgentSession) {
+                            if (isAgentSession) {
+                                const storedAgent = localStorage.getItem('afritix_current_agent');
+                                if (storedAgent) {
+                                    try {
+                                        setUser(JSON.parse(storedAgent));
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                            } else {
                                 setUser(null);
                                 setRole(UserRole.GUEST);
                                 localStorage.removeItem('afritix_user_role');
                                 localStorage.removeItem('afritix_current_agent');
+                                localStorage.removeItem('afritix_agent_session_expires_at');
                             }
                             // Si c'est un agent, on garde son rôle STAFF même sans session Supabase
                             setPendingUserId(null);

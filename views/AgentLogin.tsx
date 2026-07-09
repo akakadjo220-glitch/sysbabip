@@ -40,6 +40,11 @@ export const AgentLogin: React.FC = () => {
             setRole(UserRole.STAFF);
             localStorage.setItem('afritix_user_role', UserRole.STAFF);
             localStorage.setItem('afritix_current_agent', JSON.stringify(agent));
+            
+            // Session de 12 heures pour les agents
+            const sessionDuration = 12 * 60 * 60 * 1000;
+            localStorage.setItem('afritix_agent_session_expires_at', (Date.now() + sessionDuration).toString());
+            
             setLoading(false);
 
             // 🏪 Agent POS → interface de vente terrain
@@ -90,13 +95,14 @@ export const AgentLogin: React.FC = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Code PIN (4 chiffres)</label>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Code PIN (4 caractères)</label>
                         <div className="relative">
                             <Lock className="absolute left-4 top-3.5 text-slate-500" size={20} />
                             <input
                                 type="password"
                                 maxLength={4}
-                                pattern="\d{4}"
+                                pattern="[a-zA-Z0-9]{4}"
+                                title="Exactement 4 caractères alphanumériques"
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-mono tracking-widest"

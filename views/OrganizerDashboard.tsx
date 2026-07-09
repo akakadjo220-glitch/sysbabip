@@ -3098,8 +3098,8 @@ const AgentModal = ({ onClose, events, onSave, agent }: any) => {
               <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none" placeholder="+225..." />
             </label>
             <label className="block">
-              <span className="text-slate-400 text-sm font-semibold mb-1 block">Code PIN (4 chiffres)</span>
-              <input required type="password" maxLength={4} pattern="\d{4}" title="Exactement 4 chiffres" value={form.pin} onChange={e => setForm({ ...form, pin: e.target.value })} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white font-mono tracking-widest focus:ring-2 focus:ring-orange-500 outline-none" placeholder="1234" />
+              <span className="text-slate-400 text-sm font-semibold mb-1 block">Code PIN (4 caractères)</span>
+              <input required type="password" maxLength={4} pattern="[a-zA-Z0-9]{4}" title="Exactement 4 caractères alphanumériques" value={form.pin} onChange={e => setForm({ ...form, pin: e.target.value })} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white font-mono tracking-widest focus:ring-2 focus:ring-orange-500 outline-none" placeholder="12A4" />
             </label>
           </div>
           <label className="block">
