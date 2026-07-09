@@ -72,6 +72,8 @@ export const TicketScanner: React.FC = () => {
   const [lastSyncInfo, setLastSyncInfo]       = useState('');
   const [devicesList, setDevicesList]         = useState<any[]>([]);
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState<number>(0);
+  const [cameraError, setCameraError]         = useState<string>('');
+  const cameraStoppingRef = useRef<Promise<void> | null>(null);
 
   // Keep a stable ref for processToken to use in camera/NFC callbacks
   const processTokenRef = useRef<((token: string) => Promise<void>) | null>(null);
@@ -175,6 +177,19 @@ export const TicketScanner: React.FC = () => {
         if (!el) return;
         
         const startCamera = async () => {
+          setCameraError('');
+          
+          // Attendre la libération complète du matériel de la caméra précédente si elle est en train de s'arrêter
+          if (cameraStoppingRef.current) {
+            try {
+              await cameraStoppingRef.current;
+            } catch (e) {
+              console.warn("Échec de l'attente du stop de la caméra précédente:", e);
+            }
+          }
+          
+          if (!mounted) return;
+
           try {
             html5QrCode = new Html5Qrcode('qr-reader');
             
@@ -282,8 +297,9 @@ export const TicketScanner: React.FC = () => {
               console.error("Ultimate fallback failed:", fallbackErr);
             }
             
-            alert("Erreur d'accès à la caméra.\n\n1. Veuillez vérifier que vous avez autorisé l'accès à l'appareil photo pour ce navigateur.\n2. Assurez-vous que l'appareil photo n'est pas utilisé par une autre application.\n3. Utilisez une connexion sécurisée HTTPS.");
-            setCameraActive(false);
+            if (mounted) {
+              setCameraError("Impossible d'accéder à cet objectif. Veuillez essayer de changer de caméra.");
+            }
           }
         };
 
@@ -304,7 +320,7 @@ export const TicketScanner: React.FC = () => {
            } catch(e) { console.error("Html5Qrcode Stop Error", e); }
         }
       };
-      cleanup();
+      cameraStoppingRef.current = cleanup();
     };
   }, [cameraActive, currentDeviceIndex]);
 
@@ -643,6 +659,13 @@ export const TicketScanner: React.FC = () => {
             {/* Camera active */}
             {cameraActive && result === 'idle' && (
               <>
+                {cameraError && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-slate-950/95 text-center space-y-4">
+                    <XCircle className="text-red-500 animate-pulse" size={48} />
+                    <p className="text-white font-semibold text-base px-4">{cameraError}</p>
+                    <p className="text-slate-400 text-xs max-w-xs">Cet objectif est peut-être désactivé, non supporté ou déjà utilisé par une autre application en arrière-plan.</p>
+                  </div>
+                )}
                 <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
                   <div className="flex-1 bg-black/50" />
                   <div className="flex h-64">
@@ -666,7 +689,7 @@ export const TicketScanner: React.FC = () => {
                     <button type="submit" disabled={!manualToken.trim() || scanning} className="bg-emerald-600 hover:bg-emerald-500 text-white p-3 rounded-xl disabled:opacity-50 transition-colors"><KeyRound size={20} /></button>
                   </form>
                 </div>
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3">
                   {devicesList.length > 1 && (
                     <button 
                       type="button"
