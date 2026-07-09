@@ -176,11 +176,38 @@ export const TicketScanner: React.FC = () => {
           try {
             html5QrCode = new Html5Qrcode('qr-reader');
             
-            // Tentative 1 : Caméra HD (idéale pour QR Codes JWS denses)
+            // 1. Découvrir les caméras disponibles sur l'appareil
+            const devices = await Html5Qrcode.getCameras();
+            if (!devices || devices.length === 0) {
+              throw new Error("Aucune caméra trouvée.");
+            }
+            
+            // 2. Trouver la caméra arrière (back / rear / arrière / environment)
+            let backCamera = devices.find(device => {
+              const label = device.label.toLowerCase();
+              return label.includes('back') || 
+                     label.includes('rear') || 
+                     label.includes('arrière') || 
+                     label.includes('arriere') || 
+                     label.includes('environment') ||
+                     label.includes('environnement');
+            });
+            
+            // Fallback : si pas de caméra arrière explicite, on prend la dernière de la liste (souvent la caméra arrière)
+            const selectedCameraId = backCamera ? backCamera.id : devices[devices.length - 1].id;
+            
+            // 3. Démarrer avec l'ID matériel de la caméra choisie
+            // Tentative 1 : Caméra HD pour les codes QR denses
             try {
               const promise = html5QrCode.start(
-                { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } as MediaTrackConstraints,
-                { fps: 15 },
+                selectedCameraId,
+                { 
+                  fps: 15,
+                  videoConstraints: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                  }
+                },
                 (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
                 () => {}
               );
@@ -188,14 +215,14 @@ export const TicketScanner: React.FC = () => {
               await promise;
               return;
             } catch (hdErr) {
-              console.warn("Échec de la caméra HD, tentative en résolution standard...", hdErr);
+              console.warn("Échec de la caméra HD avec ID, tentative en résolution standard...", hdErr);
             }
             
             if (!mounted) return;
             
-            // Tentative 2 : Caméra standard (compatibilité universelle pour tous téléphones)
+            // Tentative 2 : Caméra standard avec l'ID matériel (sans contraintes de taille)
             const promiseStd = html5QrCode.start(
-              { facingMode: 'environment' },
+              selectedCameraId,
               { fps: 15 },
               (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
               () => {}
@@ -205,6 +232,22 @@ export const TicketScanner: React.FC = () => {
           } catch (err: any) {
             if (!mounted) return;
             console.error('Camera error:', err);
+            
+            // Tentative 3 ultime de secours : Essayer la méthode par défaut facingMode
+            try {
+              const promiseFallback = html5QrCode.start(
+                { facingMode: 'environment' },
+                { fps: 15 },
+                (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
+                () => {}
+              );
+              initPromise = promiseFallback;
+              await promiseFallback;
+              return;
+            } catch (fallbackErr) {
+              console.error("Ultimate fallback failed:", fallbackErr);
+            }
+            
             alert("Erreur d'accès à la caméra.\n\n1. Veuillez vérifier que vous avez autorisé l'accès à l'appareil photo pour ce navigateur.\n2. Assurez-vous que l'appareil photo n'est pas utilisé par une autre application.\n3. Utilisez une connexion sécurisée HTTPS.");
             setCameraActive(false);
           }
