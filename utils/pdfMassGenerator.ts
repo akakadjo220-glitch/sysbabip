@@ -209,8 +209,7 @@ export const generateMassTicketsZipJPG = async (
             
             if (qrOnly) {
                 // Générer le QR Code à la taille spécifiée (85, 200, 500, 800)
-                // Pour assurer une netteté absolue (notamment sur le format 85x85), nous sur-échantillonnons à 512px minimum.
-                const exportWidth = qrSize < 512 ? Math.max(qrSize * 6, 512) : qrSize;
+                const exportWidth = qrSize;
                 const qrDataUrl = await QRCode.toDataURL(ticket.qrCode, {
                     margin: 2,
                     errorCorrectionLevel: 'M',
