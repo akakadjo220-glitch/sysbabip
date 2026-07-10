@@ -192,14 +192,19 @@ export const TicketScanner: React.FC = () => {
             html5QrCode = new Html5Qrcode('qr-reader');
             
             // Démarrage forcé uniquement sur la caméra arrière (facingMode: 'environment')
-            // Sans contraintes de résolution strictes pour assurer la compatibilité avec toutes les marques.
+            // Demande d'une résolution Full HD (1080p) idéale pour scanner de loin, sans contraintes strictes pour préserver la compatibilité.
             const promise = html5QrCode.start(
               { facingMode: 'environment' },
               { 
-                fps: 15,
+                fps: 24,
+                videoConstraints: {
+                  facingMode: 'environment',
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 }
+                },
                 qrbox: (width, height) => {
                   const min = Math.min(width, height);
-                  return { width: min * 0.7, height: min * 0.7 };
+                  return { width: min * 0.75, height: min * 0.75 };
                 }
               },
               (decoded) => { if (processTokenRef.current) processTokenRef.current(decoded); },
