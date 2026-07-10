@@ -3788,6 +3788,12 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
   const [totalPrinted, setTotalPrinted] = useState<number>(0);
   const [totalScanned, setTotalScanned] = useState<number>(0);
 
+  // QR Code Recovery States
+  const [recovering, setRecovering] = useState(false);
+  const [recoverProgress, setRecoverProgress] = useState('');
+  const [recoverSize, setRecoverSize] = useState<number>(85);
+  const [recoverCategoryId, setRecoverCategoryId] = useState<string>('all');
+
   const fetchPhysicalTxs = async (eventId?: string) => {
     if (!user?.id) return;
     
@@ -3859,6 +3865,92 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
     };
     fetchRates();
   }, [user?.id, selectedEventId]);
+
+  const handleRecoverQRs = async () => {
+    if (!selectedEventId || !selectedEvent) return;
+    setRecovering(true);
+    setRecoverProgress('0 / ...');
+    
+    try {
+      addToast("🔍 Recherche des billets existants non-scannés...", "info");
+      
+      let allTickets: any[] = [];
+      let offset = 0;
+      const limit = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        let query = supabase
+          .from('tickets')
+          .select('id, ticket_type, qr_code')
+          .eq('event_id', selectedEventId)
+          .eq('guest_name', 'Billet Physique (Revendeur)')
+          .not('status', 'in', '("completed","checked_in","used")')
+          .order('created_at', { ascending: true })
+          .range(offset, offset + limit - 1);
+          
+        if (recoverCategoryId && recoverCategoryId !== 'all') {
+          const cat = categories.find((c: any) => c.id === recoverCategoryId);
+          if (cat) {
+            query = query.eq('ticket_type', cat.name);
+          }
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        if (!data || data.length === 0) {
+          hasMore = false;
+        } else {
+          allTickets = [...allTickets, ...data];
+          offset += limit;
+          if (data.length < limit) {
+            hasMore = false;
+          }
+        }
+      }
+      
+      if (allTickets.length === 0) {
+        addToast("Aucun billet physique valide et non-scanné trouvé pour ces critères.", "warning");
+        setRecovering(false);
+        return;
+      }
+      
+      addToast(`📦 Génération du ZIP pour ${allTickets.length} codes QR...`, "info");
+      setRecoverProgress(`Zipping ${allTickets.length} QR...`);
+      
+      const { generateMassTicketsZipJPG } = await import('../utils/pdfMassGenerator');
+      
+      const formattedTickets = allTickets.map(t => ({
+        id: t.id,
+        qrCode: t.qr_code
+      }));
+      
+      const catNameLabel = recoverCategoryId !== 'all' 
+        ? (categories.find((c: any) => c.id === recoverCategoryId)?.name || 'Billet') 
+        : 'Tous_Non_Scannes';
+      
+      const success = await generateMassTicketsZipJPG(
+        formattedTickets,
+        selectedEvent.name,
+        catNameLabel,
+        true, // qrOnly = true
+        recoverSize
+      );
+      
+      if (success) {
+        addToast("🎉 Fichier ZIP téléchargé avec succès !", "success");
+      } else {
+        addToast("Erreur lors de la création du fichier ZIP.", "error");
+      }
+    } catch (err: any) {
+      console.error("Error recovering QR codes:", err);
+      addToast("Erreur : " + err.message, "error");
+    } finally {
+      setRecovering(false);
+      setRecoverProgress('');
+    }
+  };
 
   const generatePDFTickets = async () => {
     addToast(`⏳ Génération des signatures cryptographiques pour ${quantity} billets...`, "info");
@@ -4367,6 +4459,65 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
 
             </form>
           </div>
+
+          {/* Recovery / Récupération Card */}
+          {selectedEventId && (
+            <div className="bg-slate-800/80 rounded-3xl p-6 md:p-8 border border-white/10 shadow-xl relative overflow-hidden mt-6">
+              <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                <QrCode size={120} className="text-white" />
+              </div>
+              
+              <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-3">
+                <QrCode className="text-cyan-400" size={24} /> Récupération de QR Codes Existants (Non scannés)
+              </h3>
+              <p className="text-slate-400 max-w-2xl relative z-10 mb-6 text-sm">
+                Téléchargez les images des QR Codes déjà générés pour cet événement qui n'ont pas encore été validés à l'entrée. Idéal pour réimprimer un lot ou modifier le format à 85x85 sans payer de commission.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end relative z-10">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-300">Résolution QR (px)</label>
+                  <select
+                    value={recoverSize}
+                    onChange={e => setRecoverSize(Number(e.target.value))}
+                    className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-cyan-500 outline-none"
+                  >
+                    <option value="85">85 x 85 (Micro)</option>
+                    <option value="200">200 x 200 (Standard)</option>
+                    <option value="500">500 x 500 (HD)</option>
+                    <option value="800">800 x 800 (Ultra HD)</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-300">Catégorie</label>
+                  <select
+                    value={recoverCategoryId}
+                    onChange={e => setRecoverCategoryId(e.target.value)}
+                    className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none focus:ring-2 focus:ring-cyan-500 outline-none"
+                  >
+                    <option value="all">Toutes les catégories</option>
+                    {categories.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleRecoverQRs}
+                  disabled={recovering}
+                  className="w-full bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 text-slate-950 px-8 py-3 rounded-xl font-black transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
+                >
+                  {recovering ? (
+                    <><Loader2 size={20} className="animate-spin text-slate-950" /> {recoverProgress || 'Téléchargement...'}</>
+                  ) : (
+                    <><QrCode size={20} /> Récupérer les QR Codes</>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Analytics Dashboard */}
           <h3 className="text-xl font-bold text-white mt-8 mb-4 flex items-center gap-2">
