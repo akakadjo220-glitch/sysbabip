@@ -3648,17 +3648,34 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
   const balanceSufficient = walletBalance >= commissionDue;
 
   // Physical tickets for analytics — fetched directly from Supabase
-  const [physicalTxs, setPhysicalTxs] = useState<any[]>([]);
+  const [totalPrinted, setTotalPrinted] = useState<number>(0);
+  const [totalScanned, setTotalScanned] = useState<number>(0);
 
   const fetchPhysicalTxs = async (eventId?: string) => {
     if (!user?.id) return;
-    let q = supabase
+    
+    // 1. Total Imprimés
+    let q1 = supabase
       .from('tickets')
-      .select('id, event_id, status, created_at')
+      .select('*', { count: 'exact', head: true })
       .eq('guest_name', 'Billet Physique (Revendeur)');
-    if (eventId) q = q.eq('event_id', eventId);
-    const { data } = await q;
-    setPhysicalTxs(data || []);
+    if (eventId) q1 = q1.eq('event_id', eventId);
+    const { count: countPrinted, error: err1 } = await q1;
+    if (!err1 && countPrinted !== null) {
+      setTotalPrinted(countPrinted);
+    }
+
+    // 2. Scannés & Consommés
+    let q2 = supabase
+      .from('tickets')
+      .select('*', { count: 'exact', head: true })
+      .eq('guest_name', 'Billet Physique (Revendeur)')
+      .in('status', ['completed', 'checked_in', 'used']);
+    if (eventId) q2 = q2.eq('event_id', eventId);
+    const { count: countScanned, error: err2 } = await q2;
+    if (!err2 && countScanned !== null) {
+      setTotalScanned(countScanned);
+    }
   };
 
   // Load wallet balance + commission rate when event selected
@@ -3894,9 +3911,6 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
     }
   };
 
-  // Analytics — computed from server-fetched physicalTxs
-  const totalPrinted = physicalTxs.length;
-  const totalScanned = physicalTxs.filter((t: any) => t.status === 'completed' || t.status === 'checked_in' || t.status === 'used').length;
   const conversionRate = totalPrinted > 0 ? Math.round((totalScanned / totalPrinted) * 100) : 0;
 
   return (
