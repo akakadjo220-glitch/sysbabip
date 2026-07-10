@@ -209,10 +209,12 @@ export const generateMassTicketsZipJPG = async (
             
             if (qrOnly) {
                 // Générer le QR Code à la taille spécifiée (85, 200, 500, 800)
+                // Pour assurer une netteté absolue (notamment sur le format 85x85), nous sur-échantillonnons à 512px minimum.
+                const exportWidth = Math.max(qrSize * 6, 512);
                 const qrDataUrl = await QRCode.toDataURL(ticket.qrCode, {
-                    margin: 1,
-                    errorCorrectionLevel: 'L',
-                    width: qrSize
+                    margin: 2,
+                    errorCorrectionLevel: 'M',
+                    width: exportWidth
                 });
                 
                 const response = await fetch(qrDataUrl);
@@ -260,9 +262,9 @@ export const generateMassTicketsZipJPG = async (
                 
                 // QR Code
                 const qrDataUrl = await QRCode.toDataURL(ticket.qrCode, {
-                    margin: 1,
-                    errorCorrectionLevel: 'L',
-                    width: 420
+                    margin: 2,
+                    errorCorrectionLevel: 'M',
+                    width: 512
                 });
                 
                 const qrImg = new Image();
