@@ -3408,22 +3408,96 @@ const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: str
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [encodingId, setEncodingId] = useState<string | null>(null);
+  
+  // Pagination & Filtres
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [pageSize] = useState<number>(10); // 10 billets par page pour une lisibilité optimale
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'encoded'>('pending'); // Par défaut 'pending' (non encodés)
+  
+  // Statistiques globales de l'événement
+  const [stats, setStats] = useState({ total: 0, encoded: 0, pending: 0 });
+
   const nfcSupported = typeof window !== 'undefined' && 'NDEFReader' in window;
 
-  useEffect(() => {
-    if (!selectedEventId) { setTickets([]); return; }
-    setLoading(true);
-    supabase
-      .from('tickets')
-      .select('id, ticket_type, status, nfc_encoded, nfc_encoded_at, qr_code, created_at')
-      .eq('event_id', selectedEventId)
-      .eq('guest_name', 'Billet Physique (Revendeur)')
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        setTickets(data || []);
-        setLoading(false);
+  const fetchGlobalStats = async () => {
+    if (!selectedEventId) return;
+    try {
+      const { count: total } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', selectedEventId)
+        .eq('guest_name', 'Billet Physique (Revendeur)');
+        
+      const { count: encoded } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', selectedEventId)
+        .eq('guest_name', 'Billet Physique (Revendeur)')
+        .eq('nfc_encoded', true);
+        
+      setStats({
+        total: total || 0,
+        encoded: encoded || 0,
+        pending: Math.max(0, (total || 0) - (encoded || 0))
       });
+    } catch (err) {
+      console.warn("Error fetching NFC global stats:", err);
+    }
+  };
+
+  const fetchTickets = async () => {
+    if (!selectedEventId) { setTickets([]); setTotalCount(0); return; }
+    setLoading(true);
+    try {
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+      
+      let q = supabase
+        .from('tickets')
+        .select('id, ticket_type, status, nfc_encoded, nfc_encoded_at, qr_code, created_at', { count: 'exact' })
+        .eq('event_id', selectedEventId)
+        .eq('guest_name', 'Billet Physique (Revendeur)');
+        
+      if (statusFilter === 'pending') {
+        q = q.eq('nfc_encoded', false);
+      } else if (statusFilter === 'encoded') {
+        q = q.eq('nfc_encoded', true);
+      }
+      
+      if (searchQuery.trim()) {
+        q = q.ilike('id', `%${searchQuery.trim()}%`);
+      }
+      
+      q = q.order('created_at', { ascending: true }).range(from, to);
+      
+      const { data, count, error } = await q;
+      if (error) throw error;
+      
+      setTickets(data || []);
+      setTotalCount(count || 0);
+    } catch (err: any) {
+      console.error("Error fetching NFC tickets:", err);
+      addToast("Erreur lors de la récupération des billets : " + err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Recharger les données quand l'événement ou la pagination change
+  useEffect(() => {
+    fetchGlobalStats();
   }, [selectedEventId]);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [selectedEventId, currentPage, statusFilter, searchQuery]);
+
+  // Reset page à 1 si filtre ou recherche change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchQuery, selectedEventId]);
 
   const handleEncode = async (ticket: any) => {
     if (!nfcSupported) {
@@ -3448,8 +3522,10 @@ const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: str
 
       if (dbError) throw new Error(dbError.message || "Impossible de mettre à jour la base de données");
 
-      // Update local state
+      // Update local state and statistics
       setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, nfc_encoded: true, nfc_encoded_at: new Date().toISOString() } : t));
+      fetchGlobalStats();
+      fetchTickets();
       addToast(`✅ Bracelet encodé pour le billet ${ticket.id.slice(-6).toUpperCase()} !`, 'success');
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
@@ -3488,81 +3564,142 @@ const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: str
       )}
 
       {/* Stats rapides */}
-      {tickets.length > 0 && (
-        <div className="flex gap-4 text-sm">
+      {stats.total > 0 && (
+        <div className="flex flex-wrap gap-3 text-sm">
           <span className="bg-slate-800/60 border border-white/5 rounded-xl px-3 py-2 text-slate-300">
-            <strong className="text-white">{tickets.length}</strong> billet{tickets.length > 1 ? 's' : ''} physique{tickets.length > 1 ? 's' : ''}
+            <strong className="text-white">{stats.total}</strong> billets physiques
           </span>
           <span className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl px-3 py-2 text-cyan-400">
-            <strong>{tickets.filter(t => t.nfc_encoded).length}</strong> encodé{tickets.filter(t => t.nfc_encoded).length > 1 ? 's' : ''} ✅
+            <strong>{stats.encoded}</strong> encodés ✅
           </span>
           <span className="bg-slate-800/60 border border-white/5 rounded-xl px-3 py-2 text-slate-400">
-            <strong className="text-white">{tickets.filter(t => !t.nfc_encoded).length}</strong> en attente
+            <strong className="text-white">{stats.pending}</strong> en attente
           </span>
         </div>
       )}
+
+      {/* Barre de recherche et Filtres */}
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between bg-slate-900/40 border border-white/5 p-4 rounded-2xl">
+        <div className="relative w-full md:w-80">
+          <input
+            type="text"
+            placeholder="Rechercher par N° Billet (ID)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-950/60 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
+          />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        </div>
+        
+        <div className="flex gap-2 w-full md:w-auto">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`flex-1 md:flex-initial px-4 py-2 rounded-xl text-xs font-bold border transition-all ${statusFilter === 'all' ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 font-extrabold' : 'bg-slate-950/40 border-white/5 text-slate-400 hover:text-white'}`}
+          >
+            Tous Billet(s)
+          </button>
+          <button
+            onClick={() => setStatusFilter('pending')}
+            className={`flex-1 md:flex-initial px-4 py-2 rounded-xl text-xs font-bold border transition-all ${statusFilter === 'pending' ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 font-extrabold' : 'bg-slate-950/40 border-white/5 text-slate-400 hover:text-white'}`}
+          >
+            En Attente ({statusFilter === 'pending' ? totalCount : stats.pending})
+          </button>
+          <button
+            onClick={() => setStatusFilter('encoded')}
+            className={`flex-1 md:flex-initial px-4 py-2 rounded-xl text-xs font-bold border transition-all ${statusFilter === 'encoded' ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400 font-extrabold' : 'bg-slate-950/40 border-white/5 text-slate-400 hover:text-white'}`}
+          >
+            Encodés ({statusFilter === 'encoded' ? totalCount : stats.encoded})
+          </button>
+        </div>
+      </div>
 
       {/* Liste des billets */}
       {loading ? (
         <div className="py-10 text-center"><Loader2 className="animate-spin text-cyan-400 mx-auto" size={28} /></div>
       ) : tickets.length === 0 ? (
         <div className="bg-slate-800/40 border border-white/5 rounded-2xl p-8 text-center text-slate-500">
-          <p>Aucun billet physique généré pour cet événement.</p>
-          <p className="text-xs mt-1">Générez d'abord des billets via le formulaire ci-dessus.</p>
+          <p>Aucun billet correspondant à vos filtres de recherche.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-900/40">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-800/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
-              <tr>
-                <th className="px-5 py-3 text-left">N° Billet</th>
-                <th className="px-5 py-3 text-left">Type</th>
-                <th className="px-5 py-3 text-left">Généré le</th>
-                <th className="px-5 py-3 text-center">Statut NFC</th>
-                <th className="px-5 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {tickets.map((ticket) => (
-                <tr key={ticket.id} className={`hover:bg-white/3 transition-colors ${ticket.nfc_encoded ? 'opacity-60' : ''}`}>
-                  <td className="px-5 py-3 font-mono text-white text-xs">{ticket.id.slice(-8).toUpperCase()}</td>
-                  <td className="px-5 py-3 text-slate-300">{ticket.ticket_type || 'Standard'}</td>
-                  <td className="px-5 py-3 text-slate-400 text-xs">{new Date(ticket.created_at).toLocaleDateString('fr-FR')}</td>
-                  <td className="px-5 py-3 text-center">
-                    {ticket.nfc_encoded ? (
-                      <span className="inline-flex items-center gap-1 text-xs bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 px-2 py-1 rounded-full font-bold">
-                        ✅ Encodé
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs bg-slate-700/50 text-slate-500 border border-white/5 px-2 py-1 rounded-full">
-                        ⬜ Non encodé
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    {ticket.nfc_encoded ? (
-                      <span className="text-xs text-slate-600 italic">
-                        {ticket.nfc_encoded_at ? new Date(ticket.nfc_encoded_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleEncode(ticket)}
-                        disabled={!!encodingId || !nfcSupported}
-                        className="inline-flex items-center gap-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 px-4 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {encodingId === ticket.id ? (
-                          <><Loader2 size={14} className="animate-spin" /> Encodage...</>
-                        ) : (
-                          <>📡 Encoder ce billet</>
-                        )}
-                      </button>
-                    )}
-                  </td>
+        <>
+          <div className="overflow-x-auto rounded-2xl border border-white/5 bg-slate-900/40">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-800/80 text-slate-400 uppercase text-xs font-bold tracking-wider">
+                <tr>
+                  <th className="px-5 py-3 text-left">N° Billet</th>
+                  <th className="px-5 py-3 text-left">Type</th>
+                  <th className="px-5 py-3 text-left">Généré le</th>
+                  <th className="px-5 py-3 text-center">Statut NFC</th>
+                  <th className="px-5 py-3 text-right">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {tickets.map((ticket) => (
+                  <tr key={ticket.id} className={`hover:bg-white/3 transition-colors ${ticket.nfc_encoded ? 'opacity-60' : ''}`}>
+                    <td className="px-5 py-3 font-mono text-white text-xs">{ticket.id.slice(-8).toUpperCase()}</td>
+                    <td className="px-5 py-3 text-slate-300">{ticket.ticket_type || 'Standard'}</td>
+                    <td className="px-5 py-3 text-slate-400 text-xs">{new Date(ticket.created_at).toLocaleDateString('fr-FR')}</td>
+                    <td className="px-5 py-3 text-center">
+                      {ticket.nfc_encoded ? (
+                        <span className="inline-flex items-center gap-1 text-xs bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 px-2 py-1 rounded-full font-bold">
+                          ✅ Encodé
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs bg-slate-700/50 text-slate-500 border border-white/5 px-2 py-1 rounded-full">
+                          ⬜ Non encodé
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {ticket.nfc_encoded ? (
+                        <span className="text-xs text-slate-600 italic">
+                          {ticket.nfc_encoded_at ? new Date(ticket.nfc_encoded_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleEncode(ticket)}
+                          disabled={!!encodingId || !nfcSupported}
+                          className="inline-flex items-center gap-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 px-4 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {encodingId === ticket.id ? (
+                            <><Loader2 size={14} className="animate-spin" /> Encodage...</>
+                          ) : (
+                            <>📡 Encoder ce billet</>
+                          )}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          {totalCount > pageSize && (
+            <div className="flex items-center justify-between bg-slate-900/40 border border-white/5 rounded-2xl p-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1 || loading}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded-xl text-xs font-bold text-slate-300 transition-colors"
+              >
+                Précédent
+              </button>
+              <span className="text-xs text-slate-400 font-medium">
+                Page <strong className="text-white">{currentPage}</strong> sur <strong className="text-white">{Math.ceil(totalCount / pageSize)}</strong> ({totalCount} ligne{totalCount > 1 ? 's' : ''})
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCount / pageSize), prev + 1))}
+                disabled={currentPage >= Math.ceil(totalCount / pageSize) || loading}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded-xl text-xs font-bold text-slate-300 transition-colors"
+              >
+                Suivant
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -3911,7 +4048,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
     }
   };
 
-  const conversionRate = totalPrinted > 0 ? Math.round((totalScanned / totalPrinted) * 100) : 0;
+  const conversionRate = totalPrinted > 0 ? parseFloat(((totalScanned / totalPrinted) * 100).toFixed(1)) : 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
