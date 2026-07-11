@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, CheckCircle, XCircle, RefreshCw, Wifi, WifiOff, Radio, Loader2, KeyRound, Cloud, CloudOff, Download } from 'lucide-react';
+import { Camera, CheckCircle, XCircle, RefreshCw, Wifi, WifiOff, Radio, Loader2, KeyRound, Cloud, CloudOff, Download, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { UserRole } from '../types';
 import { verifyTicket, TicketPayload } from '../utils/crypto';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../supabaseClient';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const PENDING_SYNCS_KEY = 'babipass_pending_syncs';
-const LOCAL_SCANS_KEY   = 'afriTix_local_scans';
-const TICKET_CACHE_KEY  = 'babipass_ticket_cache';
 const CACHE_TTL_MS      = 6 * 60 * 60 * 1000; // 6h
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,42 +18,53 @@ interface PendingSync { ticketId: string; scannedAt: string; }
 interface TicketCacheEntry { status: 'valid' | 'used' | 'revoked'; fetchedAt: number; }
 
 // ─── Pure helpers (outside component = stable references) ─────────────────────
-const getPendingSyncs = (): PendingSync[] => {
-  try { return JSON.parse(localStorage.getItem(PENDING_SYNCS_KEY) || '[]'); } catch { return []; }
+const getPendingSyncs = (agentCode: string): PendingSync[] => {
+  if (!agentCode) return [];
+  try { return JSON.parse(localStorage.getItem(`babipass_pending_syncs_${agentCode}`) || '[]'); } catch { return []; }
 };
-const addPendingSync = (ticketId: string) => {
-  const queue = getPendingSyncs();
+const addPendingSync = (ticketId: string, agentCode: string) => {
+  if (!agentCode) return;
+  const queue = getPendingSyncs(agentCode);
   if (!queue.find(p => p.ticketId === ticketId)) {
     queue.push({ ticketId, scannedAt: new Date().toISOString() });
-    localStorage.setItem(PENDING_SYNCS_KEY, JSON.stringify(queue));
+    localStorage.setItem(`babipass_pending_syncs_${agentCode}`, JSON.stringify(queue));
   }
 };
-const getLocalScans = (): Record<string, string> => {
-  try { return JSON.parse(localStorage.getItem(LOCAL_SCANS_KEY) || '{}'); } catch { return {}; }
+const getLocalScans = (agentCode: string): Record<string, string> => {
+  if (!agentCode) return {};
+  try { return JSON.parse(localStorage.getItem(`afriTix_local_scans_${agentCode}`) || '{}'); } catch { return {}; }
 };
-const markLocalScan = (ticketId: string) => {
-  const scans = getLocalScans();
+const markLocalScan = (ticketId: string, agentCode: string) => {
+  if (!agentCode) return;
+  const scans = getLocalScans(agentCode);
   scans[ticketId] = new Date().toISOString();
-  localStorage.setItem(LOCAL_SCANS_KEY, JSON.stringify(scans));
+  localStorage.setItem(`afriTix_local_scans_${agentCode}`, JSON.stringify(scans));
 };
-const getCachedStatus = (ticketId: string): 'valid' | 'used' | 'revoked' | null => {
+const getCachedStatus = (ticketId: string, agentCode: string): 'valid' | 'used' | 'revoked' | null => {
+  if (!agentCode) return null;
   try {
-    const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(TICKET_CACHE_KEY) || '{}');
+    const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(`babipass_ticket_cache_${agentCode}`) || '{}');
     const entry = cache[ticketId];
     if (!entry || Date.now() - entry.fetchedAt > CACHE_TTL_MS) return null;
     return entry.status;
   } catch { return null; }
 };
-const setCachedStatus = (ticketId: string, status: 'valid' | 'used' | 'revoked') => {
+const setCachedStatus = (ticketId: string, status: 'valid' | 'used' | 'revoked', agentCode: string) => {
+  if (!agentCode) return;
   try {
-    const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(TICKET_CACHE_KEY) || '{}');
+    const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(`babipass_ticket_cache_${agentCode}`) || '{}');
     cache[ticketId] = { status, fetchedAt: Date.now() };
-    localStorage.setItem(TICKET_CACHE_KEY, JSON.stringify(cache));
+    localStorage.setItem(`babipass_ticket_cache_${agentCode}`, JSON.stringify(cache));
   } catch { /* ignore */ }
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const TicketScanner: React.FC = () => {
+  const navigate = useNavigate();
+  const { setRole } = useAuth();
+  const [agentCode, setAgentCode] = useState<string>('');
+  const [sessionTimeLeft, setSessionTimeLeft] = useState<string>('');
+
   const [result, setResult]                   = useState<ScanResult>('idle');
   const [cameraActive, setCameraActive]       = useState(false);
   const [scanning, setScanning]               = useState(false);
@@ -79,18 +90,20 @@ export const TicketScanner: React.FC = () => {
   const isOnlineRef = useRef(navigator.onLine);
 
   // ─── Counter refresh ────────────────────────────────────────────────────
-  const refreshCounters = () => {
-    setScansCount(Object.keys(getLocalScans()).length);
-    setPendingCount(getPendingSyncs().length);
+  const refreshCounters = useCallback(() => {
+    if (!agentCode) return;
+    setScansCount(Object.keys(getLocalScans(agentCode)).length);
+    setPendingCount(getPendingSyncs(agentCode).length);
     try {
-      const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(TICKET_CACHE_KEY) || '{}');
+      const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(`babipass_ticket_cache_${agentCode}`) || '{}');
       setCacheSize(Object.keys(cache).length);
     } catch { setCacheSize(0); }
-  };
+  }, [agentCode]);
 
   // ─── Sync queue → Supabase ──────────────────────────────────────────────
   const flushPendingSyncs = useCallback(async () => {
-    const queue = getPendingSyncs();
+    if (!agentCode) return;
+    const queue = getPendingSyncs(agentCode);
     if (queue.length === 0) return;
     setSyncing(true);
     const failed: PendingSync[] = [];
@@ -98,19 +111,19 @@ export const TicketScanner: React.FC = () => {
       try {
         const { error } = await supabase.from('tickets').update({ status: 'used' }).eq('id', item.ticketId);
         if (error) failed.push(item);
-        else setCachedStatus(item.ticketId, 'used');
+        else setCachedStatus(item.ticketId, 'used', agentCode);
       } catch { failed.push(item); }
     }
-    localStorage.setItem(PENDING_SYNCS_KEY, JSON.stringify(failed));
+    localStorage.setItem(`babipass_pending_syncs_${agentCode}`, JSON.stringify(failed));
     const synced = queue.length - failed.length;
     if (synced > 0) setLastSyncInfo(`✅ ${synced} billet(s) synchronisé(s)`);
     setSyncing(false);
     refreshCounters();
-  }, []); // no dependencies — uses only stable helpers
+  }, [agentCode, refreshCounters]);
 
   // ─── Pre-cache for offline ──────────────────────────────────────────────
   const preCacheEventTickets = useCallback(async () => {
-    if (!isOnlineRef.current) return;
+    if (!isOnlineRef.current || !agentCode) return;
     setSyncing(true);
     try {
       const stored = localStorage.getItem('afritix_current_agent');
@@ -128,21 +141,24 @@ export const TicketScanner: React.FC = () => {
         const cache: Record<string, TicketCacheEntry> = {};
         const now = Date.now();
         for (const t of data) cache[t.id] = { status: t.status, fetchedAt: now };
-        localStorage.setItem(TICKET_CACHE_KEY, JSON.stringify(cache));
+        localStorage.setItem(`babipass_ticket_cache_${agentCode}`, JSON.stringify(cache));
         setLastSyncInfo(`📥 ${data.length} billet(s) mis en cache hors-ligne`);
         refreshCounters();
       }
     } catch (e) { console.error('Pre-cache failed:', e); }
     setSyncing(false);
-  }, []); // no dependencies
+  }, [agentCode, refreshCounters]);
 
   // ─── Init ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const stored = localStorage.getItem('afritix_current_agent');
     if (stored) {
-      try { setAgentName(JSON.parse(stored).name || 'Agent'); } catch (_) {}
+      try {
+        const parsed = JSON.parse(stored);
+        setAgentName(parsed.name || 'Agent');
+        setAgentCode(parsed.code || parsed.id || 'GENERIC');
+      } catch (_) {}
     }
-    refreshCounters();
     setNfcSupported('NDEFReader' in window);
 
     const onOnline = () => {
@@ -160,7 +176,50 @@ export const TicketScanner: React.FC = () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, [flushPendingSyncs]); // flushPendingSyncs is stable (no deps)
+  }, [flushPendingSyncs]);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('afritix_user_role');
+    localStorage.removeItem('afritix_current_agent');
+    localStorage.removeItem('afritix_agent_session_expires_at');
+    setRole(UserRole.GUEST);
+    navigate('/agent/login');
+  }, [navigate, setRole]);
+
+  // Session activity & expiration checker
+  useEffect(() => {
+    const checkSession = () => {
+      const expiration = localStorage.getItem('afritix_agent_session_expires_at');
+      if (!expiration) return;
+      
+      const timeLeftMs = Number(expiration) - Date.now();
+      if (timeLeftMs <= 0) {
+        alert("⏱️ Votre session a expiré. Veuillez vous reconnecter.");
+        handleLogout();
+        return;
+      }
+      
+      const totalMinutes = Math.max(0, Math.floor(timeLeftMs / (60 * 1000)));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      
+      if (hours > 0) {
+        setSessionTimeLeft(`${hours}h ${minutes}m`);
+      } else {
+        setSessionTimeLeft(`${minutes}m`);
+      }
+    };
+    
+    checkSession();
+    const interval = setInterval(checkSession, 15000); // Check every 15s
+    return () => clearInterval(interval);
+  }, [handleLogout]);
+
+  useEffect(() => {
+    if (agentCode) {
+      refreshCounters();
+    }
+  }, [agentCode, refreshCounters]);
 
   // ─── Camera (QR) ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -291,11 +350,11 @@ export const TicketScanner: React.FC = () => {
         if (ticketById) {
           ticketId = ticketById.id;
           payload  = { tId: ticketById.id, eId: ticketById.event_id || '', type: ticketById.ticket_type || 'Standard', usr: ticketById.guest_name || 'Billet Physique', iat: Date.now() };
-          setCachedStatus(ticketById.id, ticketById.status);
+          setCachedStatus(ticketById.id, ticketById.status, agentCode);
         }
       } else if (isBareTicketId && !online) {
         // Offline: check local cache by ID directly
-        const cachedStatusForId = getCachedStatus(token.trim());
+        const cachedStatusForId = getCachedStatus(token.trim(), agentCode);
         if (cachedStatusForId) {
           ticketId = token.trim();
           payload  = { tId: token.trim(), eId: '', type: 'Billet Physique', usr: 'Billet Physique', iat: Date.now() };
@@ -321,7 +380,7 @@ export const TicketScanner: React.FC = () => {
         if (ticketByQr) {
           ticketId = ticketByQr.id;
           payload  = { tId: ticketByQr.id, eId: ticketByQr.event_id || '', type: ticketByQr.ticket_type || 'Standard', usr: ticketByQr.guest_name || 'Participant', iat: Date.now() };
-          setCachedStatus(ticketByQr.id, ticketByQr.status);
+          setCachedStatus(ticketByQr.id, ticketByQr.status, agentCode);
         }
       }
 
@@ -378,7 +437,7 @@ export const TicketScanner: React.FC = () => {
           }
 
           // Season pass: mark local scan but DON'T mark ticket as 'used'
-          markLocalScan(ticketId);
+          markLocalScan(ticketId, agentCode);
           setScannedPayload({ ...payload, type: '🎟️ Pass Saison' });
           setResult('success');
           refreshCounters();
@@ -388,12 +447,12 @@ export const TicketScanner: React.FC = () => {
       }
 
       // Step 3 — Local double-scan check (always works offline)
-      if (getLocalScans()[ticketId]) {
+      if (getLocalScans(agentCode)[ticketId]) {
         setResult('error'); setErrorReason('Billet déjà scanné dans cette session !'); setScanning(false); return;
       }
 
       // Step 4a — Check local cache
-      const cachedStatus = getCachedStatus(ticketId);
+      const cachedStatus = getCachedStatus(ticketId, agentCode);
       if (cachedStatus === 'revoked') { setResult('error'); setErrorReason("Ce billet a été révoqué par l'organisateur."); setScanning(false); return; }
       if (cachedStatus === 'used')    { setResult('error'); setErrorReason('Billet déjà utilisé ! Accès refusé.'); setScanning(false); return; }
 
@@ -418,7 +477,7 @@ export const TicketScanner: React.FC = () => {
         if (updatedData && updatedData.length > 0) {
           // Success: Ticket status updated from 'valid' to 'used'
           updateSuccess = true;
-          setCachedStatus(ticketId, 'used');
+          setCachedStatus(ticketId, 'used', agentCode);
         } else {
           // Non-matching query: ticket could be used, revoked, or non-existent
           // Query the exact status to give the correct reason to the agent
@@ -429,7 +488,7 @@ export const TicketScanner: React.FC = () => {
             .maybeSingle();
 
           const actualStatus = ticketData?.status || 'unknown';
-          setCachedStatus(ticketId, actualStatus as any);
+          setCachedStatus(ticketId, actualStatus as any, agentCode);
 
           if (actualStatus === 'revoked') {
             setResult('error'); setErrorReason("Ce billet a été révoqué par l'organisateur."); setScanning(false); return;
@@ -441,13 +500,13 @@ export const TicketScanner: React.FC = () => {
         }
       } else {
         // Offline mode: mark locally and add to pending sync queue
-        addPendingSync(ticketId);
-        setCachedStatus(ticketId, 'used');
+        addPendingSync(ticketId, agentCode);
+        setCachedStatus(ticketId, 'used', agentCode);
         updateSuccess = true;
       }
 
       if (updateSuccess) {
-        markLocalScan(ticketId);
+        markLocalScan(ticketId, agentCode);
         setScannedPayload(payload);
         setResult('success');
         refreshCounters();
@@ -482,13 +541,32 @@ export const TicketScanner: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-white">Contrôle d'accès</h2>
-          <p className="text-slate-400 text-sm">📱 {agentName} • {scansCount} scan{scansCount !== 1 ? 's' : ''}</p>
+          <p className="text-slate-400 text-sm flex items-center gap-1.5 flex-wrap">
+            <span>📱 {agentName}</span>
+            <span>•</span>
+            <span>{scansCount} scan{scansCount !== 1 ? 's' : ''}</span>
+            {sessionTimeLeft && (
+              <>
+                <span>•</span>
+                <span className="text-amber-400 flex items-center gap-1 font-mono">⏱️ {sessionTimeLeft}</span>
+              </>
+            )}
+          </p>
         </div>
-        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${isOnline
-          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-          : 'bg-red-500/20 text-red-400 border-red-500/50'}`}>
-          {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-          {isOnline ? 'Connecté' : 'Hors-ligne'}
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${isOnline
+            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
+            : 'bg-red-500/20 text-red-400 border-red-500/50'}`}>
+            {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
+            {isOnline ? 'Connecté' : 'Hors-ligne'}
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center justify-center p-2 bg-slate-800 hover:bg-red-600/20 hover:text-red-400 border border-slate-700 rounded-xl text-slate-400 transition-all"
+            title="Se déconnecter"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </div>
 
