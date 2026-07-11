@@ -3923,7 +3923,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       
       const formattedTickets = allTickets.map(t => ({
         id: t.id,
-        qrCode: t.qr_code
+        qrCode: t.id
       }));
       
       const catNameLabel = recoverCategoryId !== 'all' 
@@ -3953,18 +3953,15 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
   };
 
   const generatePDFTickets = async () => {
-    addToast(`⏳ Génération des signatures cryptographiques pour ${quantity} billets...`, "info");
+    addToast(`⏳ Génération des billets physiques pour ${quantity} billets...`, "info");
     try {
-      const { signTicket } = await import('../utils/crypto');
       const { generateMassTicketsPDF } = await import('../utils/pdfMassGenerator');
 
       const catName = categories.find((c: any) => c.id === selectedCategoryId)?.name || 'Billet Physique';
       const tickets = [];
       for (let i = 0; i < quantity; i++) {
         const tId = `PHY-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-        const payload = { tId, eId: selectedEvent.id, type: catName, usr: "PHY-BUYER" };
-        const jws = await signTicket(payload);
-        tickets.push({ id: tId, qrCode: jws });
+        tickets.push({ id: tId, qrCode: tId });
       }
 
       const { data: trxData, error: trxError } = await supabase.from('transactions').insert([{
