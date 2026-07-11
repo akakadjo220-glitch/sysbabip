@@ -3980,22 +3980,40 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
       if (trxError) {
         console.warn("DB insert failed for transaction:", trxError);
         addToast("Erreur sauvegarde BDD (Transaction): " + trxError.message, "error");
-      } else {
-        const { error: tErr } = await supabase.from('tickets').insert(tickets.map((t: any) => ({
+        setIsGenerating(false);
+        return;
+      }
+
+      // Insertion par lots (chunks) de 1000 pour éviter les expirations (timeouts) Supabase
+      const batchSize = 1000;
+      let hasInsertionError = false;
+
+      for (let i = 0; i < tickets.length; i += batchSize) {
+        const batch = tickets.slice(i, i + batchSize).map((t: any) => ({
           id: t.id,
           event_id: selectedEvent.id,
-          transaction_id: trxData?.id || null,
+          transaction_id: trxData.id,
           status: 'valid',
           guest_name: 'Billet Physique (Revendeur)',
           guest_email: user?.email || 'organizer@local.com',
           ticket_type: catName,
           qr_code: t.qrCode
-        })));
+        }));
 
+        const { error: tErr } = await supabase.from('tickets').insert(batch);
         if (tErr) {
-          console.warn("DB insert failed for tickets:", tErr);
-          addToast("Erreur sauvegarde BDD (Billets): " + tErr.message, "error");
+          console.warn(`DB insert failed for tickets batch starting at index ${i}:`, tErr);
+          addToast(`Erreur sauvegarde BDD (Billets, lot ${Math.floor(i / batchSize) + 1}) : ` + tErr.message, "error");
+          hasInsertionError = true;
+          break;
         }
+      }
+
+      if (hasInsertionError) {
+        addToast("⚠️ Échec d'enregistrement de tous les billets. Nettoyage de la transaction...", "info");
+        await supabase.from('transactions').delete().eq('id', trxData.id);
+        setIsGenerating(false);
+        return;
       }
 
       let success = false;
