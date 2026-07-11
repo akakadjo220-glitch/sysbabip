@@ -3959,8 +3959,10 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
 
       const catName = categories.find((c: any) => c.id === selectedCategoryId)?.name || 'Billet Physique';
       const tickets = [];
+      const batchTime = Date.now().toString(36);
+      const batchRandom = Math.random().toString(36).substring(2, 6).toUpperCase();
       for (let i = 0; i < quantity; i++) {
-        const tId = `PHY-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+        const tId = `PHY-${batchTime}-${i}-${batchRandom}`;
         tickets.push({ id: tId, qrCode: tId });
       }
 
@@ -4011,6 +4013,7 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
 
       if (hasInsertionError) {
         addToast("⚠️ Échec d'enregistrement de tous les billets. Nettoyage de la transaction...", "info");
+        await supabase.from('tickets').delete().eq('transaction_id', trxData.id);
         await supabase.from('transactions').delete().eq('id', trxData.id);
         setIsGenerating(false);
         return;
