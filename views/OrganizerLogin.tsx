@@ -73,53 +73,23 @@ export const OrganizerLogin = () => {
     const getFullPhone = (val: string) => `${countryCode}${val}`; // Pas de suppression du 0 : +2250544246972 est le bon format CI
     const getFormattedIdentifier = () => isPhoneMode ? `${getFullPhone(identifier)}@organizer.babipass.local` : identifier;
 
-    const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
-
-    const requestVerification = async (email: string, targetPhone?: string) => {
-        const code = generateOTP();
-
-        // On supprime tout ancien OTP pour cet email (permet de contourner l'absence de politique UPDATE)
-        await supabase.from('auth_otps').delete().eq('email', email);
-
-        // Puis on insère le nouveau code
-        const { error: otpError } = await supabase.from('auth_otps').insert([{
-            email,
-            otp_code: code
-        }]);
-
-        if (otpError) {
-            console.error("Erreur d'insertion OTP:", otpError);
-            throw new Error(`Impossible d'enregistrer l'OTP dans la base de données: ${otpError.message}`);
-        }
-
-        // 2. Envoyer le mail depuis le navigateur vers notre relai SMTP Node.js via le nouveau système de template
-        const emailData = await EmailService.buildFromTemplate('welcome_otp', {
-            otpCode: code,
-            recipientEmail: email
+    // Le code est généré, stocké et envoyé (email + WhatsApp) par le serveur ;
+    // il n'est jamais visible ni vérifiable depuis le navigateur.
+    // Pour « reset », le serveur n'envoie qu'aux coordonnées enregistrées du compte.
+    const requestVerification = async (email: string, targetPhone?: string, purpose: 'signup' | 'reset' = 'signup') => {
+        const res = await fetch(`${SERVER_URL}/api/auth/otp/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                purpose,
+                phone: purpose === 'signup' && targetPhone ? targetPhone.replace(/\s/g, '') : undefined
+            })
         });
-
-        try {
-            // Appel au microservice
-            await EmailService.sendTicketEmail(email, emailData.subject, emailData.html);
-        } catch (e) {
-            console.error("Échec de l'envoi d'email via le service", e);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || "Impossible d'envoyer le code de vérification.");
         }
-
-        // 3. Envoi WhatsApp en parallèle si un numéro est disponible
-        if (targetPhone) {
-            const cleanTarget = targetPhone.replace(/\s/g, ''); // Enlève les espaces éventuels
-            console.log(`[WA OTP] Tentative d'envoi vers : ${cleanTarget}`);
-            const waMessage = `🔐 *Babipass - Code de vérification*\n\nVotre code OTP est : *${code}*\n\nCe code expire dans 10 minutes. Ne le partagez jamais.`;
-            const waResult = await WhatsAppService.sendMessage(cleanTarget, waMessage).catch(err => {
-                console.warn('[WA OTP] Envoi WhatsApp échoué (non bloquant):', err);
-                return { success: false, error: err.message };
-            });
-            console.log('[WA OTP] Résultat:', waResult);
-        } else {
-            console.warn('[WA OTP] Aucun numéro fourni, envoi WhatsApp ignoré.');
-        }
-
-        return code;
     };
 
     const verifyOtpAndSignUp = async (e: React.FormEvent) => {
@@ -130,16 +100,14 @@ export const OrganizerLogin = () => {
         try {
             const formattedIdentifier = getFormattedIdentifier();
 
-            // Dans une vraie app, on vérifie contre la base de données. 
-            // Ici pour le mock UX on vérifie si ça existe dans auth_otps côté db
-            const { data: otpData } = await supabase
-                .from('auth_otps')
-                .select('*')
-                .eq('email', formattedIdentifier)
-                .eq('otp_code', otpCode)
-                .maybeSingle();
-
-            if (!otpData) {
+            // Vérification du code côté serveur (expiration + nombre d'essais limités)
+            const otpRes = await fetch(`${SERVER_URL}/api/auth/otp/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: formattedIdentifier, code: otpCode, purpose: 'signup' })
+            });
+            const otpData = await otpRes.json().catch(() => ({}));
+            if (!otpRes.ok || !otpData.success) {
                 throw new Error("Code de vérification invalide ou expiré.");
             }
 
@@ -174,9 +142,6 @@ export const OrganizerLogin = () => {
                     throw new Error(`Inscription réussie, mais connexion impossible: ${signInError.message}. (Si "Confirm Email" est activé dans Supabase, veuillez le désactiver pour ce flux personnalisé).`);
                 }
             }
-
-            // Nettoyage de l'OTP
-            await supabase.from('auth_otps').delete().eq('email', formattedIdentifier);
 
             setSuccessMsg("Inscription validée avec succès ! Redirection...");
             setRole(UserRole.ORGANIZER);
@@ -227,7 +192,7 @@ export const OrganizerLogin = () => {
             }
 
             // Envoyer le code OTP (WhatsApp + Email)
-            await requestVerification(formattedIdentifier, isPhoneMode ? getFullPhone(identifier) : undefined);
+            await requestVerification(formattedIdentifier, undefined, 'reset');
             setResetStep(true);
             setSuccessMsg("Code de réinitialisation envoyé ! Vérifiez vos messages WhatsApp ou email.");
         } catch (err: any) {
@@ -604,8 +569,12 @@ export const OrganizerLogin = () => {
                                         onClick={async () => {
                                             setLoading(true);
                                             const formattedIdentifier = getFormattedIdentifier();
-                                            await requestVerification(formattedIdentifier);
-                                            setSuccessMsg("Nouveau code envoyé !");
+                                            try {
+                                                await requestVerification(formattedIdentifier, isPhoneMode ? getFullPhone(identifier) : getFullPhone(phoneNumber));
+                                                setSuccessMsg("Nouveau code envoyé !");
+                                            } catch (err: any) {
+                                                setError(err.message);
+                                            }
                                             setLoading(false);
                                             setTimeout(() => setSuccessMsg(''), 3000);
                                         }}

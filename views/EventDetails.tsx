@@ -7,17 +7,12 @@ import { supabase } from '../supabaseClient';
 import { getPlatformSetting } from '../utils/platformSettings';
 import { getOfflineTickets, saveSecureTicket } from '../utils/offlineStorage';
 import { generateTicketPDF } from '../utils/pdfGenerator';
-import { WhatsAppService } from '../services/WhatsAppService';
-import { EmailService } from '../services/EmailService';
-import { PaystackService } from '../services/PaystackService';
-import { PawaPayService } from '../services/PawaPayService';
-import { FeexpayService } from '../services/FeexpayService';
-import { IntouchService } from '../services/IntouchService';
-import { PaydunyaService } from '../services/PaydunyaService';
-import { signTicket } from '../utils/crypto';
+import { CheckoutService, type CheckoutProvider, type CreateOrderInput, type CreatedOrder, type IssuedTicket } from '../services/CheckoutService';
+import { CatalogService } from '../services/CatalogService';
 import { LazyVideo } from '../components/LazyVideo';
 import { AmbassadorWidget } from '../components/AmbassadorWidget';
 import { SEO } from '../components/SEO';
+import { generateEventSEO } from '../utils/seoEngine';
 import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { StadiumMap } from '../components/StadiumMap';
@@ -301,13 +296,19 @@ export const EventDetails: React.FC = () => {
       setLoading(true);
 
       try {
-        const { data, error } = await supabase
-          .from('events')
-          .select('*, ticket_types(*), profiles(name, company, avatar)') // Fetch related ticket types and organizer profile
-          .eq('slug', slug)
-          .single();
+        // 1. Catalogue public mis en cache (absorbe les pics de visites).
+        let data: any = await CatalogService.getEvent(slug!).catch(() => null);
 
-        if (error) throw error;
+        // 2. Sinon (brouillon vu par son organisateur, serveur injoignable) : accès direct.
+        if (!data) {
+          const direct = await supabase
+            .from('events')
+            .select('*, ticket_types(*), profiles(name, company, avatar)') // Fetch related ticket types and organizer profile
+            .eq('slug', slug)
+            .single();
+          if (direct.error) throw direct.error;
+          data = direct.data;
+        }
 
         if (data) {
           // Transform snake_case relation to match Event type
@@ -416,12 +417,21 @@ export const EventDetails: React.FC = () => {
 
   return (
     <div className="relative min-h-screen pb-36">
-      <SEO
-        title={`${event.title} à ${event.city} - Réservation & Billets | Babipass`}
-        description={`Participez à ${event.title} le ${new Date(event.date).toLocaleDateString('fr-FR')} à ${event.city}. Achetez vos billets officiels dès ${formatCurrency(event.price)} en toute sécurité. Places limitées, réservez ✓`}
-        image={event.image}
-        url={window.location.href}
-      />
+      {event && (() => {
+        const seoData = generateEventSEO(event);
+        return (
+          <SEO
+            title={seoData.title}
+            description={seoData.description}
+            keywords={seoData.keywords}
+            image={seoData.image}
+            canonicalUrl={seoData.canonicalUrl}
+            type="event"
+            structuredData={seoData.structuredData}
+            breadcrumbsData={seoData.breadcrumbsData}
+          />
+        );
+      })()}
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}
@@ -1550,40 +1560,34 @@ const CheckoutModal: React.FC<{
 
 
 
-  const finalizeCheckout = async (transactionRef?: string, paymentMethod?: string) => {
-    const amountToPay = paymentMode === 'installment' ? total / 3 : total;
+  // ─── Achat côté serveur ────────────────────────────────────────────────
+  // Le serveur calcule le prix, réserve les places, vérifie le paiement auprès
+  // de l'opérateur et émet les billets. Le navigateur suit le statut, puis
+  // enregistre localement les billets reçus.
 
-    try {
-      // --- FAST PATH: Ticket Generation & Local Storage (Zero Network Dependency) ---
-      const ticketId = `tix-${Date.now()}`;
-      let signedToken = "LOCKED_INSTALLMENT";
+  const amountToPay = paymentMode === 'installment' ? total / 3 : total;
 
-      try {
-        if (paymentMode === 'full') {
-          signedToken = await signTicket({
-            tId: ticketId,
-            eId: eventData.id,
-            type: "Standard",
-            usr: participantName || "Participant Anonyme"
-          });
-        }
-      } catch (err) {
-        console.error("Signature offline failed", err);
-        signedToken = "ERROR_SIGNATURE";
-      }
+  // Salle d'attente : pendant un pic, le serveur fait patienter l'acheteur.
+  const [queueWait, setQueueWait] = useState<{ seconds: number; attempt: number } | null>(null);
+  const handleQueued = (seconds: number, attempt: number) => setQueueWait({ seconds, attempt });
 
-      const organizerProfile = (eventData as any).profiles;
-      const finalOrganizerName = organizerProfile?.company || organizerProfile?.name || (eventData as any).organizer_name || "Organisateur";
+  const completeCheckout = async (tickets: IssuedTicket[]) => {
+    const organizerProfile = (eventData as any).profiles;
+    const finalOrganizerName = organizerProfile?.company || organizerProfile?.name || (eventData as any).organizer_name || "Organisateur";
+    const typeNames: Record<string, string> = Object.fromEntries(
+      (eventData.ticketTypes || []).map((t: any) => [t.id, t.name])
+    );
 
+    for (const ticket of tickets) {
       const offlineTicket = {
-        id: ticketId,
+        id: ticket.id,
         eventName: eventData.title,
         eventDate: eventData.date,
         location: eventData.location,
         image: eventData.image,
-        qrCode: signedToken,
-        holder: participantName || "Participant Anonyme",
-        type: "Standard",
+        qrCode: ticket.qr_code,
+        holder: ticket.guest_name || participantName || "Participant Anonyme",
+        type: typeNames[ticket.ticket_type] || "Standard",
         purchaseDate: new Date().toISOString(),
         paymentStatus: paymentMode === 'installment' ? 'partial' : 'paid',
         amountPaid: amountToPay,
@@ -1594,257 +1598,124 @@ const CheckoutModal: React.FC<{
         organizerName: finalOrganizerName,
         organizerLogo: organizerProfile?.avatar || null
       };
-
-      // 1. Sauvegarde locale ultra-rapide (débloque l'UI)
       await saveSecureTicket(offlineTicket);
-
-      // 2. Mettre à jour l'UI AVANT les appels réseaux lents !
-      setStep('success');
-
-      // --- SLOW PATH: Network Calls in Background (Fire and Forget) ---
-      (async () => {
-        try {
-          // Ambassador Calculation
-          const ambassadorRef = sessionStorage.getItem('afritix_ambassador_ref');
-          let ambCommission = 0;
-          if (ambassadorRef && eventData.ambassador_enabled) {
-              if (eventData.ambassador_commission_type === 'percentage') {
-                  ambCommission = Math.round((amountToPay * (eventData.ambassador_commission_value || 0)) / 100);
-              } else {
-                  ambCommission = eventData.ambassador_commission_value || 0;
-              }
-          }
-
-          const { error: trxError, data: trxData } = await supabase.from('transactions').insert([{
-            event_id: eventData.id,
-            amount: amountToPay,
-            commission_rate: eventData.commission_rate || 8.0,
-            commission_amount: Math.round(amountToPay * (Number(eventData.commission_rate || 8.0) / 100)),
-            currency: displayCurrency,
-            method: paymentMethod || (transactionRef ? 'paystack_card' : 'other_mobile'),
-            status: 'completed',
-            guest_email: contactMethod === 'email' ? contactValue : null,
-            buyer_phone: contactMethod === 'wa' ? contactValue : null,
-            guest_name: participantName || 'Guest User',
-            buyer_location: buyerLocation,
-            referral_code: ambassadorRef,
-            ambassador_commission: ambCommission
-          }]).select().single();
-          if (trxError) console.error("Supabase Transaction Error:", trxError);
-
-          // A2. Supabase Ticket Backup Insert (For Revocation & Centralized Stats)
-          const backupTicket = {
-            id: ticketId, // Using the offline-generated ID
-            event_id: eventData.id,
-            transaction_id: trxData?.id || null,
-            guest_name: participantName || 'Guest User',
-            guest_email: contactValue, // Stores email OR phone for recovery
-            status: 'valid',
-            ticket_type: Object.keys(cart).find(id => cart[id] > 0) || 'Standard',
-            qr_code: signedToken
-          };
-
-          const { error: tErr } = await supabase.from('tickets').insert([backupTicket]);
-          if (tErr) console.error("Supabase Ticket Backup Error:", tErr);
-
-          // B. Update Sales Stats
-          const totalTicketsBought = Object.values(cart).reduce((a, b) => a + b, 0);
-          await supabase.rpc('increment_event_sold', { evt_id: eventData.id, amount: totalTicketsBought });
-          for (const [tId, qty] of Object.entries(cart)) {
-            if (qty > 0) await supabase.rpc('increment_ticket_type_sold', { tt_id: tId, amount: qty });
-          }
-
-          // C. Ambassador Update
-          if (ambassadorRef && ambCommission > 0) {
-              try {
-                  await supabase.rpc('increment_ambassador_stats', { 
-                      p_code: ambassadorRef, 
-                      p_sales: 1, 
-                      p_earned: ambCommission 
-                  });
-              } catch(e) { console.error("Ambassador increment error", e); }
-          }
-
-          // D. Email Notification
-          if (contactMethod === 'email' && paymentMode === 'full') {
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(offlineTicket.qrCode)}`;
-            const emailData = await EmailService.buildFromTemplate('ticket_purchase', {
-              eventTitle: eventData.title,
-              ticketType: offlineTicket.type,
-              eventDate: new Date(eventData.date).toLocaleString(),
-              qrUrl: qrUrl,
-              jwsData: offlineTicket.qrCode
-            });
-            await EmailService.sendTicketEmail(contactValue, emailData.subject, emailData.html);
-          }
-
-          // E. WhatsApp Notifications
-          if (contactMethod === 'wa' && paymentMode === 'full') {
-            const ticketMessage = `🎉 Félicitations pour votre achat !\n\nVoici votre billet pour l'événement *${eventData.title}*.\nDate: ${new Date(eventData.date).toLocaleString('fr-FR')}\nLieu: ${eventData.location}, ${eventData.city}\nReference: ${transactionRef || ticketId}\n\nPrésentez ce QR Code à l'entrée. À très vite !`;
-            const mockQrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + encodeURIComponent(offlineTicket.qrCode);
-            await WhatsAppService.sendMediaMessage(contactValue, ticketMessage, mockQrImageUrl);
-          } else if (contactMethod === 'wa' && paymentMode === 'installment') {
-            await WhatsAppService.sendMessage(contactValue, `⏳ Réservation validée pour *${eventData.title}*. 1ère tranche payée.`);
-          }
-
-          // Tâche asynchrone pour le PDF
-          if (paymentMode === 'full') {
-            generateTicketPDF(offlineTicket).catch(console.error);
-          }
-        } catch (backgroundError) {
-          console.error("Background processing error:", backgroundError);
-        }
-      })();
-
-    } catch (err) {
-      console.error("Critical error in finalizeCheckout:", err);
-      alert("Erreur critique. Votre paiement est validé mais le billet n'a pas pu être sauvegardé localement.");
-      setStep('success');
+      if (paymentMode === 'full') {
+        generateTicketPDF(offlineTicket).catch(console.error);
+      }
     }
+    setStep('success');
+  };
+
+  const buildOrderInput = (provider: CheckoutProvider, payment?: CreateOrderInput['payment']): CreateOrderInput => ({
+    eventId: eventData.id,
+    items: Object.fromEntries(Object.entries(cart).filter(([, qty]) => qty > 0)),
+    paymentMode,
+    provider,
+    buyer: {
+      name: participantName || undefined,
+      email: contactMethod === 'email' ? contactValue : undefined,
+      phone: contactMethod === 'wa' ? contactValue : undefined,
+      contactMethod: contactMethod === 'wa' ? 'wa' : 'email'
+    },
+    buyerLocation,
+    referralCode: sessionStorage.getItem('afritix_ambassador_ref'),
+    payment
+  });
+
+  // Attend la confirmation (vérifiée par le serveur) puis termine ou revient au formulaire.
+  const settleOrder = async (created: CreatedOrder, retryStep: typeof step) => {
+    const result = await CheckoutService.waitForPayment(created.order.id, created.order.token);
+    const ref = created.order.id.slice(0, 8).toUpperCase();
+
+    if (result.status === 'paid' && result.tickets?.length) {
+      await completeCheckout(result.tickets);
+      return;
+    }
+    if (result.status === 'pending') {
+      alert(`Paiement pas encore confirmé (réf. ${ref}). Si vous l'avez validé sur votre téléphone, vos billets vous seront envoyés automatiquement dès confirmation.`);
+    } else if (result.status === 'refund_required') {
+      alert(`Votre paiement est arrivé après la fin de la réservation et il ne reste plus de place. Contactez le support pour le remboursement (réf. ${ref}).`);
+    } else if (result.status === 'amount_mismatch') {
+      alert(`Le montant payé ne correspond pas à la commande. Contactez le support (réf. ${ref}).`);
+    } else {
+      alert("Paiement échoué ou délai dépassé. Vos places ont été libérées.");
+    }
+    setStep(retryStep);
   };
 
   const handleCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!(window as any).PaystackPop) {
+      console.error("PaystackPop script is not loaded");
+      alert("Le script de paiement Paystack n'est pas chargé. Veuillez rafraîchir la page.");
+      return;
+    }
     setStep('processing');
     try {
-      const amountToPay = paymentMode === 'installment' ? total / 3 : total;
-
-      // Valider la configuration Paystack avant de lancer
-      let config;
-      try {
-        config = await PaystackService.getConfig();
-        if (!config || !config.publicKey) throw new Error("Clé introuvable.");
-        if (!config.publicKey.startsWith('pk_')) throw new Error("Clé publique invalide.");
-      } catch (configErr: any) {
-        console.error("Erreur de configuration Paystack:", configErr);
-        alert("Configuration Paystack invalide. Contactez l'administrateur.");
-        setStep('pay_card');
-        return;
-      }
-
-      if (!(window as any).PaystackPop) {
-        console.error("PaystackPop script is not loaded");
-        alert("Le script de paiement Paystack n'est pas chargé. Veuillez rafraîchir la page.");
-        setStep('pay_card');
-        return;
-      }
+      const created = await CheckoutService.createOrder(buildOrderInput('paystack'), { onQueued: handleQueued });
+      setQueueWait(null);
+      const payment = created.payment;
 
       const handler = (window as any).PaystackPop.setup({
-        key: config.publicKey,
-        email: contactValue.includes('@') ? contactValue : `user_${Date.now()}@babipass.com`,
-        amount: Math.round(amountToPay * 100), // Paystack attend des centimes (entier)
-        currency: 'XOF',
+        key: payment.publicKey,
+        email: payment.email,
+        amount: payment.amount, // montant calculé par le serveur (en centimes)
+        currency: payment.currency,
         channels: ['card', 'mobile_money'],
-        ref: 'afritix_' + Math.floor((Math.random() * 1000000000) + 1),
-        callback: function (response: any) {
-          if (response.status === 'success') {
-            finalizeCheckout(response.reference, 'paystack_card');
-          } else {
-            alert('Paiement échoué ou annulé.');
-            setStep('pay_card');
-          }
+        ref: payment.reference,
+        callback: function () {
+          // Le statut renvoyé par le popup n'est pas une preuve : le serveur vérifie.
+          setStep('processing');
+          settleOrder(created, 'pay_card');
         },
         onClose: function () {
-          setStep('pay_card'); // L'utilisateur a fermé le popup
+          setStep('pay_card'); // L'utilisateur a fermé le popup (la réservation expirera seule)
         }
       });
       handler.openIframe();
     } catch (err: any) {
       console.error("Erreur lancement Paystack", err);
+      setQueueWait(null);
       alert(err.message || 'Erreur lors du lancement de Paystack');
       setStep('pay_card');
     }
   };
 
-  const handleMomoSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const payWithMobileMoney = async (
+    provider: Exclude<CheckoutProvider, 'paystack'>,
+    payment: CreateOrderInput['payment'],
+    retryStep: typeof step
+  ) => {
     setStep('processing');
     try {
-      const amountToPay = paymentMode === 'installment' ? total / 3 : total;
-
-      // Auto-timeout après 5 minutes (300s) comme demandé par l'utilisateur
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Délai d'attente de 5 minutes dépassé.")), 300000));
-      const res: any = await Promise.race([PawaPayService.requestUSSDPush(momoPhone, amountToPay, momoNetwork), timeoutPromise]);
-
-      if (res.success) {
-        await finalizeCheckout(res.pawaId, 'pawapay_momo');
-      } else {
-        alert("Paiement Mobile Money échoué.");
-        setStep('pay_momo');
-      }
+      const created = await CheckoutService.createOrder(buildOrderInput(provider, payment), { onQueued: handleQueued });
+      setQueueWait(null);
+      await settleOrder(created, retryStep);
     } catch (err: any) {
-      alert(err.message || 'Le paiement a échoué ou a expiré.');
-      setStep('pay_momo');
+      setQueueWait(null);
+      alert(err.message || 'Le paiement a échoué.');
+      setStep(retryStep);
     }
   };
 
-  const handleFeexpaySubmit = async (e: React.FormEvent) => {
+  const handleMomoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setStep('processing');
-    try {
-      const amountToPay = paymentMode === 'installment' ? total / 3 : total;
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Délai de 5 min dépassé.")), 300000));
-      const res: any = await Promise.race([
-        FeexpayService.processMobileMoney({ phone: feexpayPhone, amount: amountToPay, country: 'BJ', network: feexpayNetwork }),
-        timeoutPromise
-      ]);
-
-      if (res.success) {
-        await finalizeCheckout(res.transactionId, 'feexpay_momo');
-      } else {
-        alert("Paiement FeexPay échoué.");
-        setStep('pay_feexpay');
-      }
-    } catch (err: any) {
-      alert(err.message || "Erreur service.");
-      setStep('pay_feexpay');
-    }
+    payWithMobileMoney('pawapay', { phone: momoPhone, network: momoNetwork }, 'pay_momo');
   };
 
-  const handleIntouchSubmit = async (e: React.FormEvent) => {
+  const handleFeexpaySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setStep('processing');
-    try {
-      const amountToPay = paymentMode === 'installment' ? total / 3 : total;
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Délai de 5 min dépassé.")), 300000));
-      const res: any = await Promise.race([
-        IntouchService.processMobilePayment({ phone: intouchPhone, amount: amountToPay, provider: intouchNetwork }),
-        timeoutPromise
-      ]);
-
-      if (res.success) {
-        await finalizeCheckout(res.transactionId, 'intouch_momo');
-      } else {
-        alert("Paiement InTouch échoué.");
-        setStep('pay_intouch');
-      }
-    } catch (err: any) {
-      alert(err.message || "Erreur connexion.");
-      setStep('pay_intouch');
-    }
+    payWithMobileMoney('feexpay', { phone: feexpayPhone, network: feexpayNetwork }, 'pay_feexpay');
   };
 
-  const handlePaydunyaSubmit = async (e: React.FormEvent) => {
+  const handleIntouchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setStep('processing');
-    try {
-      const amountToPay = paymentMode === 'installment' ? total / 3 : total;
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Délai de 5 min dépassé.")), 300000));
-      const res: any = await Promise.race([
-        PaydunyaService.processMobilePayment({ phone: paydunyaPhone, amount: amountToPay, provider: paydunyaNetwork }),
-        timeoutPromise
-      ]);
+    payWithMobileMoney('intouch', { phone: intouchPhone, network: intouchNetwork }, 'pay_intouch');
+  };
 
-      if (res.success) {
-        await finalizeCheckout(res.transactionId, 'paydunya_momo');
-      } else {
-        alert("Paiement PayDunya échoué.");
-        setStep('pay_paydunya');
-      }
-    } catch (err: any) {
-      alert(err.message || "Erreur PayDunya.");
-      setStep('pay_paydunya');
-    }
+  const handlePaydunyaSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    payWithMobileMoney('paydunya', { phone: paydunyaPhone, network: paydunyaNetwork }, 'pay_paydunya');
   };
 
   return (
@@ -2340,8 +2211,20 @@ const CheckoutModal: React.FC<{
               <X size={20} />
             </button>
             <Loader2 size={48} className="text-orange-500 animate-spin mb-6" />
-            <h3 className="text-xl font-bold text-white mb-2">Traitement en cours...</h3>
-            <p className="text-slate-400 text-sm">Veuillez valider le paiement sur votre téléphone. Cette fenêtre se fermera automatiquement après validation.</p>
+            {queueWait ? (
+              <>
+                <h3 className="text-xl font-bold text-white mb-2">Forte affluence : vous êtes dans la file d'attente</h3>
+                <p className="text-slate-400 text-sm">
+                  Ne fermez pas cette fenêtre. Nouvel essai automatique dans {queueWait.seconds} s
+                  {queueWait.attempt > 1 ? ` (tentative ${queueWait.attempt})` : ''}. Votre place sera réservée dès votre tour.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold text-white mb-2">Traitement en cours...</h3>
+                <p className="text-slate-400 text-sm">Veuillez valider le paiement sur votre téléphone. Cette fenêtre se fermera automatiquement après validation.</p>
+              </>
+            )}
           </div>
         )}
 

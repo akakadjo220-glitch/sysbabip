@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { QrCode, Lock, ArrowRight, Loader2, UserSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { supabase } from '../supabaseClient';
+import { ScannerService } from '../services/ScannerService';
 
 export const AgentLogin: React.FC = () => {
     const [agentCode, setAgentCode] = useState('');
@@ -19,31 +19,15 @@ export const AgentLogin: React.FC = () => {
         setLoading(true);
 
         try {
-            // Utilisation de la fonction RPC sécurisée (SECURITY DEFINER)
-            // Cette fonction vérifie les identifiants côté serveur et contourne le RLS.
-            const { data, error: rpcError } = await supabase.rpc('agent_login', {
-                p_agent_code: agentCode.toUpperCase(),
-                p_pin: pin,
-            });
-
-            if (rpcError) {
-                throw new Error(rpcError.message || 'Erreur serveur lors de la connexion.');
-            }
-
-            if (!data || data.success === false) {
-                throw new Error(data?.error || 'Identifiant Agent ou Code PIN invalide.');
-            }
-
-            const agent = data.agent;
+            // Le serveur vérifie le code et le PIN (verrouillage après 5 échecs)
+            // et délivre un jeton signé de 12 h, exigé pour chaque scan.
+            const { agent, expires_at } = await ScannerService.login(agentCode.toUpperCase(), pin);
 
             // Connexion réussie — redirection selon le type d'agent
             setRole(UserRole.STAFF);
             localStorage.setItem('afritix_user_role', UserRole.STAFF);
             localStorage.setItem('afritix_current_agent', JSON.stringify(agent));
-            
-            // Session de 12 heures pour les agents
-            const sessionDuration = 12 * 60 * 60 * 1000;
-            localStorage.setItem('afritix_agent_session_expires_at', (Date.now() + sessionDuration).toString());
+            localStorage.setItem('afritix_agent_session_expires_at', String(expires_at));
             
             setLoading(false);
 

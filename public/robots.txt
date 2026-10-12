@@ -1,0 +1,50 @@
+# ==============================================================================
+# BABIPASS ROBOTS.TXT — SÉCURISÉ & OPTIMISÉ MOTEURS DE RECHERCHE + IA
+# ==============================================================================
+
+# 1. Règles Générales pour tous les Crawlers Web
+User-agent: *
+Allow: /
+Allow: /event/
+Allow: /collecte/
+Allow: /tournoi/
+Allow: /tickets
+Allow: /about
+Allow: /faq
+Allow: /terms
+Allow: /privacy
+Allow: /contact
+
+# Bloquer l'indexation des espaces d'administration, scanners et données sensibles
+Disallow: /admin/
+Disallow: /sysbap/
+Disallow: /organizer/
+Disallow: /agent/
+Disallow: /scanner/
+Disallow: /api/private/
+Disallow: /api/webhook/
+Disallow: /*?token=*
+Disallow: /*?key=*
+
+# 2. Autorisation & Optimisation pour les Moteurs d'Intelligence Artificielle (AEO/GEO)
+# Permet à ChatGPT, Perplexity, Claude et Gemini de citer Babipass en réponse aux requêtes des utilisateurs
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# 3. Déclaration du Plan du Site (XML Sitemap)
+Sitemap: https://babipass.com/sitemap.xml

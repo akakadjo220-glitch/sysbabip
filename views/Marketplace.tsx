@@ -5,12 +5,14 @@ import { Event } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { CountrySelector } from '../components/CountrySelector';
 import { supabase } from '../supabaseClient';
+import { CatalogService } from '../services/CatalogService';
 import { AdCarousel } from '../components/AdCarousel';
 import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, List, SlidersHorizontal, ChevronLeft, ChevronRight, Globe, Loader2, Banknote, ShieldCheck, Ticket, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PublicMap } from '../components/PublicMap';
 import { saveSecureTicket } from '../utils/offlineStorage';
 import { SEO } from '../components/SEO';
+import { generateMarketplaceSEO } from '../utils/seoEngine';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -74,39 +76,56 @@ export const Marketplace: React.FC = () => {
       });
   }, []);
 
-  // Fetch Events from Supabase — attendre que l'auth soit résolue pour éviter un deadlock GoTrue
+  // Catalogue filtré et paginé par le serveur (mis en cache) : le navigateur ne
+  // télécharge plus tous les événements à chaque visite.
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
+  const [mapEvents, setMapEvents] = useState<Event[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   useEffect(() => {
-    if (authLoading) return; // Ne pas fetcher tant que l'auth n'est pas résolue
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (authLoading || !userCountry) return;
+    let cancelled = false;
 
     const fetchEvents = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('events')
-          .select('*, ticket_types(*)')
-          .eq('status', 'published');
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          const formattedEvents = data.map((e: any) => ({
-            ...e,
-            ticketTypes: e.ticket_types
-          }));
-          setEvents(formattedEvents);
-        } else {
-          setEvents([]);
-        }
+        const result = await CatalogService.listEvents({
+          country: userCountry,
+          category: selectedCategory,
+          city: cityFilter,
+          q: debouncedSearch,
+          page: currentPage,
+          limit: ITEMS_PER_PAGE
+        });
+        if (cancelled) return;
+        setEvents(result.events);
+        setTotalEvents(result.total);
+        setTotalPages(result.pages);
+        setCityOptions(result.cities);
       } catch (error) {
         console.error('Error fetching events:', error);
-        setEvents([]);
+        if (!cancelled) { setEvents([]); setTotalEvents(0); setTotalPages(1); }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchEvents();
-  }, [authLoading]);
+    return () => { cancelled = true; };
+  }, [authLoading, userCountry, selectedCategory, cityFilter, debouncedSearch, currentPage]);
+
+  // Repères de la carte (légers, tous les événements du pays)
+  useEffect(() => {
+    if (authLoading || !userCountry) return;
+    CatalogService.mapEvents(userCountry).then(setMapEvents).catch(() => setMapEvents([]));
+  }, [authLoading, userCountry]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -118,26 +137,9 @@ export const Marketplace: React.FC = () => {
     return <CountrySelector onSelect={setUserCountry} />;
   }
 
-  // Filter events based on search, category, city AND COUNTRY
-  const filteredEvents = events.filter(event => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.city.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'Tous' || event.category === selectedCategory;
-    const matchesCity = cityFilter === 'Tous' || event.city === cityFilter;
-    // Country Filter Logic: If user selected 'Global', show all, otherwise match country
-    const matchesCountry = userCountry === 'Global' || event.country === userCountry;
-
-    return matchesSearch && matchesCategory && matchesCity && matchesCountry;
-  });
-
-  // Pagination Logic
-  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentEvents = filteredEvents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-  // Get unique cities from filtered events to populate the dropdown
-  // Get unique cities from filtered events to populate the dropdown
-  const uniqueCities = ['Tous', ...Array.from(new Set(events.filter(e => userCountry === 'Global' || e.country === userCountry).map(e => e.city)))];
+  // Filtres (pays, catégorie, ville, recherche) et pagination faits par le serveur.
+  const currentEvents = events;
+  const uniqueCities = ['Tous', ...cityOptions];
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -148,12 +150,16 @@ export const Marketplace: React.FC = () => {
     scrollToTop();
   };
 
+  const marketplaceSeo = generateMarketplaceSEO(userCountry);
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-50 overscroll-none pb-40">
       <SEO
-        title="Billetterie Événements en Afrique - 100% Sécurisé | Babipass"
-        description="Découvrez et réservez instantanément vos billets d'événements (concerts, festivals, sports). Transactions 100% sécurisées et anti-fraude. Réservez ici ✓"
-        keywords="billetterie afrique, achat ticket concert, événements sécurisés, billets sport, réservation en ligne"
+        title={marketplaceSeo.title}
+        description={marketplaceSeo.description}
+        keywords={marketplaceSeo.keywords}
+        canonicalUrl={marketplaceSeo.canonicalUrl}
+        structuredData={marketplaceSeo.structuredData}
       />
       {/* 📢 Main Hero Carousel Area */}
       <section className="relative flex flex-col gap-4 animate-in slide-in-from-bottom-4 fade-in duration-700 mt-2">
@@ -222,7 +228,7 @@ export const Marketplace: React.FC = () => {
 
       {/* Control Bar */}
       <div className="sticky top-0 z-30 py-3 md:py-4 bg-[#0f172a]/95 backdrop-blur-xl border-b border-white/10 -mx-4 px-4 md:mx-0 md:px-0 md:rounded-xl md:border-none md:bg-transparent md:backdrop-blur-none flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl md:shadow-none">
-        <div className="flex overflow-x-auto pb-2 md:pb-0 gap-2 w-full md:w-auto no-scrollbar mask-gradient snap-x">
+        <nav aria-label="Catégories d'événements" className="flex overflow-x-auto pb-2 md:pb-0 gap-2 w-full md:w-auto no-scrollbar mask-gradient snap-x">
         {categories.map((cat) => {
             const SPORT_ICONS: Record<string, string> = {
               'Football': '⚽', 'Basketball': '🏀', 'Rugby': '🏉',
@@ -245,7 +251,7 @@ export const Marketplace: React.FC = () => {
               </button>
             );
           })}
-        </div>
+        </nav>
 
         <div className="flex items-center gap-3 w-full md:w-auto bg-slate-800/50 p-1 rounded-xl border border-slate-700">
           <button
@@ -294,7 +300,7 @@ export const Marketplace: React.FC = () => {
             ))}
           </div>
 
-          {filteredEvents.length === 0 && (
+          {!loading && totalEvents === 0 && (
             <EmptyState userCountry={userCountry} />
           )}
 
@@ -335,8 +341,56 @@ export const Marketplace: React.FC = () => {
           )}
         </section>
       ) : (
-        <PublicMap events={filteredEvents} />
+        <PublicMap events={mapEvents} />
       )}
+
+      {/* 🚀 Section d'Autorité SEO & Indexation Google / IA (Modèle Sitelinks Jumia) */}
+      <section aria-label="À propos de Babipass" className="mt-20 pt-10 border-t border-white/10 text-slate-400 text-xs md:text-sm">
+        <div className="bg-slate-900/60 rounded-3xl p-6 md:p-8 border border-white/5 space-y-6">
+          <div className="border-b border-white/5 pb-4">
+            <h1 className="text-xl md:text-2xl font-black text-white tracking-tight mb-2">
+              Babipass — La Billetterie Événementielle N°1 en Côte d'Ivoire & en Afrique
+            </h1>
+            <p className="text-slate-400 leading-relaxed">
+              Découvrez la plus vaste sélection d'événements à Abidjan et partout en Afrique : 
+              <strong className="text-slate-200"> concerts live, festivals incontournables, tournois sportifs, soirées VIP</strong> et conférences professionnelles. 
+              Achetez vos pass en toute confiance grâce au paiement instantané par <strong className="text-orange-400">Wave, Orange Money, MTN MoMo</strong> et carte bancaire.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <ShieldCheck size={16} className="text-emerald-400" />
+                Anti-Fraude & QR Code Sécurisé
+              </h2>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                Chaque billet émis sur Babipass est infalsifiable et horodaté avec un QR Code unique cryptographiquement validé à l'entrée par les organisateurs.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Banknote size={16} className="text-orange-400" />
+                Paiements Mobiles Locaux
+              </h2>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                Validez vos achats en quelques secondes sans carte bancaire obligatoire : Wave, Orange Money Côte d'Ivoire, MTN MoMo et Moov Money acceptés sans frais cachés.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Trophy size={16} className="text-amber-400" />
+                Espace Organisateur Clé en Main
+              </h2>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                Créez votre événement en moins de 3 minutes, générez des billets physiques et digitaux, suivez vos encaissements en direct et retirez vos fonds rapidement.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

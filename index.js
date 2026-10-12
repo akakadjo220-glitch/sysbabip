@@ -678,7 +678,7 @@ app.post('/api/pay/paydunya', async (req, res) => {
 // ─── DIDIT API CONFIGURATION ────────────────────────────────────────────────
 // In a real production environment, these should be loaded from process.env
 // We are hardcoding them from the user's secure response for immediate deployment
-const DIDIT_API_KEY = 'gkjZnCYzBXgXiWjLNarfXeq8HLCFK0fnzSgulw7NZ9s';
+const DIDIT_API_KEY = process.env.DIDIT_API_KEY;
 const DIDIT_WORKFLOW_ID = '8fa09204-b88d-442d-ad51-98757f60e0fb';
 
 // ─── DIDIT SESSION CREATION ────────────────────────────────────────────────

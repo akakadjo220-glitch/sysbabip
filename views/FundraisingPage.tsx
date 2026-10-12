@@ -4,9 +4,7 @@ import { Heart, Users, Calendar, ArrowLeft, Loader2, CheckCircle, CreditCard, Ph
 import { supabase } from '../supabaseClient';
 import { formatCurrency } from '../constants';
 import { SEO } from '../components/SEO';
-import { PawaPayService } from '../services/PawaPayService';
-import { PaystackService } from '../services/PaystackService';
-import { getPlatformSetting } from '../utils/platformSettings';
+import { CheckoutService } from '../services/CheckoutService';
 
 export const FundraisingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -59,82 +57,15 @@ export const FundraisingPage: React.FC = () => {
     load();
   }, [slug]);
 
-  // ── Enregistre la contribution après paiement confirmé ──────────────────
-  const recordContribution = async (transactionRef: string, paymentMethod: string) => {
-    const amount = parseFloat(form.amount);
-    const rawRate = await getPlatformSetting('default_fundraising_commission_rate');
-    const rate = rawRate !== null ? Number(rawRate) / 100 : 0.05;
-    const platform_fee = Math.round(amount * rate);
-    const net_amount = amount - platform_fee;
-    const emailToUse = form.email || null;
-
-    const { error: insErr } = await supabase.from('fundraising_contributions').insert([{
-      campaign_id: campaign.id,
-      contributor_name: form.name || 'Anonyme',
-      contributor_email: emailToUse,
-      amount,
-      platform_fee,
-      net_amount,
-      payment_method: paymentMethod,
-      transaction_ref: transactionRef
-    }]);
-    if (insErr) throw insErr;
-    setStep('success');
-  };
-
-  // ── Carte bancaire → Paystack Popup (sécurisé, aucune donnée CB côté client) ──
-  const handlePaystackCard = async () => {
-    const amount = parseFloat(form.amount);
-    if (!amount || amount <= 0) { setError('Veuillez saisir un montant valide.'); return; }
-    setError('');
-
-    let config: any;
-    try {
-      config = await PaystackService.getConfig();
-      if (!config?.publicKey?.startsWith('pk_')) throw new Error('Clé Paystack invalide.');
-    } catch (configErr: any) {
-      setError("Configuration Paystack manquante. Contactez l'administrateur.");
-      return;
-    }
-
-    if (!(window as any).PaystackPop) {
-      setError('SDK Paystack non chargé. Rafraîchissez la page.');
-      return;
-    }
-
-    const handler = (window as any).PaystackPop.setup({
-      key: config.publicKey,
-      email: form.email || 'contributeur@babipass.com',
-      amount: Math.round(amount * 100), // Paystack uses smallest currency unit
-      currency: (campaign.currency === 'FCFA' || !campaign.currency) ? 'XOF' : campaign.currency,
-      channels: ['card', 'mobile_money'],
-      ref: 'babifund_' + Date.now(),
-      callback: function(response: any) {
-        if (response.status === 'success') {
-          recordContribution(response.reference, 'CB').catch((err: any) => {
-            setError(err.message || 'Paiement validé, mais erreur de sauvegarde.');
-          });
-        } else {
-          setError('Paiement annulé ou échoué.');
-        }
-      },
-      onClose: () => { /* User closed the popup, do nothing */ }
-    });
-    handler.openIframe();
-  };
-
-  // ── Mobile Money → PawaPay USSD Push ────────────────────────────────────
+  // ── Contribution : le serveur lance le paiement, le vérifie auprès de
+  //    l'opérateur, puis enregistre la contribution (jamais le navigateur). ──
   const handleContribute = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseFloat(form.amount);
-    if (!amount || amount <= 0) { setError('Veuillez saisir un montant valide.'); return; }
+    const amount = Math.round(parseFloat(form.amount));
+    if (!amount || amount < 100) { setError('Veuillez saisir un montant valide (minimum 100).'); return; }
 
-    if (form.method === 'CB') {
-      await handlePaystackCard();
-      return;
-    }
-
-    if (!form.phone) {
+    const isCard = form.method === 'CB';
+    if (!isCard && !form.phone) {
       setError('Mode Mobile Money sélectionné : le numéro de téléphone est obligatoire.');
       return;
     }
@@ -142,9 +73,27 @@ export const FundraisingPage: React.FC = () => {
     setSubmitting(true);
     setError('');
     try {
-      const { success, pawaId } = await PawaPayService.requestUSSDPush(form.phone, amount, form.method);
-      if (!success) throw new Error('Échec du paiement Mobile Money');
-      await recordContribution(pawaId, form.method);
+      const created = await CheckoutService.createDonation({
+        campaignId: campaign.id,
+        amount,
+        provider: isCard ? 'paystack' : 'pawapay',
+        buyer: { name: form.name || undefined, email: form.email || undefined },
+        payment: isCard ? undefined : { phone: form.phone, network: form.method }
+      });
+
+      if (isCard && !(await CheckoutService.openPaystack(created))) {
+        setError('Paiement annulé.');
+        return;
+      }
+
+      const result = await CheckoutService.waitForPayment(created.order.id, created.order.token);
+      if (result.status === 'paid') {
+        setStep('success');
+      } else if (result.status === 'pending') {
+        setError("Paiement pas encore confirmé. S'il a été validé, votre contribution sera enregistrée automatiquement.");
+      } else {
+        setError('Paiement échoué ou expiré.');
+      }
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la contribution.');
     } finally {

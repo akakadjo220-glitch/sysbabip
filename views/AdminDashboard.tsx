@@ -304,18 +304,17 @@ const OverviewTab = ({ stats }: any) => {
 
       // Filtered KPIs
       if (hasFilters) {
-        let q = supabase.from('transactions').select('amount, commission_amount, event_id, events!inner(organizer_id)').neq('status', 'valid');
-        if (filterEvent) q = q.eq('event_id', filterEvent);
-        if (filterDateFrom) q = q.gte('created_at', filterDateFrom + 'T00:00:00');
-        if (filterDateTo) q = q.lte('created_at', filterDateTo + 'T23:59:59');
-        if (filterUser) q = q.eq('events.organizer_id', filterUser);
-
-        const { data: trxData } = await q;
-        const arr = trxData || [];
+        // Totaux calculés en base (justes quel que soit le nombre de transactions).
+        const { data: kpi } = await supabase.rpc('admin_transaction_kpis', {
+          p_event_id: filterEvent || null,
+          p_organizer_id: filterUser || null,
+          p_from: filterDateFrom ? filterDateFrom + 'T00:00:00' : null,
+          p_to: filterDateTo ? filterDateTo + 'T23:59:59' : null
+        });
         setFilteredStats({
-          revenue: arr.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0),
-          commission: arr.reduce((s: number, t: any) => s + (Number(t.commission_amount) || 0), 0),
-          trxCount: arr.length
+          revenue: Number(kpi?.revenue) || 0,
+          commission: Number(kpi?.commission) || 0,
+          trxCount: Number(kpi?.trx_count) || 0
         });
       }
 
@@ -1342,20 +1341,11 @@ const FinanceTab = ({ stats, addToast }: any) => {
   useEffect(() => {
     supabase.from('events').select('id, title').order('title').then(({ data }) => setEventOpts(data || []));
     supabase.from('profiles').select('id, name').in('role', ['ORGANIZER', 'ADMIN']).order('name').then(({ data }) => setUserOpts(data || []));
-    // Fetch total ambassador commissions (all time, excluding physical)
-    supabase.from('transactions').select('ambassador_commission').neq('status', 'valid').then(({ data }) => {
-      const total = (data || []).reduce((s: number, t: any) => s + (Number(t.ambassador_commission) || 0), 0);
-      setTotalAmbassadorCommission(total);
-    });
-    // Fetch total cash advances paid to organizers
-    supabase.from('payout_requests').select('amount').eq('type', 'cash_advance').eq('status', 'paid').then(({ data }) => {
-      const total = (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-      setTotalCashAdvance(total);
-    });
-    // Fetch total physical commission compensated from organizer wallet
-    supabase.from('payout_requests').select('amount').eq('type', 'physical_commission').eq('status', 'paid').then(({ data }) => {
-      const total = (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-      setTotalPhysicalCompensation(total);
+    // Totaux globaux calculés en base : commissions ambassadeurs, avances, compensations physiques.
+    supabase.rpc('admin_global_totals').then(({ data }) => {
+      setTotalAmbassadorCommission(Number(data?.ambassador_commission) || 0);
+      setTotalCashAdvance(Number(data?.cash_advance) || 0);
+      setTotalPhysicalCompensation(Number(data?.physical_compensation) || 0);
     });
   }, []);
 
@@ -1389,17 +1379,16 @@ const FinanceTab = ({ stats, addToast }: any) => {
 
     // Compute filtered KPIs when filters are active
     if (hasFilters) {
-      let kpiQ = supabase.from('transactions').select('amount, commission_amount, ambassador_commission, events!inner(organizer_id)').neq('status', 'valid');
-      if (fEvent) kpiQ = kpiQ.eq('event_id', fEvent);
-      if (fDateFrom) kpiQ = kpiQ.gte('created_at', fDateFrom + 'T00:00:00');
-      if (fDateTo) kpiQ = kpiQ.lte('created_at', fDateTo + 'T23:59:59');
-      if (fUser) kpiQ = kpiQ.eq('events.organizer_id', fUser);
-      const { data: kpiData } = await kpiQ;
-      const arr = kpiData || [];
+      const { data: kpi } = await supabase.rpc('admin_transaction_kpis', {
+        p_event_id: fEvent || null,
+        p_organizer_id: fUser || null,
+        p_from: fDateFrom ? fDateFrom + 'T00:00:00' : null,
+        p_to: fDateTo ? fDateTo + 'T23:59:59' : null
+      });
       setFStats({
-        revenue: arr.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0),
-        commission: arr.reduce((s: number, t: any) => s + (Number(t.commission_amount) || 0), 0),
-        ambassadorCommission: arr.reduce((s: number, t: any) => s + (Number(t.ambassador_commission) || 0), 0)
+        revenue: Number(kpi?.revenue) || 0,
+        commission: Number(kpi?.commission) || 0,
+        ambassadorCommission: Number(kpi?.ambassador_commission) || 0
       });
     }
 

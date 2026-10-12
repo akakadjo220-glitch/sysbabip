@@ -167,15 +167,14 @@ export const AmbassadorLogin = () => {
         try {
             const cleanEmail = email.trim().toLowerCase();
 
-            // Verify OTP against our auth_otps table (set by the server)
-            const { data: otpData, error: otpFetchError } = await supabase
-                .from('auth_otps')
-                .select('*')
-                .eq('email', cleanEmail)
-                .eq('otp_code', otpCode)
-                .maybeSingle();
-
-            if (otpFetchError || !otpData) {
+            // Vérification du code côté serveur (auth_otps n'est plus lisible depuis le navigateur)
+            const otpRes = await fetch(`${SERVER_URL}/api/auth/otp/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: cleanEmail, code: otpCode, purpose: 'ambassador' })
+            });
+            const otpData = await otpRes.json().catch(() => ({}));
+            if (!otpRes.ok || !otpData.success) {
                 throw new Error("Code incorrect ou expiré. Vérifiez votre email.");
             }
 
@@ -197,9 +196,6 @@ export const AmbassadorLogin = () => {
                     role: 'AMBASSADOR'
                 }], { onConflict: 'id' });
             }
-
-            // Clean up OTP
-            await supabase.from('auth_otps').delete().eq('email', cleanEmail);
 
             setSuccessMsg("Compte créé ! Redirection en cours...");
             setRole(UserRole.AMBASSADOR);

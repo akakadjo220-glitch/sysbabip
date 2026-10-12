@@ -2,7 +2,7 @@ const { Client } = require('pg');
 
 async function run() {
     const client = new Client({
-        connectionString: "postgresql://postgres.l4cw40oks4kso84ko44ogkkw:Babipass2024!@188.241.58.227:5432/postgres" // I will use the external server
+        connectionString: process.env.DATABASE_URL // I will use the external server
     });
     try {
         await client.connect();

@@ -29,3 +29,10 @@ dist-ssr
 # Backend folder (stored in separate repo)
 server/
 temp_server/
+
+# Données sensibles (dumps, journaux KYC, sorties de débogage)
+db_dump.json
+didit_logs*.json
+*.bak-phase0
+test_out.txt
+logo_base64.txt

@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { SERVER_URL } from '../config';
+import { getPlatformSetting } from '../utils/platformSettings';
 
 /**
  * Service d'upload unifié.
@@ -13,21 +14,11 @@ import { SERVER_URL } from '../config';
  */
 export async function uploadFile(file: File, bucket: string, path: string): Promise<string> {
   try {
-    // 1. Récupérer la configuration de Chevereto
-    const { data, error: fetchErr } = await supabase
-      .from('platform_settings')
-      .select('value')
-      .eq('key', 'chevereto_config')
-      .maybeSingle();
-
-    if (fetchErr) {
-      console.warn('[UploadService] Impossible de récupérer la config Chevereto, repli sur Supabase:', fetchErr.message);
-    }
-
-    const config = data?.value as { enabled: boolean; apiUrl: string } | null;
+    // 1. Récupérer la configuration de Chevereto (seul « enabled » est public, la clé reste côté serveur)
+    const config = await getPlatformSetting<{ enabled: boolean }>('chevereto_config');
 
     // 2. Si activé, envoyer sur Chevereto via le Proxy Backend Express
-    if (config && config.enabled && config.apiUrl) {
+    if (config && config.enabled) {
       console.log(`[UploadService] Stockage Chevereto actif. Envoi du fichier ${file.name}...`);
       
       const formData = new FormData();

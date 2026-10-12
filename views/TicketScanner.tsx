@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { verifyTicket, TicketPayload } from '../utils/crypto';
 import { Html5Qrcode } from 'html5-qrcode';
-import { supabase } from '../supabaseClient';
+import { ScannerService, AgentAuthError, ScannerNetworkError } from '../services/ScannerService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CACHE_TTL_MS      = 6 * 60 * 60 * 1000; // 6h
@@ -15,7 +15,7 @@ type ScanResult = 'idle' | 'success' | 'error';
 type ScanMode   = 'qr' | 'nfc';
 
 interface PendingSync { ticketId: string; scannedAt: string; }
-interface TicketCacheEntry { status: 'valid' | 'used' | 'revoked'; fetchedAt: number; }
+interface TicketCacheEntry { status: 'valid' | 'used' | 'revoked' | 'partial'; fetchedAt: number; }
 
 // ─── Pure helpers (outside component = stable references) ─────────────────────
 const getPendingSyncs = (agentCode: string): PendingSync[] => {
@@ -40,7 +40,7 @@ const markLocalScan = (ticketId: string, agentCode: string) => {
   scans[ticketId] = new Date().toISOString();
   localStorage.setItem(`afriTix_local_scans_${agentCode}`, JSON.stringify(scans));
 };
-const getCachedStatus = (ticketId: string, agentCode: string): 'valid' | 'used' | 'revoked' | null => {
+const getCachedStatus = (ticketId: string, agentCode: string): TicketCacheEntry['status'] | null => {
   if (!agentCode) return null;
   try {
     const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(`babipass_ticket_cache_${agentCode}`) || '{}');
@@ -49,7 +49,7 @@ const getCachedStatus = (ticketId: string, agentCode: string): 'valid' | 'used' 
     return entry.status;
   } catch { return null; }
 };
-const setCachedStatus = (ticketId: string, status: 'valid' | 'used' | 'revoked', agentCode: string) => {
+const setCachedStatus = (ticketId: string, status: TicketCacheEntry['status'], agentCode: string) => {
   if (!agentCode) return;
   try {
     const cache: Record<string, TicketCacheEntry> = JSON.parse(localStorage.getItem(`babipass_ticket_cache_${agentCode}`) || '{}');
@@ -86,6 +86,8 @@ export const TicketScanner: React.FC = () => {
 
   // Keep a stable ref for processToken to use in camera/NFC callbacks
   const processTokenRef = useRef<((token: string) => Promise<void>) | null>(null);
+  // Déconnexion appelée quand le serveur refuse la session agent (jeton expiré / agent désactivé)
+  const handleLogoutRef = useRef<(() => void) | null>(null);
   // Keep online state accessible in callbacks without re-creating them
   const isOnlineRef = useRef(navigator.onLine);
 
@@ -106,17 +108,29 @@ export const TicketScanner: React.FC = () => {
     const queue = getPendingSyncs(agentCode);
     if (queue.length === 0) return;
     setSyncing(true);
-    const failed: PendingSync[] = [];
-    for (const item of queue) {
-      try {
-        const { error } = await supabase.from('tickets').update({ status: 'used' }).eq('id', item.ticketId);
-        if (error) failed.push(item);
-        else setCachedStatus(item.ticketId, 'used', agentCode);
-      } catch { failed.push(item); }
+    let failed: PendingSync[] = queue;
+    let conflicts = 0;
+    try {
+      // Le serveur valide chaque scan hors-ligne comme un scan normal.
+      const results = await ScannerService.sync(queue.map(item => item.ticketId));
+      const byCode = new Map(results.map(r => [r.code, r.result]));
+      failed = queue.filter(item => {
+        const result = byCode.get(item.ticketId);
+        if (!result || result === 'error') return true;
+        if (result === 'ok') setCachedStatus(item.ticketId, 'used', agentCode);
+        if (result === 'already_used') { conflicts++; setCachedStatus(item.ticketId, 'used', agentCode); }
+        return false;
+      });
+    } catch (err) {
+      if (err instanceof AgentAuthError) { handleLogoutRef.current?.(); }
     }
     localStorage.setItem(`babipass_pending_syncs_${agentCode}`, JSON.stringify(failed));
     const synced = queue.length - failed.length;
-    if (synced > 0) setLastSyncInfo(`✅ ${synced} billet(s) synchronisé(s)`);
+    if (conflicts > 0) {
+      setLastSyncInfo(`⚠️ ${synced} billet(s) synchronisé(s), dont ${conflicts} déjà entré(s) par un autre accès pendant la coupure`);
+    } else if (synced > 0) {
+      setLastSyncInfo(`✅ ${synced} billet(s) synchronisé(s)`);
+    }
     setSyncing(false);
     refreshCounters();
   }, [agentCode, refreshCounters]);
@@ -126,26 +140,20 @@ export const TicketScanner: React.FC = () => {
     if (!isOnlineRef.current || !agentCode) return;
     setSyncing(true);
     try {
-      const stored = localStorage.getItem('afritix_current_agent');
-      const agent = stored ? JSON.parse(stored) : null;
-
-      let query = supabase.from('tickets').select('id, status').in('status', ['valid', 'used', 'revoked']);
-      
-      // Filtrer par événement spécifique si l'agent est assigné à un événement
-      if (agent?.event_id) {
-        query = query.eq('event_id', agent.event_id);
-      }
-      
-      const { data } = await query.limit(40000);
+      // Le serveur ne renvoie que les billets des événements de l'agent.
+      const data = await ScannerService.snapshot();
       if (data) {
         const cache: Record<string, TicketCacheEntry> = {};
         const now = Date.now();
-        for (const t of data) cache[t.id] = { status: t.status, fetchedAt: now };
+        for (const t of data) cache[t.id] = { status: t.status as TicketCacheEntry['status'], fetchedAt: now };
         localStorage.setItem(`babipass_ticket_cache_${agentCode}`, JSON.stringify(cache));
         setLastSyncInfo(`📥 ${data.length} billet(s) mis en cache hors-ligne`);
         refreshCounters();
       }
-    } catch (e) { console.error('Pre-cache failed:', e); }
+    } catch (e) {
+      console.error('Pre-cache failed:', e);
+      if (e instanceof AgentAuthError) handleLogoutRef.current?.();
+    }
     setSyncing(false);
   }, [agentCode, refreshCounters]);
 
@@ -182,9 +190,12 @@ export const TicketScanner: React.FC = () => {
     localStorage.removeItem('afritix_user_role');
     localStorage.removeItem('afritix_current_agent');
     localStorage.removeItem('afritix_agent_session_expires_at');
+    ScannerService.clearSession();
     setRole(UserRole.GUEST);
     navigate('/agent/login');
   }, [navigate, setRole]);
+
+  useEffect(() => { handleLogoutRef.current = handleLogout; }, [handleLogout]);
 
   // Session activity & expiration checker
   useEffect(() => {
@@ -326,198 +337,124 @@ export const TicketScanner: React.FC = () => {
     return () => { active = false; };
   }, [scanMode, nfcSupported]);
 
-  // ─── Core Token Processing (Offline-First) ───────────────────────────────
-  const processToken = async (token: string) => {
+  // ─── Core Token Processing (Online via server, Offline-First fallback) ───
+  const fail = (reason: string) => { setResult('error'); setErrorReason(reason); };
+
+  // Validation hors-ligne : cache des statuts + file de synchronisation.
+  const processOffline = async (token: string) => {
+    let ticketId: string | null = null;
+    let payload: TicketPayload | null = null;
+
+    // Identifiant nu (TIX-…, PHY-…) : on vérifie qu'il figure dans le cache de l'agent.
+    const isBareTicketId = token.length < 80 && !token.startsWith('eyJ');
+    if (isBareTicketId && getCachedStatus(token, agentCode)) {
+      ticketId = token;
+      payload = { tId: token, eId: '', type: 'Billet', usr: 'Participant', iat: Date.now() };
+    }
+
+    // Anciens QR signés (JWS) : vérification cryptographique locale.
+    if (!ticketId) {
+      const cryptoResult = await verifyTicket(token);
+      if (cryptoResult.valid && cryptoResult.payload) {
+        ticketId = cryptoResult.payload.tId;
+        payload = cryptoResult.payload;
+      }
+    }
+
+    if (!ticketId || !payload) return fail('Billet inconnu du cache hors-ligne. Reconnectez-vous pour le vérifier.');
+    if (getLocalScans(agentCode)[ticketId]) return fail('Billet déjà scanné dans cette session !');
+
+    const cachedStatus = getCachedStatus(ticketId, agentCode);
+    if (cachedStatus === 'revoked') return fail("Ce billet a été révoqué par l'organisateur.");
+    if (cachedStatus === 'used') return fail('Billet déjà utilisé ! Accès refusé.');
+    if (cachedStatus === 'partial') return fail('Billet réservé en paiement fractionné : solde non réglé. Accès refusé.');
+
+    addPendingSync(ticketId, agentCode);
+    setCachedStatus(ticketId, 'used', agentCode);
+    markLocalScan(ticketId, agentCode);
+    setScannedPayload(payload);
+    setResult('success');
+    refreshCounters();
+  };
+
+  const processToken = async (rawToken: string) => {
     if (scanning) return;
     setScanning(true);
     setCameraActive(false);
     await new Promise(r => setTimeout(r, 400));
+    const token = rawToken.trim();
 
     try {
-      let ticketId: string | null = null;
-      let payload: TicketPayload | null = null;
-      const online = isOnlineRef.current;
-
-      // Step 0 — NFC bare ticket ID (new format: NFC chip only stores ticket ID, not JWS)
-      // IDs look like "PHY-xxxxxxxx-xxxx" or "TIX-..." or a UUID — they never start with "eyJ"
-      const isBareTicketId = token.trim().length < 80 && !token.startsWith('eyJ');
-      if (isBareTicketId && online) {
-        const { data: ticketById } = await supabase
-          .from('tickets')
-          .select('id, status, guest_name, ticket_type, event_id')
-          .eq('id', token.trim())
-          .single();
-        if (ticketById) {
-          ticketId = ticketById.id;
-          payload  = { tId: ticketById.id, eId: ticketById.event_id || '', type: ticketById.ticket_type || 'Standard', usr: ticketById.guest_name || 'Billet Physique', iat: Date.now() };
-          setCachedStatus(ticketById.id, ticketById.status, agentCode);
-        }
-      } else if (isBareTicketId && !online) {
-        // Offline: check local cache by ID directly
-        const cachedStatusForId = getCachedStatus(token.trim(), agentCode);
-        if (cachedStatusForId) {
-          ticketId = token.trim();
-          payload  = { tId: token.trim(), eId: '', type: 'Billet Physique', usr: 'Billet Physique', iat: Date.now() };
-        }
+      if (!isOnlineRef.current) {
+        await processOffline(token);
+        return;
       }
 
-      // Step 1 — Cryptographic verification (works offline, for QR JWS tokens)
-      if (!ticketId) {
-        const cryptoResult = await verifyTicket(token);
-        if (cryptoResult.valid && cryptoResult.payload) {
-          ticketId = cryptoResult.payload.tId;
-          payload  = cryptoResult.payload;
+      let response;
+      try {
+        response = await ScannerService.scan(token);
+      } catch (err) {
+        if (err instanceof AgentAuthError) {
+          alert("⏱️ Votre session agent n'est plus valide. Veuillez vous reconnecter.");
+          handleLogout();
+          return;
         }
-      }
-
-      // Step 2 — Fallback: lookup by qr_code in Supabase (requires online)
-      if (!ticketId && online) {
-        const { data: ticketByQr } = await supabase
-          .from('tickets')
-          .select('id, status, guest_name, ticket_type, event_id')
-          .eq('qr_code', token)
-          .single();
-        if (ticketByQr) {
-          ticketId = ticketByQr.id;
-          payload  = { tId: ticketByQr.id, eId: ticketByQr.event_id || '', type: ticketByQr.ticket_type || 'Standard', usr: ticketByQr.guest_name || 'Participant', iat: Date.now() };
-          setCachedStatus(ticketByQr.id, ticketByQr.status, agentCode);
+        if (err instanceof ScannerNetworkError) {
+          // Serveur injoignable malgré la connexion : bascule hors-ligne.
+          await processOffline(token);
+          return;
         }
+        throw err;
       }
 
-      if (!ticketId || !payload) {
-        setResult('error'); setErrorReason('QR Code invalide ou inconnu dans le système.'); setScanning(false); return;
-      }
+      const { result: scanResult, ticket } = response;
+      const payload: TicketPayload | null = ticket
+        ? { tId: ticket.id, eId: ticket.event_id || '', type: ticket.ticket_type || 'Standard', usr: ticket.guest_name || 'Participant', iat: Date.now() }
+        : null;
 
-      // Step 2b — Season Pass validation (multi-match pass)
-      if (online && ticketId) {
-        const { data: seasonTicket } = await supabase
-          .from('tickets')
-          .select('id, tournament_id, pass_id, status')
-          .eq('id', ticketId)
-          .maybeSingle();
-
-        if (seasonTicket?.tournament_id) {
-          // This is a season pass ticket — check the current event's tournament
-          const currentEvent = (window as any).__currentScanEventId;
-          if (currentEvent) {
-            const { data: currentEvt } = await supabase
-              .from('events')
-              .select('tournament_id, title')
-              .eq('id', currentEvent)
-              .single();
-
-            if (!currentEvt || currentEvt.tournament_id !== seasonTicket.tournament_id) {
-              setResult('error');
-              setErrorReason('❌ Pass Saison invalide pour ce match. Ce pass est lié à un autre tournoi.');
-              setScanning(false); return;
-            }
-          }
-
-          // Check if already checked-in for this specific event
-          if (currentEvent) {
-            const { data: existingCheckin } = await supabase
-              .from('season_pass_checkins')
-              .select('id')
-              .eq('ticket_id', ticketId)
-              .eq('event_id', currentEvent)
-              .maybeSingle();
-
-            if (existingCheckin) {
-              setResult('error');
-              setErrorReason('✅ Pass Saison déjà utilisé pour ce match.');
-              setScanning(false); return;
-            }
-
-            // Log the check-in (don't mark ticket as 'used')
-            await supabase.from('season_pass_checkins').insert([{
-              ticket_id: ticketId,
-              event_id: currentEvent,
-              pass_id: seasonTicket.pass_id,
-            }]);
-          }
-
-          // Season pass: mark local scan but DON'T mark ticket as 'used'
-          markLocalScan(ticketId, agentCode);
-          setScannedPayload({ ...payload, type: '🎟️ Pass Saison' });
+      switch (scanResult) {
+        case 'ok':
+          setCachedStatus(ticket!.id, 'used', agentCode);
+          markLocalScan(ticket!.id, agentCode);
+          setScannedPayload(payload);
           setResult('success');
           refreshCounters();
-          setScanning(false);
-          return; // Skip Step 3–5 for season passes
-        }
+          break;
+        case 'season_ok':
+          markLocalScan(ticket!.id, agentCode);
+          setScannedPayload(payload);
+          setResult('success');
+          refreshCounters();
+          break;
+        case 'season_already':
+          fail('✅ Pass Saison déjà utilisé pour ce match.');
+          break;
+        case 'already_used':
+          if (ticket) setCachedStatus(ticket.id, 'used', agentCode);
+          fail('Billet déjà utilisé ! Accès refusé.');
+          break;
+        case 'revoked':
+          if (ticket) setCachedStatus(ticket.id, 'revoked', agentCode);
+          fail("Ce billet a été révoqué par l'organisateur.");
+          break;
+        case 'partial':
+          fail('Billet réservé en paiement fractionné : solde non réglé. Accès refusé.');
+          break;
+        case 'transferred':
+          fail('Ce billet a été transféré à une autre personne : il n\'est plus valable.');
+          break;
+        case 'wrong_event':
+          fail("Ce billet n'est pas valable pour cet événement.");
+          break;
+        default:
+          fail('QR Code invalide ou inconnu dans le système.');
       }
-
-      // Step 3 — Local double-scan check (always works offline)
-      if (getLocalScans(agentCode)[ticketId]) {
-        setResult('error'); setErrorReason('Billet déjà scanné dans cette session !'); setScanning(false); return;
-      }
-
-      // Step 4a — Check local cache
-      const cachedStatus = getCachedStatus(ticketId, agentCode);
-      if (cachedStatus === 'revoked') { setResult('error'); setErrorReason("Ce billet a été révoqué par l'organisateur."); setScanning(false); return; }
-      if (cachedStatus === 'used')    { setResult('error'); setErrorReason('Billet déjà utilisé ! Accès refusé.'); setScanning(false); return; }
-
-      // Step 4b — Atomic verification and update if online
-      let updateSuccess = false;
-
-      if (online) {
-        // Atomic conditional update: only mark as used if it is currently 'valid'
-        // This is safe against parallel/concurrent scans (Postgres write lock)
-        const { data: updatedData, error: updateError } = await supabase
-          .from('tickets')
-          .update({ status: 'used' })
-          .eq('id', ticketId)
-          .eq('status', 'valid')
-          .select('id, status');
-
-        if (updateError) {
-          console.error("Atomic update failed:", updateError);
-          setResult('error'); setErrorReason('Erreur de connexion avec le serveur.'); setScanning(false); return;
-        }
-
-        if (updatedData && updatedData.length > 0) {
-          // Success: Ticket status updated from 'valid' to 'used'
-          updateSuccess = true;
-          setCachedStatus(ticketId, 'used', agentCode);
-        } else {
-          // Non-matching query: ticket could be used, revoked, or non-existent
-          // Query the exact status to give the correct reason to the agent
-          const { data: ticketData } = await supabase
-            .from('tickets')
-            .select('status')
-            .eq('id', ticketId)
-            .maybeSingle();
-
-          const actualStatus = ticketData?.status || 'unknown';
-          setCachedStatus(ticketId, actualStatus as any, agentCode);
-
-          if (actualStatus === 'revoked') {
-            setResult('error'); setErrorReason("Ce billet a été révoqué par l'organisateur."); setScanning(false); return;
-          } else if (actualStatus === 'used') {
-            setResult('error'); setErrorReason('Billet déjà utilisé ! Accès refusé.'); setScanning(false); return;
-          } else {
-            setResult('error'); setErrorReason('Billet non trouvé ou invalide.'); setScanning(false); return;
-          }
-        }
-      } else {
-        // Offline mode: mark locally and add to pending sync queue
-        addPendingSync(ticketId, agentCode);
-        setCachedStatus(ticketId, 'used', agentCode);
-        updateSuccess = true;
-      }
-
-      if (updateSuccess) {
-        markLocalScan(ticketId, agentCode);
-        setScannedPayload(payload);
-        setResult('success');
-        refreshCounters();
-      }
-
     } catch (err) {
       console.error('processToken error:', err);
-      setResult('error');
-      setErrorReason('Erreur lors de la validation.');
+      fail('Erreur lors de la validation.');
+    } finally {
+      setScanning(false);
     }
-    setScanning(false);
   };
 
   useEffect(() => { processTokenRef.current = processToken; });

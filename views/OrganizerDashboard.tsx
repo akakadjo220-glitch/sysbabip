@@ -16,8 +16,7 @@ import { VideoUploadField } from '../components/LazyVideo';
 import { CRMPushService, PushCampaign } from '../services/CRMPushService';
 import { getUniqueSlug } from '../utils/slugUtils';
 import { getCountryDialCode } from '../utils/countryCodes';
-import { PaystackService } from '../services/PaystackService';
-import { PawaPayService } from '../services/PawaPayService';
+import { CheckoutService } from '../services/CheckoutService';
 import { uploadFile } from '../services/uploadService';
 
 const MapResizer = () => {
@@ -242,13 +241,15 @@ export const OrganizerDashboard: React.FC = () => {
       fetchProfile();
 
       // 2. Request a unique, secure session from the backend
+      // Le serveur lie la session à l'utilisateur authentifié par ce jeton.
+      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${SERVER_URL}/api/didit/session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user?.id,
-          callback_url: window.location.origin + '/organizer'
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`
+        },
+        body: JSON.stringify({})
       });
 
       const data = await response.json();
@@ -669,7 +670,24 @@ const StatCard = ({ title, value, trend, colorClass }: any) => (
 );
 
 const OverviewView = ({ events, transactions }: any) => {
+  // Statistiques calculées en base (justes au-delà de 1000 transactions).
+  // Le calcul local ci-dessous ne sert qu'en secours si la fonction est indisponible.
+  const [overview, setOverview] = useState<any>(null);
+  useEffect(() => {
+    supabase.rpc('organizer_overview', { p_days: 7 }).then(({ data, error }) => {
+      if (!error && data) setOverview(data);
+    });
+  }, [transactions]);
+
   const chartData = useMemo(() => {
+    if (overview?.daily) {
+      return overview.daily.map((d: any) => ({
+        name: new Date(d.day + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short' }),
+        sales: Number(d.sales) || 0,
+        tickets: Number(d.tickets) || 0,
+        scans: 0
+      }));
+    }
     const data = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -690,11 +708,17 @@ const OverviewView = ({ events, transactions }: any) => {
       data.push({ name: dayName, sales: daySales, tickets: dayTickets, scans: 0 });
     }
     return data;
-  }, [transactions]);
+  }, [transactions, overview]);
 
   // Real ticket distribution: group by ticket_type name from events' ticket_types
   // Real ticket distribution: group by ticket_type name from events' ticketTypes
   const ticketDistData = useMemo(() => {
+    if (overview?.ticket_distribution) {
+      const PALETTE = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899'];
+      return overview.ticket_distribution.map((d: any, idx: number) => ({
+        name: d.name, value: Number(d.value) || 0, color: PALETTE[idx % PALETTE.length]
+      }));
+    }
     // Build a map of ticket_type_id -> name from all events
     const typeNameMap: Record<string, string> = {};
     if (events && Array.isArray(events)) {
@@ -737,9 +761,11 @@ const OverviewView = ({ events, transactions }: any) => {
     return Object.entries(countMap).map(([name, value], idx) => ({
       name, value, color: PALETTE[idx % PALETTE.length]
     }));
-  }, [events, transactions]);
+  }, [events, transactions, overview]);
 
-  const rev = transactions.filter((t: any) => t.status === 'completed').reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+  const rev = overview
+    ? Number(overview.revenue) || 0
+    : transactions.filter((t: any) => t.status === 'completed').reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
   const totalTickets = events.reduce((sum: number, e: any) => sum + (Number(e.sold) || 0), 0);
   // Real page views: sum views from each event owned by this organizer
   const totalViews = events.reduce((sum: number, e: any) => sum + (Number(e.views) || 0), 0);
@@ -3952,101 +3978,36 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
     }
   };
 
-  const generatePDFTickets = async () => {
-    addToast(`⏳ Génération des billets physiques pour ${quantity} billets...`, "info");
-    try {
+  // ─── Billets physiques : générés par le serveur ───────────────────────
+  // Le serveur calcule la commission (prix, taux, quota gratuit), la prélève
+  // (jeton pré-payé ou wallet) puis crée les billets ; le navigateur ne fait
+  // plus que produire le PDF / ZIP à partir des identifiants reçus.
+
+  const getAccessToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Session expirée. Veuillez vous reconnecter.');
+    return session.access_token;
+  };
+
+  const exportPhysicalTickets = async (ticketIds: string[], catName: string) => {
+    const tickets = ticketIds.map(id => ({ id, qrCode: id }));
+    let success = false;
+    if (exportFormat === 'pdf') {
+      addToast("✅ Billets enregistrés ! Préparation du PDF...", "info");
       const { generateMassTicketsPDF } = await import('../utils/pdfMassGenerator');
-
-      const catName = categories.find((c: any) => c.id === selectedCategoryId)?.name || 'Billet Physique';
-      const tickets = [];
-      const batchTime = Date.now().toString(36);
-      const batchRandom = Math.random().toString(36).substring(2, 6).toUpperCase();
-      for (let i = 0; i < quantity; i++) {
-        const tId = `PHY-${batchTime}-${i}-${batchRandom}`;
-        tickets.push({ id: tId, qrCode: tId });
-      }
-
-      const { data: trxData, error: trxError } = await supabase.from('transactions').insert([{
-        event_id: selectedEvent.id,
-        user_id: user?.id,
-        amount: commissionDue,
-        commission_rate: Math.round(commissionRate * 100),
-        commission_amount: commissionDue,
-        currency: selectedEvent.currency,
-        status: 'valid',
-        method: 'cash/pos',
-        guest_name: `Lot de ${quantity} Billets Physiques`,
-        guest_email: user?.email || 'organizer@local.com'
-      }]).select().single();
-
-      if (trxError) {
-        console.warn("DB insert failed for transaction:", trxError);
-        addToast("Erreur sauvegarde BDD (Transaction): " + trxError.message, "error");
-        setIsGenerating(false);
-        return;
-      }
-
-      // Insertion par lots (chunks) de 1000 pour éviter les expirations (timeouts) Supabase
-      const batchSize = 1000;
-      let hasInsertionError = false;
-
-      for (let i = 0; i < tickets.length; i += batchSize) {
-        const batch = tickets.slice(i, i + batchSize).map((t: any) => ({
-          id: t.id,
-          event_id: selectedEvent.id,
-          transaction_id: trxData.id,
-          status: 'valid',
-          guest_name: 'Billet Physique (Revendeur)',
-          guest_email: user?.email || 'organizer@local.com',
-          ticket_type: catName,
-          qr_code: t.qrCode
-        }));
-
-        const { error: tErr } = await supabase.from('tickets').insert(batch);
-        if (tErr) {
-          console.warn(`DB insert failed for tickets batch starting at index ${i}:`, tErr);
-          addToast(`Erreur sauvegarde BDD (Billets, lot ${Math.floor(i / batchSize) + 1}) : ` + tErr.message, "error");
-          hasInsertionError = true;
-          break;
-        }
-      }
-
-      if (hasInsertionError) {
-        addToast("⚠️ Échec d'enregistrement de tous les billets. Nettoyage de la transaction...", "info");
-        await supabase.from('tickets').delete().eq('transaction_id', trxData.id);
-        await supabase.from('transactions').delete().eq('id', trxData.id);
-        setIsGenerating(false);
-        return;
-      }
-
-      let success = false;
-      if (exportFormat === 'pdf') {
-        addToast("✅ Signatures créées ! Préparation du PDF...", "info");
-        success = await generateMassTicketsPDF(tickets, selectedEvent.title, catName, columns);
-      } else {
-        addToast("✅ Signatures créées ! Préparation de l'archive ZIP...", "info");
-        const { generateMassTicketsZipJPG } = await import('../utils/pdfMassGenerator');
-        success = await generateMassTicketsZipJPG(tickets, selectedEvent.title, catName, qrOnly, qrSize);
-      }
-
-      if (success) {
-        const consumedFree = Math.min(quantity, remainingFreeQuota);
-        if (consumedFree > 0) {
-          const newUsed = freeUsed + consumedFree;
-          await supabase.from('profiles').update({ free_physical_tickets_used: newUsed }).eq('id', user?.id);
-          await fetchProfile();
-        }
-        addToast(exportFormat === 'pdf' ? "🖨️ Fichier PDF généré avec succès !" : "📦 Archive ZIP d'images JPG générée avec succès !", "success");
-        setQuantity(50);
-        fetchPhysicalTxs(selectedEventId || undefined);
-      } else {
-        throw new Error(exportFormat === 'pdf' ? "Erreur lors de la génération du PDF" : "Erreur lors de la génération des images JPG (ZIP)");
-      }
-    } catch (err: any) {
-      addToast(`Erreur : ${err.message}`, "error");
-    } finally {
-      setIsGenerating(false);
+      success = await generateMassTicketsPDF(tickets, selectedEvent.title, catName, columns);
+    } else {
+      addToast("✅ Billets enregistrés ! Préparation de l'archive ZIP...", "info");
+      const { generateMassTicketsZipJPG } = await import('../utils/pdfMassGenerator');
+      success = await generateMassTicketsZipJPG(tickets, selectedEvent.title, catName, qrOnly, qrSize);
     }
+    if (!success) {
+      // Les billets existent en base : ils restent récupérables via « Récupérer les QR ».
+      throw new Error(exportFormat === 'pdf'
+        ? "Billets créés, mais erreur lors de la génération du PDF. Utilisez la récupération des QR."
+        : "Billets créés, mais erreur lors de la génération du ZIP. Utilisez la récupération des QR.");
+    }
+    addToast(exportFormat === 'pdf' ? "🖨️ Fichier PDF généré avec succès !" : "📦 Archive ZIP d'images JPG générée avec succès !", "success");
   };
 
   const handleGenerate = async (e?: React.FormEvent) => {
@@ -4061,96 +4022,61 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
     }
 
     setIsGenerating(true);
+    try {
+      addToast(`⏳ Génération de ${quantity} billets physiques...`, "info");
+      const token = await getAccessToken();
+      const batch = await CheckoutService.physical.createBatch(token, selectedEventId, selectedCategoryId, quantity);
 
-    if (commissionDue > 0) {
-      addToast(`⏳ Vérification commission : ${commissionDue.toLocaleString('fr-FR')} FCFA...`, "info");
-      const { data: commResult, error: commError } = await supabase.rpc('pay_physical_commission', {
-        p_organizer_id: user?.id,
-        p_event_id: selectedEventId,
-        p_quantity: quantity,
-        p_ticket_price: ticketPrice,
-        p_commission_rate: commissionRate,
-      });
-
-      if (commError) {
-        addToast(`Erreur vérification commission: ${commError.message}`, "error");
-        setIsGenerating(false);
-        return;
-      }
-
-      if (!commResult?.success) {
-        if (commResult?.reason === 'pending_payment_exists') {
-          addToast("⚠️ Une demande de paiement de commission est déjà en attente. Contactez l'admin.", "error");
-          setIsGenerating(false);
-          return;
-        }
-        setPendingCommission(commResult?.amount || commissionDue);
+      if (batch.status === 'payment_required') {
+        setPendingCommission(batch.quote.commission);
         setShowPaymentModal(true);
-        setIsGenerating(false);
         return;
       }
 
-      if (commResult?.method === 'wallet_deduction') {
+      if (batch.method === 'wallet_deduction') {
         addToast(`✅ Commission déduite automatiquement de votre wallet.`, "success");
-        setWalletBalance(prev => prev - commissionDue);
-      } else if (commResult?.method === 'pre_approved_token') {
-        addToast(`✅ Jeton de paiement anticipé consommé avec succès.`, "success");
+        setWalletBalance(prev => prev - batch.quote.commission);
+      } else if (batch.method === 'pre_approved_token') {
+        addToast(`✅ Paiement de commission consommé avec succès.`, "success");
       }
-    }
 
-    await generatePDFTickets();
+      await exportPhysicalTickets(batch.ticket_ids || [], batch.quote.category_name);
+      await fetchProfile();
+      setQuantity(50);
+      fetchPhysicalTxs(selectedEventId || undefined);
+    } catch (err: any) {
+      addToast(`Erreur : ${err.message}`, "error");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const processCommissionPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentInProgress(true);
-    const amountToPay = pendingCommission - walletBalance;
-
     try {
-      let reference = '';
-      if (payMethod === 'paystack') {
-        const config = await PaystackService.getConfig();
-        if (!config || !config.publicKey) throw new Error("Paystack non configuré");
+      const token = await getAccessToken();
+      const provider = payMethod === 'paystack' ? 'paystack' : 'pawapay';
+      const created = await CheckoutService.physical.createCommissionOrder(
+        token, selectedEventId, selectedCategoryId, quantity, provider,
+        provider === 'pawapay' ? { phone: momoPhone, network: momoNetwork } : undefined
+      );
 
-        await new Promise((resolve, reject) => {
-          const handler = (window as any).PaystackPop.setup({
-            key: config.publicKey,
-            email: user?.email || 'organizer@afritix.com',
-            amount: Math.round(amountToPay * 100),
-            currency: 'XOF',
-            channels: ['card', 'mobile_money'],
-            ref: 'comm_phy_' + Math.floor((Math.random() * 1000000000) + 1),
-            callback: function (res: any) {
-              reference = res.reference;
-              resolve(true);
-            },
-            onClose: function () {
-              reject(new Error("Paiement annulé."));
-            }
-          });
-          handler.openIframe();
-        });
-      } else {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Délai de 5 min dépassé.")), 300000));
-        const res: any = await Promise.race([PawaPayService.requestUSSDPush(momoPhone, amountToPay, momoNetwork), timeoutPromise]);
-        if (!res.success) throw new Error("Paiement Mobile Money échoué.");
-        reference = res.pawaId;
+      if (provider === 'paystack' && !(await CheckoutService.openPaystack(created))) {
+        throw new Error("Paiement annulé.");
       }
 
-      addToast("✅ Paiement réussi ! Validation numérique en cours...", "info");
-      const { error: confirmErr } = await supabase.rpc('confirm_physical_commission_payment', {
-        p_organizer_id: user?.id,
-        p_event_id: selectedEventId,
-        p_amount: amountToPay,
-        p_reference: reference
-      });
-
-      if (confirmErr) throw new Error("DB Error: " + confirmErr.message);
+      addToast("⏳ Vérification du paiement auprès de l'opérateur...", "info");
+      const result = await CheckoutService.waitForPayment(created.order.id, created.order.token);
+      if (result.status !== 'paid') {
+        throw new Error(result.status === 'pending'
+          ? "Paiement pas encore confirmé. Réessayez la génération dans quelques minutes."
+          : "Le paiement a échoué ou a expiré.");
+      }
 
       setShowPaymentModal(false);
       addToast("🎉 Commission validée ! L'impression se lance automatiquement...", "success");
       await handleGenerate();
-
     } catch (err: any) {
       addToast(err.message || "Le paiement a échoué", "error");
     } finally {
@@ -4253,8 +4179,8 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                   </div>
                   <div className="border-t border-white/10 pt-3">
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-400">À payer</span>
-                      <span className="text-rose-400 font-extrabold text-base">{(pendingCommission - walletBalance).toLocaleString('fr-FR')} FCFA</span>
+                      <span className="text-slate-400">À payer (commission complète du lot)</span>
+                      <span className="text-rose-400 font-extrabold text-base">{pendingCommission.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                   </div>
                 </div>

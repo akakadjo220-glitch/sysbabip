@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { getOfflineTickets, removeSecureTicket, saveSecureTicket } from '../utils/offlineStorage';
 import { QrCode, Calendar, MapPin, Ticket, WifiOff, Clock, ShieldCheck, RefreshCw, Send, X, Smartphone, Mail, AlertTriangle, Banknote, Users, Copy, Share2, Plus, Lock, Loader2, User, Download, Search, Globe } from 'lucide-react';
-import { signTicket } from '../utils/crypto';
+import { CheckoutService } from '../services/CheckoutService';
 import { PAYMENT_ROUTING, formatCurrency } from '../constants';
-import { WhatsAppService } from '../services/WhatsAppService';
 import { generateTicketPDF } from '../utils/pdfGenerator';
 import QRCode from 'qrcode';
 import { supabase } from '../supabaseClient';
@@ -350,48 +349,40 @@ const InstallmentModal: React.FC<{ ticket: any; installmentAmount: number; onClo
 
   const handlePayment = async () => {
     setStep('processing');
-
-    // Simulate payment processing via existing API
-    setTimeout(async () => {
-      try {
-        const updatedTicket = { ...ticket };
-        updatedTicket.installmentsPaid += 1;
-        updatedTicket.amountPaid += installmentAmount;
-
-        // Si c'est la dernière tranche, on débloque le billet et génère le JWS officiel
-        if (updatedTicket.installmentsPaid >= updatedTicket.installmentsTotal) {
-          updatedTicket.paymentStatus = 'paid';
-          updatedTicket.qrCode = await signTicket({
-            tId: ticket.id,
-            eId: "event-" + ticket.eventName, // mock
-            type: ticket.type,
-            usr: ticket.holder || "Anonyme"
-          });
-
-          // Notify via WA if known contact
-          if (updatedTicket.contactDetail) {
-            const msg = `🎉 Tontine terminée !\n\nVous avez réglé la totalité de votre billet pour *${updatedTicket.eventName}*. Votre QR Code officiel est désormais débloqué dans votre Portefeuille (Mes Billets).`;
-            WhatsAppService.sendMessage(updatedTicket.contactDetail, msg);
-          }
-        } else {
-          // Notify step
-          if (updatedTicket.contactDetail) {
-            const msg = `⏳ Paiement de la tranche ${updatedTicket.installmentsPaid}/${updatedTicket.installmentsTotal} reçu pour *${updatedTicket.eventName}*. Plus que ${updatedTicket.installmentsTotal - updatedTicket.installmentsPaid} paiement(s) !`;
-            WhatsAppService.sendMessage(updatedTicket.contactDetail, msg);
-          }
-        }
-
-        // Update local storage
-        await removeSecureTicket(ticket.id || ticket.qrCode);
-        await saveSecureTicket(updatedTicket);
-
-        setStep('success');
-      } catch (err) {
-        console.error(err);
-        alert("Erreur technique lors du paiement.");
+    try {
+      // Le serveur calcule la tranche, lance le paiement et le vérifie. À la
+      // dernière tranche, il rend les billets valables à l'entrée.
+      const created = await CheckoutService.createInstallment(ticket.id, 'paystack');
+      if (!(await CheckoutService.openPaystack(created))) {
         setStep('info');
+        return;
       }
-    }, 2000); // 2s sim processing
+
+      const result = await CheckoutService.waitForPayment(created.order.id, created.order.token);
+      if (result.status !== 'paid') {
+        alert(result.status === 'pending'
+          ? "Paiement pas encore confirmé. S'il a été validé, il sera pris en compte automatiquement."
+          : 'Paiement échoué ou expiré.');
+        setStep('info');
+        return;
+      }
+
+      const updatedTicket = { ...ticket };
+      updatedTicket.installmentsPaid += 1;
+      updatedTicket.amountPaid = result.amount_paid ?? updatedTicket.amountPaid + created.order.amount_due;
+      if (result.fully_paid) {
+        updatedTicket.paymentStatus = 'paid';
+        updatedTicket.installmentsPaid = updatedTicket.installmentsTotal;
+      }
+
+      await removeSecureTicket(ticket.id || ticket.qrCode);
+      await saveSecureTicket(updatedTicket);
+      setStep('success');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Erreur technique lors du paiement.");
+      setStep('info');
+    }
   };
 
   return (
@@ -403,7 +394,7 @@ const InstallmentModal: React.FC<{ ticket: any; installmentAmount: number; onClo
           <div className="p-6">
             <h3 className="text-xl font-bold text-white mb-2 text-center">Paiement de Tranche</h3>
             <div className="bg-slate-800/50 p-4 rounded-xl mb-6 border border-amber-500/20 text-center">
-              <p className="text-sm font-medium text-slate-400 mb-1">Montant à régler (Mobile Money)</p>
+              <p className="text-sm font-medium text-slate-400 mb-1">Montant à régler (carte ou Mobile Money)</p>
               <p className="text-3xl font-black text-amber-400">{formatCurrency(installmentAmount)}</p>
             </div>
 
@@ -495,46 +486,25 @@ const TransferModal: React.FC<{ ticket: any; onClose: () => void; onSuccess: () 
     }
 
     try {
-      // 1. Appel RPC Supabase pour transférer le billet en base (Utiliser finalContact)
-      const { data, error } = await supabase.rpc('transfer_ticket', {
-        p_ticket_id: ticket.id || ticket.qrCode,
-        p_new_name: recipientName,
-        p_new_contact: finalContact
+      // 1. Le serveur invalide l'ancien billet, en émet un nouveau au nom du
+      //    destinataire et lui envoie (email ou WhatsApp).
+      const res = await fetch(`${SERVER_URL}/api/tickets/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticket_id: ticket.id || ticket.qrCode,
+          recipient_name: recipientName,
+          recipient_contact: finalContact,
+          channel: contactMethod === 'wa' ? 'wa' : 'email'
+        })
       });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-      if (!data || !data.success) {
-        throw new Error(data?.error || 'Erreur lors du transfert.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Erreur lors du transfert.');
       }
 
-      const newTicketId = data.new_ticket_id;
-
-      // 2. Invalider l'ancien billet localement via le wallet sécurisé (AES-GCM)
+      // 2. Retirer l'ancien billet du portefeuille local (il n'est plus valable)
       await removeSecureTicket(ticket.id || ticket.qrCode);
-
-      // 3. Créer un nouveau jeton cryptographique pour le nouvel utilisateur
-      const newSignedToken = await signTicket({
-        tId: newTicketId,
-        eId: ticket.eventId || ticket.eventName,
-        type: ticket.type,
-        usr: recipientName
-      });
-
-      // Mettre à jour le nouveau QR Code généré en base
-      await supabase.from('tickets').update({ qr_code: newSignedToken }).eq('id', newTicketId);
-
-      // 4. Notifier le destinataire
-      const transferMessage = `🎟️ *NOUVEAU BILLET* 🎟️\n\nBonjour ${recipientName} !\nUn billet vous a été transféré pour *${ticket.eventName}*.\n\nCe billet est 100% crypté et anti-fraude. Gardez le QR code précieusement ou importez-le dans votre portefeuille.`;
-      const mockQrImageUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(newSignedToken);
-
-      if (contactMethod === 'wa') {
-        console.log(`Transfert WA vers ${finalContact}`);
-        await WhatsAppService.sendMediaMessage(finalContact, transferMessage, mockQrImageUrl);
-      } else {
-        console.log(`Transfert Email vers ${finalContact} :`, newSignedToken);
-      }
 
       setStep('success');
     } catch (err: any) {
@@ -743,83 +713,21 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
         }
       }
 
-      // Pour la recherche, on cherche :
-      // 1. Le format exact construit (ex: 22507...)
-      // 2. Le format avec joker (au cas où) 
-      // 3. Le numéro brut sans indicatif
-      let orQuery = `guest_email.eq.${finalContact},guest_email.ilike.%${finalContact}%`;
-      
-      if (contactMethod === 'wa') {
-        const numOnly = searchContact.replace(/[^0-9]/g, '');
-        if (numOnly.length >= 8) {
-           // On cherche aussi le numéro seul (pour les anciens billets ou erreurs d'indicatif)
-           orQuery += `,guest_email.ilike.%${numOnly},guest_email.eq.${numOnly}`;
-        }
-      }
+      // Le serveur compte les billets et envoie le code (email ou WhatsApp).
+      // Les billets eux-mêmes ne sont renvoyés qu'après vérification du code.
+      const res = await fetch(`${SERVER_URL}/api/tickets/recover/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact: finalContact, channel: contactMethod === 'wa' ? 'wa' : 'email' })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Recherche impossible');
 
-      // 1. Rechercher les billets en base de données via RPC (Sécurisé & Outre-passe le RLS)
-      const { data: rawData, error: fetchError } = await supabase
-        .rpc('find_tickets_by_contact', { p_contact: finalContact });
-
-      if (fetchError) throw fetchError;
-
-      if (!rawData || rawData.length === 0) {
-        setFoundCount(0);
+      setFoundCount(data.count || 0);
+      if (!data.count) {
         setStep('results');
         return;
       }
-
-      // 2. Transformer les données à plat du RPC vers le format attendu par l'UI
-      const formattedData = rawData.map((d: any) => ({
-        ...d,
-        events: {
-          title: d.event_title,
-          date: d.event_date,
-          location: d.event_location,
-          city: d.event_city,
-          profiles: {
-            name: d.organizer_name,
-            avatar: d.organizer_avatar
-          }
-        }
-      }));
-
-      setTicketData(formattedData);
-      setFoundCount(formattedData.length);
-
-      if (contactMethod === 'email') {
-         // Appeler le backend dédié pour un OTP sécurisé + email "Récupération de Billets"
-         try {
-           await fetch(`${SERVER_URL}/api/auth/ticket-otp`, {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({
-                 email: finalContact,
-                 ticketCount: formattedData.length
-               })
-           });
-         } catch (err) {
-           console.error("Email send error", err);
-         }
-      } else {
-          // Pour WhatsApp, générer l'OTP et le stocker localement via RPC sécurisé
-          const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-          try {
-            // Utiliser le RPC sécurisé pour enregistrer l'OTP (Contourne l'erreur 401 RLS)
-            const { error: rpcError } = await supabase.rpc('save_whatsapp_otp', { 
-               p_contact: finalContact, 
-               p_otp: generatedOtp 
-            });
-            if (rpcError) throw rpcError;
-          } catch (e) {
-            console.error("Erreur enregistrement OTP via RPC:", e);
-          }
-          
-          const waMsg = `🔐 *Code de Sécurité Babipass*\n\nQuelqu'un tente de récupérer vos ${formattedData.length} billets.\n\nVotre code de vérification est : *${generatedOtp}*\n\nValable 10 minutes.`;
-          
-          console.log(`[MyTickets] Envoi OTP WA vers ${finalContact}`);
-          WhatsAppService.sendMessage(finalContact, waMsg);
-       }
 
       setStep('otp');
 
@@ -853,24 +761,43 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
         }
       }
 
-      // 2. Vérifier l'OTP via RPC sécurisé
-      const { data: res, error: otpFetchError } = await supabase.rpc('verify_whatsapp_otp', {
-        p_contact: finalContact,
-        p_otp: otpCode
+      // 2. Vérifier l'OTP côté serveur, qui ne renvoie les billets qu'en cas de succès
+      const verifyRes = await fetch(`${SERVER_URL}/api/tickets/recover/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact: finalContact, channel: contactMethod === 'wa' ? 'wa' : 'email', code: otpCode })
       });
+      const verifyData = await verifyRes.json().catch(() => ({}));
 
-      if (otpFetchError || !res || !res.success) {
+      if (!verifyRes.ok || !verifyData.success) {
         setError("Code incorrect ou expiré. Veuillez réessayer.");
         setStep('otp');
         return;
       }
+
+      // Transformer les données à plat du RPC vers le format attendu par l'UI
+      const recoveredTickets = (verifyData.tickets || []).map((d: any) => ({
+        ...d,
+        events: {
+          title: d.event_title,
+          date: d.event_date,
+          location: d.event_location,
+          city: d.event_city,
+          profiles: {
+            name: d.organizer_name,
+            avatar: d.organizer_avatar
+          }
+        }
+      }));
+      setTicketData(recoveredTickets);
+      setFoundCount(recoveredTickets.length);
 
       // Code validé ! On procède à l'import local
       let imported = 0;
       const currentTickets = await getOfflineTickets();
       const currentIds = new Set(currentTickets.map(t => t.id));
 
-      for (const t of ticketData) {
+      for (const t of recoveredTickets) {
         if (!currentIds.has(t.id)) {
           const offlineTicket = {
             id: t.id,
@@ -889,9 +816,6 @@ const RecoveryModal: React.FC<{ onClose: () => void; onSuccess: () => void }> = 
           imported++;
         }
       }
-
-      // Clean up OTP
-      await supabase.from('auth_otps').delete().eq('email', contactValue.trim().toLowerCase());
 
       setStep('results');
     } catch (err) {

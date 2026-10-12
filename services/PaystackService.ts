@@ -10,7 +10,8 @@ export class PaystackService {
      * Récupère la configuration Paystack depuis Supabase (platform_settings).
      */
     static async getConfig() {
-        const config = await getPlatformSetting<{ publicKey: string; secretKey: string }>('paystack_config');
+        // Seule la clé publique est exposée au navigateur ; la clé secrète reste côté serveur.
+        const config = await getPlatformSetting<{ publicKey: string }>('paystack_config');
         if (!config || !config.publicKey) {
             throw new Error("Clé publique Paystack manquante. Veuillez configurer dans les paramètres Administrateur.");
         }

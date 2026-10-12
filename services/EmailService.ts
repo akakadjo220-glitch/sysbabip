@@ -4,17 +4,11 @@ import { SERVER_URL } from '../config';
 
 export const EmailService = {
   /**
-   * Send an email using SMTP configuration stored in Supabase platform_settings
+   * Send an email through the server relay. The SMTP configuration stays
+   * server-side (platform_settings is no longer readable from the browser).
    */
   async sendTicketEmail(email: string, subject: string, htmlBody: string) {
     try {
-      const smtpConfig = await getPlatformSetting<{ host: string; user: string; pass: string; port: string }>('smtp_config');
-
-      if (!smtpConfig || !smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
-        throw new Error("SMTP Configuration is missing or incomplete. Please set it in Admin Dashboard.");
-      }
-
-      console.log(`[EmailService] Preparing to use SMTP: ${smtpConfig.host}:${smtpConfig.port || 465}`);
       console.log(`[EmailService] Sending to: ${email}`);
 
       const relayUrl = `${SERVER_URL}/api/send-email`;
@@ -25,7 +19,6 @@ export const EmailService = {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          smtpConfig: smtpConfig,
           to: email,
           subject: subject,
           htmlBody: htmlBody

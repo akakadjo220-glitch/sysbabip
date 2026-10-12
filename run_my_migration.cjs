@@ -3,7 +3,7 @@ const fs = require('fs');
 
 async function run() {
     const client = new Client({
-        connectionString: "postgresql://postgres.l4cw40oks4kso84ko44ogkkw:Babipass2024!@188.241.58.227:5432/postgres" // Note: the previous attempt timed out here? Let's check if the port is open externally. Wait! I can't use node pg if it's closed externally!
+        connectionString: process.env.DATABASE_URL // Note: the previous attempt timed out here? Let's check if the port is open externally. Wait! I can't use node pg if it's closed externally!
     });
     try {
         await client.connect();
