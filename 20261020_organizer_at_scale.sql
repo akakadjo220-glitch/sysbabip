@@ -12,6 +12,8 @@
 --   organizer_buyer_zones(p_event_id)             acheteurs par quartier / ville (carte, export Meta)
 --   organizer_contacts(p_event_id, limit, offset) contacts dédoublonnés, paginés
 --
+-- + ops_health_snapshot() : état de santé pour les alertes (serveur uniquement).
+--
 -- Lecture seule, sans effet sur les données. Peut être exécuté à tout moment.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -148,6 +150,41 @@ BEGIN
   );
 END;
 $$;
+
+-- ─── 5. État de santé de la plateforme (alertes, serveur uniquement) ──────
+-- Un seul appel, toutes les 5 minutes, par la tâche « health-alerts » du serveur.
+CREATE INDEX IF NOT EXISTS idx_orders_created ON public.orders (created_at);
+
+CREATE OR REPLACE FUNCTION public.ops_health_snapshot()
+RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN jsonb_build_object(
+    -- Paiements restés « en attente » bien après l'expiration de la réservation.
+    'orders_stuck', (SELECT count(*) FROM public.orders
+                     WHERE status = 'pending' AND created_at < now() - interval '30 minutes'),
+    'orders_last_hour', (SELECT count(*) FROM public.orders WHERE created_at > now() - interval '1 hour'),
+    'orders_paid_last_hour', (SELECT count(*) FROM public.orders
+                              WHERE created_at > now() - interval '1 hour' AND status = 'paid'),
+    'orders_failed_last_hour', (SELECT count(*) FROM public.orders
+                                WHERE created_at > now() - interval '1 hour' AND status IN ('failed', 'amount_mismatch')),
+    -- Clients ayant payé sans pouvoir recevoir de place : à rembourser.
+    'refund_required', (SELECT count(*) FROM public.orders WHERE status = 'refund_required'),
+    'email_overdue', (SELECT count(*) FROM public.email_queue
+                      WHERE status = 'pending' AND next_attempt_at < now() - interval '15 minutes'),
+    'email_failed_last_hour', (SELECT count(*) FROM public.email_queue
+                               WHERE status = 'failed' AND created_at > now() - interval '1 hour'),
+    'whatsapp_overdue', (SELECT count(*) FROM public.whatsapp_queue
+                         WHERE status = 'pending' AND next_attempt_at < now() - interval '15 minutes'),
+    'whatsapp_failed_last_hour', (SELECT count(*) FROM public.whatsapp_queue
+                                  WHERE status = 'failed' AND created_at > now() - interval '1 hour')
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public.ops_health_snapshot() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ops_health_snapshot() TO service_role;
 
 -- ─── Droits : organisateurs connectés uniquement ──────────────────────────
 REVOKE ALL ON FUNCTION public.organizer_ambassador_commissions() FROM PUBLIC, anon;

@@ -6,6 +6,7 @@ import { Marketplace } from './views/Marketplace';
 import { UserRole } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { lazyNamed } from './utils/lazyPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // L'accueil est chargé tout de suite ; les autres pages seulement quand on les
 // ouvre (un acheteur ne télécharge jamais le code des tableaux de bord).
@@ -96,10 +97,14 @@ const ScrollToTop: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
+  const { pathname } = useLocation();
   return (
     <AuthProvider>
       <ScrollToTop />
       <Layout>
+        {/* Une page qui plante affiche un message au lieu d'un écran blanc ; le
+            filet se réinitialise à chaque changement de page. */}
+        <ErrorBoundary key={pathname}>
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Marketplace />} />
@@ -147,6 +152,7 @@ const AppContent: React.FC = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
+        </ErrorBoundary>
       </Layout>
       <Suspense fallback={null}>
         <PublicChatWidget />
