@@ -6,6 +6,7 @@
  * émet les billets. Le navigateur se contente de suivre le statut.
  */
 import { SERVER_URL } from '../config';
+import { loadPaystack } from '../utils/loadPaystack';
 
 export type CheckoutProvider = 'paystack' | 'pawapay' | 'feexpay' | 'intouch' | 'paydunya';
 export type OrderStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'amount_mismatch' | 'refund_required';
@@ -109,13 +110,14 @@ export const CheckoutService = {
    * quand l'utilisateur a terminé (true) ou fermé le popup (false). Le résultat
    * du popup n'est pas une preuve : appeler ensuite waitForPayment.
    */
-  openPaystack(created: CreatedOrder): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+  async openPaystack(created: CreatedOrder): Promise<boolean> {
+    try {
+      await loadPaystack();
+    } catch {
+      throw new CheckoutError("Le module de paiement Paystack n'a pas pu être chargé. Vérifiez votre connexion et réessayez.");
+    }
+    return new Promise((resolve) => {
       const PaystackPop = (window as any).PaystackPop;
-      if (!PaystackPop) {
-        reject(new CheckoutError("Le script de paiement Paystack n'est pas chargé. Veuillez rafraîchir la page."));
-        return;
-      }
       const p = created.payment;
       PaystackPop.setup({
         key: p.publicKey,

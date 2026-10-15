@@ -3,7 +3,6 @@ import { getOfflineTickets, removeSecureTicket, saveSecureTicket } from '../util
 import { QrCode, Calendar, MapPin, Ticket, WifiOff, Clock, ShieldCheck, RefreshCw, Send, X, Smartphone, Mail, AlertTriangle, Banknote, Users, Copy, Share2, Plus, Lock, Loader2, User, Download, Search, Globe } from 'lucide-react';
 import { CheckoutService } from '../services/CheckoutService';
 import { PAYMENT_ROUTING, formatCurrency } from '../constants';
-import { generateTicketPDF } from '../utils/pdfGenerator';
 import QRCode from 'qrcode';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -136,6 +135,7 @@ const TicketCard: React.FC<{ ticket: any; onTransferComplete: () => void }> = ({
   const handleDownloadPdf = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsGeneratingPdf(true);
+    const { generateTicketPDF } = await import('../utils/pdfGenerator');
     await generateTicketPDF(ticket);
     setIsGeneratingPdf(false);
   };

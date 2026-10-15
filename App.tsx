@@ -1,28 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { Layout } from './components/Layout';
 import { Marketplace } from './views/Marketplace';
-import { OrganizerDashboard } from './views/OrganizerDashboard';
-import { AdminDashboard } from './views/AdminDashboard';
-import { TicketScanner } from './views/TicketScanner';
-import { EventDetails } from './views/EventDetails';
-import { MyTickets } from './views/MyTickets';
-import { OrganizerLogin } from './views/OrganizerLogin';
-import { AgentDashboard } from './views/AgentDashboard';
-import { AdminLogin } from './views/AdminLogin';
-import { AgentLogin } from './views/AgentLogin';
-import { AmbassadorLogin } from './views/AmbassadorLogin';
-import { FundraisingPage } from './views/FundraisingPage';
-import { AmbassadorDashboard } from './views/AmbassadorDashboard';
-import { About } from './views/About';
-import { FAQ } from './views/FAQ';
-import { Privacy } from './views/Privacy';
-import { Terms } from './views/Terms';
-import { TournamentPage } from './views/TournamentPage';
 import { UserRole } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { PublicChatWidget } from './components/PublicChatWidget';
+import { lazyNamed } from './utils/lazyPage';
+
+// L'accueil est chargé tout de suite ; les autres pages seulement quand on les
+// ouvre (un acheteur ne télécharge jamais le code des tableaux de bord).
+const EventDetails = lazyNamed(() => import('./views/EventDetails'), 'EventDetails');
+const MyTickets = lazyNamed(() => import('./views/MyTickets'), 'MyTickets');
+const FundraisingPage = lazyNamed(() => import('./views/FundraisingPage'), 'FundraisingPage');
+const TournamentPage = lazyNamed(() => import('./views/TournamentPage'), 'TournamentPage');
+const About = lazyNamed(() => import('./views/About'), 'About');
+const FAQ = lazyNamed(() => import('./views/FAQ'), 'FAQ');
+const Privacy = lazyNamed(() => import('./views/Privacy'), 'Privacy');
+const Terms = lazyNamed(() => import('./views/Terms'), 'Terms');
+const OrganizerLogin = lazyNamed(() => import('./views/OrganizerLogin'), 'OrganizerLogin');
+const AdminLogin = lazyNamed(() => import('./views/AdminLogin'), 'AdminLogin');
+const AgentLogin = lazyNamed(() => import('./views/AgentLogin'), 'AgentLogin');
+const AmbassadorLogin = lazyNamed(() => import('./views/AmbassadorLogin'), 'AmbassadorLogin');
+const OrganizerDashboard = lazyNamed(() => import('./views/OrganizerDashboard'), 'OrganizerDashboard');
+const AdminDashboard = lazyNamed(() => import('./views/AdminDashboard'), 'AdminDashboard');
+const AmbassadorDashboard = lazyNamed(() => import('./views/AmbassadorDashboard'), 'AmbassadorDashboard');
+const AgentDashboard = lazyNamed(() => import('./views/AgentDashboard'), 'AgentDashboard');
+const TicketScanner = lazyNamed(() => import('./views/TicketScanner'), 'TicketScanner');
+const PublicChatWidget = lazyNamed(() => import('./components/PublicChatWidget'), 'PublicChatWidget');
+
+const PageLoader: React.FC = () => (
+  <div className="flex justify-center items-center min-h-[60vh]">
+    <div className="animate-spin w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full"></div>
+  </div>
+);
 
 // --- Component de protection des routes internes ---
 const ProtectedRoute = ({ children, allowedRoles, fallbackPath = "/organizer/login" }: { children: React.ReactNode, allowedRoles: UserRole[], fallbackPath?: string }) => {
@@ -90,6 +100,7 @@ const AppContent: React.FC = () => {
     <AuthProvider>
       <ScrollToTop />
       <Layout>
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Marketplace />} />
           <Route path="/event/:slug" element={<EventDetails />} />
@@ -135,8 +146,11 @@ const AppContent: React.FC = () => {
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </Layout>
-      <PublicChatWidget />
+      <Suspense fallback={null}>
+        <PublicChatWidget />
+      </Suspense>
       <InactivityWarning />
     </AuthProvider>
   );

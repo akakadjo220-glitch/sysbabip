@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../constants';
 import { Event } from '../types';
@@ -9,7 +9,10 @@ import { CatalogService } from '../services/CatalogService';
 import { AdCarousel } from '../components/AdCarousel';
 import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, List, SlidersHorizontal, ChevronLeft, ChevronRight, Globe, Loader2, Banknote, ShieldCheck, Ticket, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { PublicMap } from '../components/PublicMap';
+import { lazyNamed } from '../utils/lazyPage';
+
+// La carte (Mapbox, ~460 Ko) n'est téléchargée que si le visiteur ouvre la vue « Carte ».
+const PublicMap = lazyNamed(() => import('../components/PublicMap'), 'PublicMap');
 import { saveSecureTicket } from '../utils/offlineStorage';
 import { SEO } from '../components/SEO';
 import { generateMarketplaceSEO } from '../utils/seoEngine';
@@ -341,7 +344,9 @@ export const Marketplace: React.FC = () => {
           )}
         </section>
       ) : (
-        <PublicMap events={mapEvents} />
+        <Suspense fallback={<div className="h-[500px] rounded-3xl bg-slate-800/50 animate-pulse" />}>
+          <PublicMap events={mapEvents} />
+        </Suspense>
       )}
 
       {/* 🚀 Section d'Autorité SEO & Indexation Google / IA (Modèle Sitelinks Jumia) */}

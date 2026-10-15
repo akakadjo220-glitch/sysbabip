@@ -41,14 +41,12 @@ export default defineConfig(({ mode }) => {
       build: {
         rollupOptions: {
           output: {
+            // Seul le socle commun à toutes les pages est regroupé. Les autres
+            // librairies (carte, PDF, graphiques, scanner…) restent dans le
+            // morceau de la page qui les utilise et ne sont téléchargées qu'à
+            // l'ouverture de cette page.
             manualChunks(id) {
-              if (id.includes('node_modules')) {
-                if (id.includes('mapbox-gl')) {
-                  return 'mapbox';
-                }
-                if (id.includes('jspdf') || id.includes('html2canvas')) {
-                  return 'pdf-generator';
-                }
+              if (/node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run|react-helmet-async|@supabase)[\\/]/.test(id)) {
                 return 'vendor';
               }
             }
