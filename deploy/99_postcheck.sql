@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- CONTRÔLE APRÈS MIGRATION — LECTURE SEULE (ne modifie rien)
 -- ═══════════════════════════════════════════════════════════════════════════
--- À exécuter après les 8 migrations. Toutes les lignes doivent afficher ok = true.
+-- À exécuter après les 9 migrations. Toutes les lignes doivent afficher ok = true.
 -- La première colonne indique la phase concernée en cas d'échec.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -47,6 +47,15 @@ checks AS (
          NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public'
                      AND tablename IN ('transactions', 'agents', 'payout_settings')
                      AND (coalesce(qual, '') = 'true' OR coalesce(with_check, '') = 'true'))
+  UNION ALL
+  SELECT 'compl', 'profiles : plus aucune policy ouverte (e-mails, téléphones)',
+         NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'profiles'
+                     AND (coalesce(qual, '') = 'true' OR coalesce(with_check, '') = 'true')
+                     AND roles <> '{service_role}')
+  UNION ALL
+  SELECT 'compl', 'vitrine organizer_public_profiles lisible par le public',
+         to_regclass('public.organizer_public_profiles') IS NOT NULL
+         AND has_table_privilege('anon', 'public.organizer_public_profiles', 'SELECT')
   UNION ALL
   SELECT 'compl', 'aucune écriture publique sur reviews / affiliate_links',
          NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public'

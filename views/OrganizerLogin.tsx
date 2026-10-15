@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { EmailService } from '../services/EmailService';
 import { WhatsAppService } from '../services/WhatsAppService';
+import { AccountService } from '../services/AccountService';
 import { getCountryDialCode } from '../utils/countryCodes';
 
 export const OrganizerLogin = () => {
@@ -168,24 +169,14 @@ export const OrganizerLogin = () => {
             if (isPhoneMode) {
                 // Chercher le vrai email en base en testant plusieurs formats du numéro
                 const rawInput = identifier.trim();
-                const fullPhone = getFullPhone(rawInput); // ex: +2250544246972
-                const noPlus = fullPhone.replace('+', '');   // ex: 2250544246972
-                const noCountry = rawInput.replace(/^0+/, ''); // ex: 544246972
+                const resolvedEmail = await AccountService.resolvePhone(rawInput, getFullPhone(rawInput));
 
-                // Chercher profile avec email ou name contenant le numéro (tous domaines acceptés)
-                const { data: profiles } = await supabase
-                    .from('profiles')
-                    .select('email')
-                    .or(`email.like.%${noPlus}%,email.like.%${rawInput}%,email.like.%${noCountry}%,name.like.%${noPlus}%,name.like.%${rawInput}%`)
-                    .limit(5);
-
-                if (!profiles || profiles.length === 0) {
+                if (!resolvedEmail) {
                     throw new Error("Aucun compte trouvé avec ce numéro. Vérifiez votre numéro et l'indicatif sélectionné.");
                 }
 
-                // Prendre l'email le plus proche
-                formattedIdentifier = profiles[0].email;
-                setResolvedResetEmail(profiles[0].email); // Mémoriser pour l'étape de confirmation
+                formattedIdentifier = resolvedEmail;
+                setResolvedResetEmail(resolvedEmail); // Mémoriser pour l'étape de confirmation
                 console.log('[Reset] Compte trouvé :', formattedIdentifier);
             } else {
                 formattedIdentifier = identifier;
@@ -255,34 +246,10 @@ export const OrganizerLogin = () => {
 
             if (isSignUp) {
                 // Vérifier si ce numéro/email est déjà enregistré
-                let accountExists = false;
-
-                if (isPhoneMode) {
-                    const rawInput = identifier.trim();
-                    const fullPhone = getFullPhone(rawInput);
-                    const noPlus = fullPhone.replace('+', '');
-                    const noCountry = rawInput.replace(/^0+/, '');
-
-                    const { data: profiles } = await supabase
-                        .from('profiles')
-                        .select('id')
-                        .or(`email.like.%${noPlus}%,email.like.%${rawInput}%,email.like.%${noCountry}%,name.like.%${noPlus}%,name.like.%${rawInput}%`)
-                        .limit(1);
-
-                    if (profiles && profiles.length > 0) {
-                        accountExists = true;
-                    }
-                } else {
-                    const { data: existingProfile } = await supabase
-                        .from('profiles')
-                        .select('id')
-                        .eq('email', formattedIdentifier)
-                        .maybeSingle();
-
-                    if (existingProfile) {
-                        accountExists = true;
-                    }
-                }
+                const rawInput = identifier.trim();
+                const accountExists = isPhoneMode
+                    ? await AccountService.exists({ phone: rawInput, fullPhone: getFullPhone(rawInput) })
+                    : await AccountService.exists({ email: formattedIdentifier });
 
                 if (accountExists) {
                     throw new Error("Ce numéro/email est déjà inscrit. Veuillez vous connecter ou utiliser \"Mot de passe oublié\".");
@@ -297,22 +264,12 @@ export const OrganizerLogin = () => {
 
                 if (isPhoneMode) {
                     const rawInput = identifier.trim();
-                    const fullPhone = getFullPhone(rawInput);
-                    const noPlus = fullPhone.replace('+', '');
-                    const noCountry = rawInput.replace(/^0+/, '');
+                    const resolvedEmail = await AccountService.resolvePhone(rawInput, getFullPhone(rawInput));
 
-                    const { data: profiles } = await supabase
-                        .from('profiles')
-                        .select('email')
-                        .or(`email.like.%${noPlus}%,email.like.%${rawInput}%,email.like.%${noCountry}%,name.like.%${noPlus}%,name.like.%${rawInput}%`)
-                        .limit(1);
-
-                    if (profiles && profiles.length > 0) {
-                        loginEmail = profiles[0].email;
-                        console.log('[Login] Compte trouvé :', loginEmail);
-                    } else {
+                    if (!resolvedEmail) {
                         throw new Error("Aucun compte trouvé avec ce numéro de téléphone.");
                     }
+                    loginEmail = resolvedEmail;
                 }
 
                 // Connexion avec le vrai email résolu

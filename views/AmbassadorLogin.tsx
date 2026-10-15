@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 import { getCountryDialCode } from '../utils/countryCodes';
 import { SERVER_URL } from '../config';
+import { AccountService } from '../services/AccountService';
 
 export const AmbassadorLogin = () => {
     const [searchParams] = useSearchParams();
@@ -82,13 +83,7 @@ export const AmbassadorLogin = () => {
 
         try {
             // Check email not already used
-            const { data: existing } = await supabase
-                .from('profiles')
-                .select('email')
-                .eq('email', email.trim().toLowerCase())
-                .limit(1);
-
-            if (existing && existing.length > 0) {
+            if (await AccountService.exists({ email: email.trim().toLowerCase() })) {
                 throw new Error("Cet email est déjà associé à un compte. Veuillez vous connecter.");
             }
 

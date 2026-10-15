@@ -303,11 +303,19 @@ export const EventDetails: React.FC = () => {
         if (!data) {
           const direct = await supabase
             .from('events')
-            .select('*, ticket_types(*), profiles(name, company, avatar)') // Fetch related ticket types and organizer profile
+            .select('*, ticket_types(*)')
             .eq('slug', slug)
             .single();
           if (direct.error) throw direct.error;
           data = direct.data;
+          if (data?.organizer_id) {
+            const { data: org } = await supabase
+              .from('organizer_public_profiles')
+              .select('name, company, avatar')
+              .eq('id', data.organizer_id)
+              .maybeSingle();
+            data.profiles = org;
+          }
         }
 
         if (data) {

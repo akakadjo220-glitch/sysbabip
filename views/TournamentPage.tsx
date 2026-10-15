@@ -36,10 +36,18 @@ export const TournamentPage: React.FC = () => {
       try {
         const { data: t, error } = await supabase
           .from('tournaments')
-          .select('*, profiles(name, company, avatar)')
+          .select('*')
           .eq('slug', slug)
           .single();
         if (error || !t) throw error;
+        if (t.organizer_id) {
+          const { data: org } = await supabase
+            .from('organizer_public_profiles')
+            .select('name, company, avatar')
+            .eq('id', t.organizer_id)
+            .maybeSingle();
+          t.profiles = org;
+        }
         setTournament(t);
 
         const [{ data: evts }, { data: passes }] = await Promise.all([

@@ -41,7 +41,7 @@ export const FundraisingPage: React.FC = () => {
 
       if (!camp) { setLoading(false); return; }
 
-      const { data: prof } = await supabase.from('profiles').select('name').eq('id', camp.organizer_id).single();
+      const { data: prof } = await supabase.from('organizer_public_profiles').select('name').eq('id', camp.organizer_id).maybeSingle();
       if (prof) camp.profiles = prof;
 
       setCampaign(camp);
