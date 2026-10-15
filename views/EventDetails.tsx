@@ -4,7 +4,6 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { MOCK_EVENTS, formatCurrency, formatDate, convertCurrency, PAYMENT_ROUTING } from '../constants';
 import { Event, TicketCategory } from '../types';
 import { supabase } from '../supabaseClient';
-import { getPlatformSetting } from '../utils/platformSettings';
 import { getOfflineTickets, saveSecureTicket } from '../utils/offlineStorage';
 import { CheckoutService, type CheckoutProvider, type CreateOrderInput, type CreatedOrder, type IssuedTicket } from '../services/CheckoutService';
 import { CatalogService } from '../services/CatalogService';
@@ -14,7 +13,8 @@ import { SEO } from '../components/SEO';
 import { generateEventSEO } from '../utils/seoEngine';
 import { lazyNamed } from '../utils/lazyPage';
 import { loadPaystack } from '../utils/loadPaystack';
-import { paymentOptionsFor, approximateLocation } from '../utils/paymentOptions';
+import { approximateLocation } from '../utils/paymentOptions';
+import { PaymentMethodPicker, usePaymentOptions } from '../components/PaymentMethodPicker';
 
 // Carte et PDF chargés à la demande : la page et le bouton d'achat s'affichent d'abord.
 const EventLocationMap = lazyNamed(() => import('../components/EventLocationMap'), 'EventLocationMap');
@@ -1402,19 +1402,11 @@ const CheckoutModal: React.FC<{
 
   const convertedTotal = convertCurrency(total, 'XOF', displayCurrency);
 
-  // Toggles Admin Actifs
-  const [activeGateways, setActiveGateways] = useState({
-    paystack: true, pawapay: true, feexpay: false, intouch: false, paydunya: false
-  });
+  // Moyens de paiement utilisables (activés ET configurés, selon le serveur).
+  const { options: paymentOptions, loading: paymentOptionsLoading } = usePaymentOptions(visitorCountryCode);
   const [buyerLocation, setBuyerLocation] = useState<any>(null);
 
   useEffect(() => {
-    const loadToggles = async () => {
-      const toggles = await getPlatformSetting<typeof activeGateways>('payment_toggles');
-      if (toggles) setActiveGateways(toggles);
-    };
-    loadToggles();
-
     // Pays et position approximatifs (Cloudflare) : aucune demande d'autorisation
     // au moment de payer, aucun service tiers.
     approximateLocation().then(({ countryCode, location }) => {
@@ -1605,7 +1597,6 @@ const CheckoutModal: React.FC<{
     }
   };
 
-  const paymentOptions = paymentOptionsFor(visitorCountryCode, activeGateways);
   const chosen = paymentOptions.find(o => o.key === selectedOption) || null;
 
   const handleMobileMoneySubmit = (e: React.FormEvent) => {
@@ -1741,65 +1732,24 @@ const CheckoutModal: React.FC<{
             </div>
 
             <p className="text-sm font-medium text-slate-300 mb-3">Payer avec</p>
-            {paymentOptions.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {paymentOptions.map(option => (
-                  <button
-                    key={option.key}
-                    onClick={() => { setSelectedOption(option.key); setError(''); }}
-                    aria-pressed={selectedOption === option.key}
-                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all ${selectedOption === option.key ? 'border-orange-500 bg-orange-500/10 ring-1 ring-orange-500' : 'border-slate-700 bg-slate-800/50 hover:border-slate-500'} ${option.kind === 'card' && paymentOptions.length % 2 === 1 ? 'col-span-2' : ''}`}
-                  >
-                    {option.kind === 'card'
-                      ? <CreditCard size={18} className="text-indigo-300 shrink-0" />
-                      : <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${option.color}`} />}
-                    <span className="text-white font-bold text-sm">{option.label}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="p-4 text-center border-dashed border border-slate-700 rounded-xl">
-                <p className="text-slate-400 text-sm">Aucun moyen de paiement n'est disponible pour ce pays pour le moment.</p>
-              </div>
-            )}
-
-            {chosen?.kind === 'momo' && (
-              <form onSubmit={handleMobileMoneySubmit} className="mt-5 space-y-3 animate-in fade-in">
-                <div>
-                  <label htmlFor="checkout-pay-phone" className="block text-sm font-medium text-slate-300 mb-2">Numéro {chosen.label} qui paie</label>
-                  <input
-                    id="checkout-pay-phone"
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel-national"
-                    value={payPhone}
-                    onChange={(e) => setPayPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="07 00 00 00 00"
-                    className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-mono text-lg tracking-wider"
-                    required
-                  />
-                  <p className="text-xs text-slate-500 mt-2">{chosen.hint}</p>
-                </div>
+            <form onSubmit={chosen?.kind === 'card' ? handleCardSubmit : handleMobileMoneySubmit} className="space-y-4">
+              <PaymentMethodPicker
+                options={paymentOptions}
+                loading={paymentOptionsLoading}
+                selected={selectedOption}
+                onSelect={(key) => { setSelectedOption(key); setError(''); }}
+                phone={payPhone}
+                onPhoneChange={setPayPhone}
+              />
+              {chosen && (
                 <button
                   type="submit"
                   className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]"
                 >
-                  Payer {formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)} avec {chosen.label}
+                  Payer {formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)}{chosen.kind === 'momo' ? ` avec ${chosen.label}` : ''}
                 </button>
-              </form>
-            )}
-
-            {chosen?.kind === 'card' && (
-              <form onSubmit={handleCardSubmit} className="mt-5 space-y-3 animate-in fade-in">
-                <p className="text-xs text-slate-500">Une fenêtre de paiement sécurisée s'ouvre pour saisir votre carte. Babipass ne voit jamais votre numéro de carte.</p>
-                <button
-                  type="submit"
-                  className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(79,70,229,0.4)]"
-                >
-                  Payer {formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)} par carte
-                </button>
-              </form>
-            )}
+              )}
+            </form>
 
             <p className="mt-5 text-xs text-slate-500 flex items-center justify-center gap-1">
               <ShieldCheck size={12} /> Paiement vérifié par Babipass avant l'envoi du billet

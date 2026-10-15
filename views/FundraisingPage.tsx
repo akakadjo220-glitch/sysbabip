@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Heart, Users, Calendar, ArrowLeft, Loader2, CheckCircle, CreditCard, Phone, Shield } from 'lucide-react';
+import { Heart, Users, Calendar, ArrowLeft, Loader2, CheckCircle, Shield } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { formatCurrency } from '../constants';
 import { SEO } from '../components/SEO';
 import { CheckoutService } from '../services/CheckoutService';
+import { PaymentMethodPicker, usePaymentOptions, paymentRequest } from '../components/PaymentMethodPicker';
 
 export const FundraisingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -18,15 +19,12 @@ export const FundraisingPage: React.FC = () => {
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: '', email: '', phone: '', amount: '', method: 'WAVE' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', amount: '' });
 
-  const paymentMethods = [
-    { id: 'WAVE', label: 'Wave', emoji: '🌊' },
-    { id: 'OM', label: 'Orange Money', emoji: '🟠' },
-    { id: 'MTN', label: 'MTN MoMo', emoji: '🟡' },
-    { id: 'MOOV', label: 'Moov Money', emoji: '🔵' },
-    { id: 'CB', label: 'Carte bancaire', emoji: '💳' },
-  ];
+  // Moyens de paiement utilisables (activés ET configurés, selon le serveur).
+  const { options: paymentOptions, loading: paymentOptionsLoading } = usePaymentOptions();
+  const [selectedOption, setSelectedOption] = useState('');
+  const chosen = paymentOptions.find(o => o.key === selectedOption) || null;
 
   useEffect(() => {
     if (!slug) return;
@@ -64,24 +62,25 @@ export const FundraisingPage: React.FC = () => {
     const amount = Math.round(parseFloat(form.amount));
     if (!amount || amount < 100) { setError('Veuillez saisir un montant valide (minimum 100).'); return; }
 
-    const isCard = form.method === 'CB';
-    if (!isCard && !form.phone) {
-      setError('Mode Mobile Money sélectionné : le numéro de téléphone est obligatoire.');
+    if (!chosen) { setError('Choisissez un moyen de paiement.'); return; }
+    if (chosen.kind === 'momo' && form.phone.replace(/[^0-9]/g, '').length < 8) {
+      setError(`Indiquez le numéro ${chosen.label} qui va payer.`);
       return;
     }
 
     setSubmitting(true);
     setError('');
     try {
+      const { provider, payment } = paymentRequest(chosen, form.phone);
       const created = await CheckoutService.createDonation({
         campaignId: campaign.id,
         amount,
-        provider: isCard ? 'paystack' : 'pawapay',
+        provider,
         buyer: { name: form.name || undefined, email: form.email || undefined },
-        payment: isCard ? undefined : { phone: form.phone, network: form.method }
+        payment
       });
 
-      if (isCard && !(await CheckoutService.openPaystack(created))) {
+      if (provider === 'paystack' && !(await CheckoutService.openPaystack(created))) {
         setError('Paiement annulé.');
         return;
       }
@@ -235,33 +234,18 @@ export const FundraisingPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-1">Email (optionnel pour Mobile Money)</label>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1">
+                      Email {chosen?.kind === 'card' ? '*' : '(optionnel)'}
+                    </label>
                     <input
                       type="email"
                       placeholder="votre@email.com"
                       value={form.email}
                       onChange={e => setForm({ ...form, email: e.target.value })}
                       className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 text-sm"
-                      required={form.method === 'CB'}
+                      required={chosen?.kind === 'card'}
                     />
                   </div>
-
-                  {form.method !== 'CB' && (
-                    <div className="animate-in fade-in slide-in-from-top-2">
-                      <label className="block text-sm font-semibold text-slate-300 mb-1">Numéro Mobile Money *</label>
-                      <div className="relative">
-                        <Phone size={18} className="absolute left-3 top-3 text-slate-500" />
-                        <input
-                          type="tel"
-                          placeholder="Ex: 0102030405"
-                          value={form.phone}
-                          onChange={e => setForm({ ...form, phone: e.target.value })}
-                          className="w-full bg-slate-900/60 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 text-sm"
-                          required
-                        />
-                      </div>
-                    </div>
-                  )}
 
                   <div>
                     <label className="block text-sm font-semibold text-slate-300 mb-1">Montant ({campaign.currency}) *</label>
@@ -277,28 +261,24 @@ export const FundraisingPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-2">Mode de paiement</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {paymentMethods.map(pm => (
-                        <button
-                          key={pm.id}
-                          type="button"
-                          onClick={() => setForm({ ...form, method: pm.id })}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${form.method === pm.id ? 'bg-orange-600 border-orange-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}
-                        >
-                          {pm.emoji} {pm.label}
-                        </button>
-                      ))}
-                    </div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-2">Payer avec</label>
+                    <PaymentMethodPicker
+                      options={paymentOptions}
+                      loading={paymentOptionsLoading}
+                      selected={selectedOption}
+                      onSelect={(key) => { setSelectedOption(key); setError(''); }}
+                      phone={form.phone}
+                      onPhoneChange={(phone) => setForm({ ...form, phone })}
+                    />
                   </div>
 
                   <button
                     type="submit"
-                    disabled={submitting}
+                    disabled={submitting || !chosen}
                     className="w-full bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {submitting ? <Loader2 size={18} className="animate-spin" /> : <Heart size={18} />}
-                    {form.method === 'CB' ? 'Payer par Carte Bancaire' : (submitting ? 'Paiement en cours...' : 'Payer via Mobile Money')}
+                    {submitting ? 'Paiement en cours...' : chosen ? `Contribuer avec ${chosen.label}` : 'Choisissez un moyen de paiement'}
                   </button>
                   <p className="text-xs text-slate-500 text-center flex items-center justify-center gap-1"><Shield size={11}/> Paiement 100% sécurisé</p>
                 </form>

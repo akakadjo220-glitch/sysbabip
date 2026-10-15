@@ -1,4 +1,5 @@
 import { PAYMENT_ROUTING } from '../constants';
+import { SERVER_URL } from '../config';
 
 // Moyens de paiement présentés à l'acheteur sous leur nom courant (Wave, Orange
 // Money…), dans l'ordre d'usage du pays. Chaque option liste les passerelles
@@ -57,15 +58,56 @@ const BY_COUNTRY: Record<string, OptionDef[]> = {
     ],
 };
 
-/** Options disponibles pour un pays, compte tenu des passerelles activées par l'admin. */
-export function paymentOptionsFor(countryCode: string, active: Partial<Record<GatewayId, boolean>>): PaymentOption[] {
+/**
+ * Options disponibles pour un pays, compte tenu des passerelles utilisables
+ * (activées ET configurées, voir loadAvailablePayments). Si Paystack encaisse
+ * aussi le Mobile Money, le bouton carte l'indique.
+ */
+export function paymentOptionsFor(
+    countryCode: string,
+    active: Partial<Record<GatewayId, boolean>>,
+    paystackMobileMoney = false
+): PaymentOption[] {
     const defs = BY_COUNTRY[countryCode] || (PAYMENT_ROUTING[countryCode] ? [CARD] : []);
     const out: PaymentOption[] = [];
     for (const { via, ...rest } of defs) {
         const pick = via.find(c => active[c.gateway]);
-        if (pick) out.push({ ...rest, gateway: pick.gateway, network: pick.network });
+        if (!pick) continue;
+        const option: PaymentOption = { ...rest, gateway: pick.gateway, network: pick.network };
+        if (option.kind === 'card' && paystackMobileMoney) {
+            option.label = 'Carte ou Mobile Money';
+            option.hint = 'Visa, Mastercard, Wave, Orange Money… dans la fenêtre sécurisée';
+        }
+        out.push(option);
     }
     return out;
+}
+
+export interface AvailablePayments {
+    providers: Partial<Record<GatewayId, boolean>>;
+    paystackMobileMoney: boolean;
+}
+
+let availableCache: { at: number; value: Promise<AvailablePayments> } | null = null;
+
+/**
+ * Passerelles réellement utilisables, selon le serveur (activées dans l'admin ET
+ * clés saisies). Mis en cache 30 s. Si le serveur ne répond pas : aucune, plutôt
+ * qu'un bouton qui mène à une erreur.
+ */
+export function loadAvailablePayments(): Promise<AvailablePayments> {
+    if (availableCache && Date.now() - availableCache.at < 30 * 1000) return availableCache.value;
+    const value = fetch(`${SERVER_URL}/api/public/payment-methods`)
+        .then(r => r.json())
+        .then(d => (d?.success
+            ? { providers: d.providers || {}, paystackMobileMoney: !!d.paystack_mobile_money }
+            : { providers: {}, paystackMobileMoney: false }))
+        .catch(() => {
+            availableCache = null; // nouvel essai au prochain appel
+            return { providers: {}, paystackMobileMoney: false };
+        });
+    availableCache = { at: Date.now(), value };
+    return value;
 }
 
 /** Position approximative du visiteur (Cloudflare), sans autorisation ni service tiers. */

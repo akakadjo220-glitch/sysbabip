@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getOfflineTickets, removeSecureTicket, saveSecureTicket } from '../utils/offlineStorage';
 import { QrCode, Calendar, MapPin, Ticket, WifiOff, Clock, ShieldCheck, RefreshCw, Send, X, Smartphone, Mail, AlertTriangle, Banknote, Users, Copy, Share2, Plus, Lock, Loader2, User, Download, Search, Globe } from 'lucide-react';
 import { CheckoutService } from '../services/CheckoutService';
+import { PaymentMethodPicker, usePaymentOptions, paymentRequest } from '../components/PaymentMethodPicker';
 import { PAYMENT_ROUTING, formatCurrency } from '../constants';
 import QRCode from 'qrcode';
 import { supabase } from '../supabaseClient';
@@ -346,23 +347,35 @@ const TicketCard: React.FC<{ ticket: any; onTransferComplete: () => void }> = ({
 // Modal de Paiement de Tranche (Tontine)
 const InstallmentModal: React.FC<{ ticket: any; installmentAmount: number; onClose: () => void; onSuccess: () => void }> = ({ ticket, installmentAmount, onClose, onSuccess }) => {
   const [step, setStep] = useState<'info' | 'processing' | 'success'>('info');
+  const [error, setError] = useState('');
 
-  const handlePayment = async () => {
+  // Moyens de paiement utilisables (activés ET configurés, selon le serveur).
+  const { options: paymentOptions, loading: paymentOptionsLoading } = usePaymentOptions();
+  const [selectedOption, setSelectedOption] = useState('');
+  const [payPhone, setPayPhone] = useState(() => String(ticket.contactDetail || '').replace(/^\+?225/, '').replace(/[^0-9]/g, ''));
+  const chosen = paymentOptions.find(o => o.key === selectedOption) || null;
+
+  const handlePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chosen) { setError('Choisissez un moyen de paiement.'); return; }
+    if (chosen.kind === 'momo' && payPhone.length < 8) { setError(`Indiquez le numéro ${chosen.label} qui va payer.`); return; }
+    setError('');
     setStep('processing');
     try {
       // Le serveur calcule la tranche, lance le paiement et le vérifie. À la
       // dernière tranche, il rend les billets valables à l'entrée.
-      const created = await CheckoutService.createInstallment(ticket.id, 'paystack');
-      if (!(await CheckoutService.openPaystack(created))) {
+      const { provider, payment } = paymentRequest(chosen, payPhone);
+      const created = await CheckoutService.createInstallment(ticket.id, provider, payment);
+      if (provider === 'paystack' && !(await CheckoutService.openPaystack(created))) {
         setStep('info');
         return;
       }
 
       const result = await CheckoutService.waitForPayment(created.order.id, created.order.token);
       if (result.status !== 'paid') {
-        alert(result.status === 'pending'
+        setError(result.status === 'pending'
           ? "Paiement pas encore confirmé. S'il a été validé, il sera pris en compte automatiquement."
-          : 'Paiement échoué ou expiré.');
+          : 'Paiement non abouti ou expiré. Vous pouvez réessayer.');
         setStep('info');
         return;
       }
@@ -380,7 +393,7 @@ const InstallmentModal: React.FC<{ ticket: any; installmentAmount: number; onClo
       setStep('success');
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Erreur technique lors du paiement.");
+      setError(err.message || "Le paiement n'a pas pu démarrer. Réessayez.");
       setStep('info');
     }
   };
@@ -394,18 +407,31 @@ const InstallmentModal: React.FC<{ ticket: any; installmentAmount: number; onClo
           <div className="p-6">
             <h3 className="text-xl font-bold text-white mb-2 text-center">Paiement de Tranche</h3>
             <div className="bg-slate-800/50 p-4 rounded-xl mb-6 border border-amber-500/20 text-center">
-              <p className="text-sm font-medium text-slate-400 mb-1">Montant à régler (carte ou Mobile Money)</p>
+              <p className="text-sm font-medium text-slate-400 mb-1">Montant à régler</p>
               <p className="text-3xl font-black text-amber-400">{formatCurrency(installmentAmount)}</p>
             </div>
 
-            <p className="text-sm text-slate-400 mb-6 px-2 text-center">Vous allez être débité de cette somme. Un reçu vous sera envoyé par la suite.</p>
+            {error && (
+              <div role="alert" className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">{error}</div>
+            )}
 
-            <button
-              onClick={handlePayment}
-              className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl font-bold shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all hover:scale-105"
-            >
-              Confirmer le Paiement
-            </button>
+            <form onSubmit={handlePayment} className="space-y-4">
+              <PaymentMethodPicker
+                options={paymentOptions}
+                loading={paymentOptionsLoading}
+                selected={selectedOption}
+                onSelect={(key) => { setSelectedOption(key); setError(''); }}
+                phone={payPhone}
+                onPhoneChange={setPayPhone}
+              />
+              <button
+                type="submit"
+                disabled={!chosen}
+                className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-500 text-white rounded-xl font-bold shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+              >
+                {chosen ? `Payer ${formatCurrency(installmentAmount)} avec ${chosen.label}` : 'Choisissez un moyen de paiement'}
+              </button>
+            </form>
           </div>
         )}
 

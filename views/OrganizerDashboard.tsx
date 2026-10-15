@@ -17,6 +17,7 @@ import { CRMPushService, PushCampaign } from '../services/CRMPushService';
 import { getUniqueSlug } from '../utils/slugUtils';
 import { getCountryDialCode } from '../utils/countryCodes';
 import { CheckoutService } from '../services/CheckoutService';
+import { PaymentMethodPicker, usePaymentOptions, paymentRequest } from '../components/PaymentMethodPicker';
 import { uploadFile } from '../services/uploadService';
 
 const MapResizer = () => {
@@ -3785,9 +3786,11 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
   const [pendingCommission, setPendingCommission] = useState<number>(0);
 
   // Payment Modal interactive states
-  const [payMethod, setPayMethod] = useState<'paystack' | 'momo'>('paystack');
+  // Moyens de paiement utilisables (activés ET configurés, selon le serveur).
+  const { options: paymentOptions, loading: paymentOptionsLoading } = usePaymentOptions();
+  const [selectedPayOption, setSelectedPayOption] = useState('');
   const [momoPhone, setMomoPhone] = useState('');
-  const [momoNetwork, setMomoNetwork] = useState('ORANGE_CI');
+  const chosenPayOption = paymentOptions.find(o => o.key === selectedPayOption) || null;
   const [paymentInProgress, setPaymentInProgress] = useState(false);
 
   const selectedEvent = events.find((e: any) => e.id === selectedEventId);
@@ -4053,13 +4056,13 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
 
   const processCommissionPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!chosenPayOption) { addToast("Choisissez un moyen de paiement.", "error"); return; }
     setPaymentInProgress(true);
     try {
       const token = await getAccessToken();
-      const provider = payMethod === 'paystack' ? 'paystack' : 'pawapay';
+      const { provider, payment } = paymentRequest(chosenPayOption, momoPhone);
       const created = await CheckoutService.physical.createCommissionOrder(
-        token, selectedEventId, selectedCategoryId, quantity, provider,
-        provider === 'pawapay' ? { phone: momoPhone, network: momoNetwork } : undefined
+        token, selectedEventId, selectedCategoryId, quantity, provider, payment
       );
 
       if (provider === 'paystack' && !(await CheckoutService.openPaystack(created))) {
@@ -4185,29 +4188,15 @@ const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addT
                   </div>
                 </div>
 
-                <div className="flex gap-2 mb-4 bg-slate-900/50 p-1 border border-white/5 rounded-xl">
-                  <button type="button" onClick={() => setPayMethod('paystack')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${payMethod === 'paystack' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                    Carte / Paystack
-                  </button>
-                  <button type="button" onClick={() => setPayMethod('momo')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${payMethod === 'momo' ? 'bg-amber-500 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                    Mobile Money
-                  </button>
-                </div>
-
                 <form onSubmit={processCommissionPayment} className="space-y-4">
-                  {payMethod === 'momo' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <select required value={momoNetwork} onChange={e => setMomoNetwork(e.target.value)} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none">
-                        <option value="ORANGE_CI">Orange CI</option>
-                        <option value="MTN_CI">MTN CI</option>
-                        <option value="MOOV_CI">Moov CI</option>
-                        <option value="WAVE_CI">Wave CI</option>
-                        <option value="ORANGE_SN">Orange SN</option>
-                        <option value="FREE_SN">Free SN</option>
-                      </select>
-                      <input type="tel" required value={momoPhone} onChange={e => setMomoPhone(e.target.value)} placeholder="N° Téléphone" className="bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-orange-500 outline-none" />
-                    </div>
-                  )}
+                  <PaymentMethodPicker
+                    options={paymentOptions}
+                    loading={paymentOptionsLoading}
+                    selected={selectedPayOption}
+                    onSelect={setSelectedPayOption}
+                    phone={momoPhone}
+                    onPhoneChange={setMomoPhone}
+                  />
 
                   <div className="flex gap-3 pt-2">
                     <button type="button" onClick={() => setShowPaymentModal(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-bold transition-colors">
