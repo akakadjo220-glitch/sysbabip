@@ -75,9 +75,20 @@ const InactivityWarning: React.FC = () => {
   );
 };
 
+// Remonte en haut de page à chaque changement de page (liens du pied de page, etc.).
+// Les ancres (#section) gardent leur comportement normal.
+const ScrollToTop: React.FC = () => {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0);
+  }, [pathname, hash]);
+  return null;
+};
+
 const AppContent: React.FC = () => {
   return (
     <AuthProvider>
+      <ScrollToTop />
       <Layout>
         <Routes>
           <Route path="/" element={<Marketplace />} />
