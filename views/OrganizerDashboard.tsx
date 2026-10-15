@@ -65,8 +65,6 @@ export const OrganizerDashboard: React.FC = () => {
   const [cancelReason, setCancelReason] = useState('');
 
   const [events, setEvents] = useState<Event[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [attendees, setAttendees] = useState<any[]>([]);
   const [promos, setPromos] = useState<any[]>([]);
 
   // 1. Listen for Didit KYC returning parameters
@@ -135,60 +133,8 @@ export const OrganizerDashboard: React.FC = () => {
 
       setEvents(mappedEvents);
 
-      // Build type name map
-      const typeNameMap: Record<string, string> = {};
-      eventsData?.forEach((e: any) => {
-        (e.ticket_types || []).forEach((tt: any) => {
-          typeNameMap[tt.id] = tt.name || 'Standard';
-        });
-      });
-
-      // 2. Récupération des transactions (isolée)
-      const eventIds = eventsData?.map(e => e.id) || [];
-      let trxData: any[] = [];
-      if (eventIds.length > 0) {
-        try {
-          const { data: rawTrx, error: trErr } = await supabase
-            .from('transactions')
-            .select('*, events(title, country), tickets(ticket_type_id, ticket_type)')
-            .in('event_id', eventIds)
-            .order('created_at', { ascending: false });
-
-          if (trErr) {
-            console.warn('Transactions fetch blocked:', trErr.message);
-            addToast(`ⓘ Données de vente indisponibles : ${trErr.message}`, 'info');
-          } else {
-            trxData = rawTrx || [];
-          }
-        } catch (innerErr: any) {
-          console.warn('Silent trx fetch error:', innerErr);
-        }
-      }
-
-      setTransactions(trxData);
-
-      const mappedAttendees = trxData.filter(t => t.status === 'completed').map(t => {
-        let ticketTypeName = 'Standard';
-        const ticketList = Array.isArray(t.tickets) ? t.tickets : (t.tickets ? [t.tickets] : []);
-        if (ticketList.length > 0) {
-          const rawType = ticketList[0].ticket_type_id || ticketList[0].ticket_type || 'Standard';
-          ticketTypeName = typeNameMap[rawType] || rawType;
-          // If the resolved name is still a UUID (meaning the ticket_type was deleted), fallback to Standard
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ticketTypeName)) {
-            ticketTypeName = 'Standard';
-          }
-        }
-        return {
-          id: t.id.split('-')[0].substring(0, 8).toUpperCase(),
-          fullId: t.id,
-          name: t.guest_name || t.guest_email || 'Anonyme',
-          event: t.events?.title || 'Événement Inconnu',
-          eventId: t.event_id,
-          ticketType: ticketTypeName,
-          status: 'valid'
-        };
-      });
-      setAttendees(mappedAttendees);
+      // Les ventes ne sont plus chargées en bloc ici : chaque vue interroge la
+      // base (totaux calculés en SQL, listes paginées), même avec des millions de lignes.
       setPromos([]);
 
       // 3. Stats Globales via RPC
@@ -339,8 +285,21 @@ export const OrganizerDashboard: React.FC = () => {
     }
   };
 
-  const exportEventBuyers = (eventId: string, title: string) => {
-    const eventTxs = transactions.filter((t: any) => t.event_id === eventId && t.status === 'completed');
+  const exportEventBuyers = async (eventId: string, title: string) => {
+    // Lecture par lots de 1 000 : l'export reste complet quel que soit le volume.
+    const eventTxs: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('guest_name, guest_email, buyer_phone, method, amount, created_at, tickets(id)')
+        .eq('event_id', eventId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: true })
+        .range(from, from + 999);
+      if (error) { addToast(`Export impossible : ${error.message}`, 'error'); return; }
+      eventTxs.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
     if (eventTxs.length === 0) {
       addToast('Aucun acheteur enregistré pour cet événement.', 'error');
       return;
@@ -385,7 +344,13 @@ export const OrganizerDashboard: React.FC = () => {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    const hasSales = transactions.some((t: any) => t.event_id === eventId || t.events?.id === eventId);
+    // Compté en base : une suppression définitive n'est permise que sans aucune vente.
+    const { count: salesCount, error: salesErr } = await supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId);
+    if (salesErr) { addToast(`Vérification des ventes impossible : ${salesErr.message}`, 'error'); return; }
+    const hasSales = (salesCount || 0) > 0;
     if (confirm(hasSales ? "Cet événement a déjà des ventes. Il sera annulé (Soft Delete) au lieu d'être supprimé définitivement. Continuer ?" : "Voulez-vous vraiment supprimer cet événement définitivement ?")) {
       try {
         if (hasSales) {
@@ -412,15 +377,6 @@ export const OrganizerDashboard: React.FC = () => {
     return events.filter(e => e.id === selectedEventId);
   }, [events, selectedEventId]);
 
-  const filteredTransactions = useMemo(() => {
-    if (selectedEventId === 'all') return transactions;
-    return transactions.filter((t: any) => t.event_id === selectedEventId || t.events?.id === selectedEventId);
-  }, [transactions, selectedEventId]);
-
-  const filteredAttendees = useMemo(() => {
-    if (selectedEventId === 'all') return attendees;
-    return attendees.filter((a: any) => a.eventId === selectedEventId || a.event_id === selectedEventId);
-  }, [attendees, selectedEventId]);
 
   if (loading) return <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4"><Loader2 className="animate-spin text-orange-500" size={48} /><p className="text-slate-400 font-medium">Chargement du portail organisateur...</p></div>;
 
@@ -558,7 +514,7 @@ export const OrganizerDashboard: React.FC = () => {
 
       {/* Views */}
       <div className="relative z-20 block">
-        {activeTab === 'overview' && <OverviewView events={filteredEvents} transactions={filteredTransactions} />}
+        {activeTab === 'overview' && <OverviewView events={filteredEvents} />}
         {activeTab === 'events' && <EventsListView events={events}
           onCreate={() => { setWizardEvent(null); setShowWizard(true); }}
           onEdit={(e: any) => { setWizardEvent(e); setShowWizard(true); }}
@@ -567,14 +523,14 @@ export const OrganizerDashboard: React.FC = () => {
           onRequestCancel={(e: any) => { setCancelEventObj(e); setCancelReason(''); setCancelModalOpen(true); }}
           addToast={addToast} />}
         {activeTab === 'attendees' && <AttendeesView userId={user?.id} events={events} addToast={addToast} />}
-        {activeTab === 'sales' && <SalesView stats={stats} eventSales={eventSales} transactions={filteredTransactions} events={filteredEvents} />}
-        {activeTab === 'agents' && <PosTeamView events={events} transactions={transactions} addToast={addToast} />}
+        {activeTab === 'sales' && <SalesView stats={stats} eventSales={eventSales} events={filteredEvents} />}
+        {activeTab === 'agents' && <PosTeamView events={events} addToast={addToast} />}
         {activeTab === 'crm' && <PushCampaignView events={events} addToast={addToast} />}
-        {activeTab === 'marketing' && <MarketingView transactions={transactions} />}
+        {activeTab === 'marketing' && <MarketingView events={events} />}
         {activeTab === 'wallet' && <WalletView eventSales={eventSales} stats={stats} addToast={addToast} refreshData={fetchData} profile={profile} fetchProfile={fetchProfile} />}
         {activeTab === 'chatbot' && <ChatbotView events={events} addToast={addToast} />}
         {activeTab === 'account' && <AccountSettingsView userMode="organizer" />}
-        {activeTab === 'physical' && <PhysicalTicketsView profile={profile} fetchProfile={fetchProfile} events={filteredEvents} transactions={filteredTransactions} addToast={addToast} />}
+        {activeTab === 'physical' && <PhysicalTicketsView profile={profile} fetchProfile={fetchProfile} events={filteredEvents} addToast={addToast} />}
         {activeTab === 'fundraising' && (
           (profile?.is_verified && profile?.business_status === 'verified') ? (
             <FundraisingTab organizerId={user?.id} addToast={addToast} />
@@ -670,15 +626,17 @@ const StatCard = ({ title, value, trend, colorClass }: any) => (
   </div>
 );
 
-const OverviewView = ({ events, transactions }: any) => {
-  // Statistiques calculées en base (justes au-delà de 1000 transactions).
-  // Le calcul local ci-dessous ne sert qu'en secours si la fonction est indisponible.
+// Sans liste de ventes chargée en bloc, le calcul local de secours n'a plus de données.
+const NO_TRANSACTIONS: any[] = [];
+
+const OverviewView = ({ events, transactions = NO_TRANSACTIONS }: any) => {
+  // Statistiques calculées en base (justes même avec des millions de ventes).
   const [overview, setOverview] = useState<any>(null);
   useEffect(() => {
     supabase.rpc('organizer_overview', { p_days: 7 }).then(({ data, error }) => {
       if (!error && data) setOverview(data);
     });
-  }, [transactions]);
+  }, [events]);
 
   const chartData = useMemo(() => {
     if (overview?.daily) {
@@ -1135,16 +1093,18 @@ const AttendeesView = ({ userId, events, addToast }: any) => {
   );
 };
 
-const SalesView = ({ stats, eventSales, transactions }: any) => {
+const SalesView = ({ stats, eventSales }: any) => {
   const [salesPage, setSalesPage] = useState(1);
   const SALES_PER_PAGE = 10;
 
-  const ambMap: Record<string, number> = {};
-  (transactions || []).forEach((t: any) => {
-    if (t.ambassador_commission > 0 && t.status !== 'valid') {
-       ambMap[t.event_id] = (ambMap[t.event_id] || 0) + Number(t.ambassador_commission);
-    }
-  });
+  // Commissions ambassadeurs par événement, additionnées en base.
+  const [ambMap, setAmbMap] = useState<Record<string, number>>({});
+  useEffect(() => {
+    supabase.rpc('organizer_ambassador_commissions').then(({ data, error }) => {
+      if (error) { console.warn('Commissions ambassadeurs indisponibles:', error.message); return; }
+      setAmbMap(Object.fromEntries((data || []).map((r: any) => [r.event_id, Number(r.total) || 0])));
+    });
+  }, [eventSales]);
 
   const totalRevenuBrut = Number(stats?.totalGross || 0);
   const totalCommission = Number(stats?.totalCommission || 0);
@@ -1242,68 +1202,47 @@ const SalesView = ({ stats, eventSales, transactions }: any) => {
   );
 };
 
-const MarketingView = ({ transactions }: any) => {
+const MarketingView = ({ events }: any) => {
   const [mapStyle, setMapStyle] = useState<'dark' | 'light' | 'satellite'>('dark');
 
-  // Aggregate locations from transactions for the heatmap
-  const locations = transactions
-    .filter((t: any) => t.buyer_location && t.status === 'completed')
-    .map((t: any) => t.buyer_location);
+  // Acheteurs regroupés par quartier / ville, calculé en base (juste quel que soit le volume).
+  const [zoneData, setZoneData] = useState<{ total_buyers: number; zones: any[] }>({ total_buyers: 0, zones: [] });
+  useEffect(() => {
+    supabase.rpc('organizer_buyer_zones', { p_event_id: null }).then(({ data, error }) => {
+      if (error) { console.warn('Zones acheteurs indisponibles:', error.message); return; }
+      if (data) setZoneData(data);
+    });
+  }, [events]);
 
-  // Group by city for quick stats
-  const cityStatsMap = locations.reduce((acc: any, loc: any) => {
-    const city = loc.city || 'Inconnu';
-    acc[city] = (acc[city] || 0) + 1;
+  const totalBuyers = Number(zoneData.total_buyers) || 0;
+  // Un point par quartier sur la carte ; sa taille suit le nombre d'acheteurs.
+  const maxZone = Math.max(1, ...zoneData.zones.map((z: any) => Number(z.buyers) || 0));
+  const locations = zoneData.zones
+    .filter((z: any) => z.lat != null && z.lng != null)
+    .map((z: any) => ({
+      lat: Number(z.lat), lng: Number(z.lng), city: z.city, neighborhood: z.commune,
+      count: Number(z.buyers) || 0, radius: 8 + Math.round(14 * (Number(z.buyers) || 0) / maxZone)
+    }));
+
+  // Répartition par ville
+  const cityStatsMap = zoneData.zones.reduce((acc: any, z: any) => {
+    const city = z.city || 'Inconnu';
+    acc[city] = (acc[city] || 0) + (Number(z.buyers) || 0);
     return acc;
   }, {});
-
   const cityStatsList = Object.keys(cityStatsMap).map(city => ({
     city,
     count: cityStatsMap[city]
   })).sort((a, b) => b.count - a.count);
 
   const exportMetaTargets = () => {
-    if (locations.length === 0) {
+    if (totalBuyers === 0) {
       alert('Aucune donnée géolocalisée disponible pour l\'export.');
       return;
     }
 
-    // Build zone-level stats: group by commune/neighborhood first, then city
-    type ZoneStat = {
-      zone: string; commune: string; city: string; country: string;
-      lat: string; lng: string; count: number; totalAmount: number;
-      peakHour: number; transactions: any[];
-    };
-
-    const zoneMap: Record<string, ZoneStat> = {};
-
-    transactions
-      .filter((t: any) => t.buyer_location && t.status === 'completed')
-      .forEach((t: any) => {
-        const loc = t.buyer_location;
-        const commune = loc.neighborhood || loc.suburb || loc.district || '';
-        const city = loc.city || loc.town || loc.village || 'Inconnu';
-        const zoneKey = commune ? `${commune}, ${city}` : city;
-        const hour = t.created_at ? new Date(t.created_at).getHours() : 12;
-
-        if (!zoneMap[zoneKey]) {
-          zoneMap[zoneKey] = {
-            zone: zoneKey, commune, city,
-            country: loc.country_code || 'CI',
-            lat: loc.lat ? String(loc.lat) : '',
-            lng: loc.lng ? String(loc.lng) : '',
-            count: 0, totalAmount: 0, peakHour: hour, transactions: []
-          };
-        }
-        zoneMap[zoneKey].count++;
-        zoneMap[zoneKey].totalAmount += Number(t.amount || 0);
-        zoneMap[zoneKey].transactions.push(hour);
-      });
-
-    // Sort by count desc
-    const zones = Object.values(zoneMap).sort((a, b) => b.count - a.count);
-    const totalBuyers = zones.reduce((s, z) => s + z.count, 0);
-    const maxCount = zones[0]?.count || 1;
+    const zones = zoneData.zones;
+    const maxCount = Number(zones[0]?.buyers) || 1;
 
     const headers = [
       'Zone (Cible Meta)',
@@ -1320,23 +1259,17 @@ const MarketingView = ({ transactions }: any) => {
       'Heure de pointe'
     ];
 
-    const rows = zones.map(z => {
-      const pct = ((z.count / totalBuyers) * 100).toFixed(1);
-      const budgetPct = ((z.count / totalBuyers) * 100).toFixed(0);
-      const avgAmount = z.count > 0 ? Math.round(z.totalAmount / z.count).toLocaleString('fr-FR') : '0';
-      // Smart radius: dense urban = 2km, sparse = 10km
-      const radius = z.count >= maxCount * 0.3 ? '2' : z.count >= maxCount * 0.1 ? '5' : '10';
-      // Peak hour
-      const hourCounts: Record<number, number> = {};
-      z.transactions.forEach(h => { hourCounts[h] = (hourCounts[h] || 0) + 1; });
-      const peakH = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '?';
-      const peakLabel = `${peakH}h`;
-
-      // Define clear representation if commune is missing or same as city
+    const rows = zones.map((z: any) => {
+      const count = Number(z.buyers) || 0;
+      const pct = ((count / totalBuyers) * 100).toFixed(1);
+      const budgetPct = ((count / totalBuyers) * 100).toFixed(0);
+      const avgAmount = count > 0 ? Math.round(Number(z.total_amount) / count).toLocaleString('fr-FR') : '0';
+      // Rayon : zone dense = 2 km, peu dense = 10 km
+      const radius = count >= maxCount * 0.3 ? '2' : count >= maxCount * 0.1 ? '5' : '10';
+      const peakLabel = z.peak_hour != null ? `${z.peak_hour}h` : '?';
       const displayCommune = (z.commune && z.commune !== z.city) ? z.commune : '— (Ville entière)';
       const displayZone = (z.commune && z.commune !== z.city) ? `${z.commune}, ${z.city}` : z.city;
-
-      return [displayZone, displayCommune, z.city, z.country, z.lat, z.lng, radius, z.count, `${pct}%`, `${budgetPct}%`, avgAmount, peakLabel];
+      return [displayZone, displayCommune, z.city, z.country, z.lat ?? '', z.lng ?? '', radius, count, `${pct}%`, `${budgetPct}%`, avgAmount, peakLabel];
     });
 
     const csvContent = [headers, ...rows]
@@ -1390,11 +1323,11 @@ const MarketingView = ({ transactions }: any) => {
                     fillOpacity: 0.8,
                     weight: 2
                   }}
-                  radius={12}
+                  radius={loc.radius}
                   className="animate-pulse drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]"
                 >
                   <LeafletTooltip className="text-sm font-bold bg-slate-900 border-none text-white shadow-2xl rounded-xl">
-                    Achat depuis {loc.neighborhood || loc.city || 'cette zone'}
+                    {loc.count} acheteur{loc.count > 1 ? 's' : ''} · {loc.neighborhood || loc.city || 'cette zone'}
                   </LeafletTooltip>
                 </CircleMarker>
               )
@@ -1419,7 +1352,7 @@ const MarketingView = ({ transactions }: any) => {
             <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 px-5 py-3 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center gap-4">
               <div className="flex flex-col">
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Achats Géolocalisés</span>
-                <span className="text-xl font-bold text-white leading-none mt-1">{locations.length}</span>
+                <span className="text-xl font-bold text-white leading-none mt-1">{totalBuyers}</span>
               </div>
               <div className="w-px h-8 bg-white/10" />
               <div className="flex flex-col">
@@ -1443,7 +1376,7 @@ const MarketingView = ({ transactions }: any) => {
                     <span className="text-orange-400 font-bold text-lg bg-orange-500/10 px-2 py-0.5 rounded-lg">{stat.count}</span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-orange-500 to-red-500 relative overflow-hidden" style={{ width: `${(stat.count / locations.length) * 100}%` }}>
+                    <div className="h-full bg-gradient-to-r from-orange-500 to-red-500 relative overflow-hidden" style={{ width: `${(stat.count / Math.max(1, totalBuyers)) * 100}%` }}>
                       <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]" />
                     </div>
                   </div>
@@ -1455,13 +1388,13 @@ const MarketingView = ({ transactions }: any) => {
           <div className="mt-8 pt-6 border-t border-white/10 space-y-2">
             <button
               onClick={exportMetaTargets}
-              disabled={locations.length === 0}
+              disabled={totalBuyers === 0}
               className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
             >
               <TrendingUp size={16} /> Exporter cibles Meta
             </button>
             <p className="text-center text-xs text-slate-500">
-              {locations.length > 0 ? `${locations.length} points · CSV compatible Meta Ads` : 'Aucune donnée de localisation disponible.'}
+              {totalBuyers > 0 ? `${totalBuyers} acheteurs · ${zoneData.zones.length} zones · CSV compatible Meta Ads` : 'Aucune donnée de localisation disponible.'}
             </p>
           </div>
         </div>
@@ -1571,20 +1504,11 @@ const WalletView = ({ eventSales, stats, addToast, refreshData, profile, fetchPr
           .select('*, events:event_id(title)')
           .eq('organizer_id', user.id)
           .order('created_at', { ascending: false }),
-        supabase.from('transactions')
-          .select('event_id, ambassador_commission')
-          .gt('ambassador_commission', 0)
-          .neq('status', 'valid')
-          .in('event_id', (eventSales || []).map((ev: any) => ev.event_id))
+        // Commissions ambassadeurs par événement, additionnées en base.
+        supabase.rpc('organizer_ambassador_commissions')
       ]);
       setRequests(reqData || []);
-
-      // Aggregate ambassador commissions per event
-      const ambMap: Record<string, number> = {};
-      (ambData || []).forEach((t: any) => {
-        ambMap[t.event_id] = (ambMap[t.event_id] || 0) + Number(t.ambassador_commission || 0);
-      });
-      setAmbCommByEvent(ambMap);
+      setAmbCommByEvent(Object.fromEntries((ambData || []).map((r: any) => [r.event_id, Number(r.total) || 0])));
 
       setLoading(false);
     };
@@ -2911,7 +2835,7 @@ const ChatbotView = ({ events, addToast }: any) => {
 };
 
 // ─── POS Team View ───
-const PosTeamView = ({ events, transactions, addToast }: any) => {
+const PosTeamView = ({ events, addToast }: any) => {
   const { user } = useAuth();
   const [agents, setAgents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2921,23 +2845,26 @@ const PosTeamView = ({ events, transactions, addToast }: any) => {
   const fetchAgents = async () => {
     if (!user?.id) return;
     setLoading(true);
-    const { data, error } = await supabase.from('agents').select('*').eq('organizer_id', user.id);
+    // Espèces encaissées par agent : additionnées en base.
+    const [{ data, error }, { data: cash }] = await Promise.all([
+      supabase.from('agents').select('*').eq('organizer_id', user.id),
+      supabase.rpc('organizer_agent_cash'),
+    ]);
 
     if (error || !data || data.length === 0) {
       // No agents found
       setAgents([]);
     } else {
-      const enriched = data.map(agent => {
-        const agentSales = transactions.filter((t: any) => t.agent_id === agent.id && t.is_cash && t.status === 'completed');
-        const collected = agentSales.reduce((acc: number, cur: any) => acc + Number(cur.amount), 0);
-        return { ...agent, cashCollected: collected, role: "Agent", lastActive: agent.created_at };
-      });
+      const cashByAgent = Object.fromEntries((cash || []).map((r: any) => [r.agent_id, Number(r.collected) || 0]));
+      const enriched = data.map(agent => (
+        { ...agent, cashCollected: cashByAgent[agent.id] || 0, role: "Agent", lastActive: agent.created_at }
+      ));
       setAgents(enriched);
     }
     setLoading(false);
   };
 
-  useEffect(() => { fetchAgents(); }, [transactions, user?.id]);
+  useEffect(() => { fetchAgents(); }, [user?.id]);
 
   const handleCashCollect = (agent: any) => {
     if (window.confirm(`Confirmer la récupération de ${formatCurrency(agent.cashCollected)} de la part de ${agent.name} ?`)) {
@@ -3195,39 +3122,26 @@ const PushCampaignView = ({ events, addToast }: any) => {
     localStorage.setItem('babipass_crm_history', JSON.stringify(history));
   };
 
-  const fetchContacts = async (eventId: string) => {
+  // Contacts dédoublonnés et paginés par la base : justes quel que soit le volume.
+  const [totalContacts, setTotalContacts] = useState(0);
+  const [emailCount, setEmailCount] = useState(0);
+
+  const contactsPage = async (eventId: string, limit: number, offset: number) => {
+    const { data, error } = await supabase.rpc('organizer_contacts', {
+      p_event_id: eventId === 'all' ? null : eventId, p_limit: limit, p_offset: offset
+    });
+    if (error) throw error;
+    return data || { total: 0, with_email: 0, rows: [] };
+  };
+
+  const fetchContacts = async (eventId: string, page: number) => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      // Get events owned by this organizer
-      let eventIds: string[] = [];
-      if (eventId !== 'all') {
-        eventIds = [eventId];
-      } else {
-        const { data: evs } = await supabase.from('events').select('id').eq('organizer_id', user.id);
-        eventIds = (evs || []).map((e: any) => e.id);
-      }
-
-      if (eventIds.length === 0) { setContacts([]); setLoading(false); return; }
-
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('guest_name, guest_email, buyer_phone, amount, event_id, created_at, events(title)')
-        .in('event_id', eventIds)
-        .eq('status', 'completed')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Deduplicate by email or name
-      const seen = new Set<string>();
-      const unique = (data || []).filter((t: any) => {
-        const key = t.guest_email || t.guest_name;
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      setContacts(unique);
+      const data = await contactsPage(eventId, PAGE_SIZE, (page - 1) * PAGE_SIZE);
+      setContacts(data.rows || []);
+      setTotalContacts(Number(data.total) || 0);
+      setEmailCount(Number(data.with_email) || 0);
     } catch (e: any) {
       addToast('Erreur lors du chargement des contacts : ' + e.message, 'error');
     } finally {
@@ -3235,22 +3149,35 @@ const PushCampaignView = ({ events, addToast }: any) => {
     }
   };
 
+  useEffect(() => { setCurrentPage(1); }, [selectedEventId]);
   useEffect(() => {
-    fetchContacts(selectedEventId);
-  }, [selectedEventId, user?.id]);
+    fetchContacts(selectedEventId, currentPage);
+  }, [selectedEventId, currentPage, user?.id]);
 
-  const emailCount = contacts.filter((c: any) => c.guest_email).length;
-  const noEmailCount = contacts.filter((c: any) => !c.guest_email).length;
+  const noEmailCount = Math.max(0, totalContacts - emailCount);
 
-  const handleExportCSV = () => {
-    if (contacts.length === 0) { addToast('Aucun contact à exporter.', 'error'); return; }
+  const handleExportCSV = async () => {
+    if (totalContacts === 0) { addToast('Aucun contact à exporter.', 'error'); return; }
+
+    // Export complet, lu par lots de 1 000.
+    const all: any[] = [];
+    try {
+      for (let offset = 0; offset < totalContacts; offset += 1000) {
+        const data = await contactsPage(selectedEventId, 1000, offset);
+        all.push(...(data.rows || []));
+        if (!data.rows || data.rows.length < 1000) break;
+      }
+    } catch (e: any) {
+      addToast('Export impossible : ' + e.message, 'error');
+      return;
+    }
 
     const headers = ['Nom', 'Téléphone', 'Email', 'Événement', 'Montant (FCFA)', 'Date achat'];
-    const rows = contacts.map((c: any) => [
+    const rows = all.map((c: any) => [
       c.guest_name || '',
       c.buyer_phone || '',
       c.guest_email || '',
-      (c.events as any)?.title || '',
+      c.event_title || '',
       c.amount || '',
       c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : ''
     ]);
@@ -3272,9 +3199,9 @@ const PushCampaignView = ({ events, addToast }: any) => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    const newEntry = { date: new Date().toLocaleString('fr-FR'), count: contacts.length, event: eventName, format: 'CSV' };
+    const newEntry = { date: new Date().toLocaleString('fr-FR'), count: all.length, event: eventName, format: 'CSV' };
     saveHistory([newEntry, ...exportHistory.slice(0, 9)]);
-    addToast(`✅ ${contacts.length} contacts exportés avec succès !`, 'success');
+    addToast(`✅ ${all.length} contacts exportés avec succès !`, 'success');
   };
 
   return (
@@ -3306,7 +3233,7 @@ const PushCampaignView = ({ events, addToast }: any) => {
 
           <button
             onClick={handleExportCSV}
-            disabled={loading || contacts.length === 0}
+            disabled={loading || totalContacts === 0}
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:opacity-90 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-40"
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
@@ -3324,7 +3251,7 @@ const PushCampaignView = ({ events, addToast }: any) => {
             </div>
             <div className="col-span-2 text-center p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
               <p className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Total Contacts Uniques</p>
-              <p className="text-2xl font-bold text-white">{loading ? '...' : contacts.length}</p>
+              <p className="text-2xl font-bold text-white">{loading ? '...' : totalContacts}</p>
             </div>
           </div>
         </div>
@@ -3332,13 +3259,13 @@ const PushCampaignView = ({ events, addToast }: any) => {
         {/* Preview Table */}
         <div className="md:col-span-2 bg-slate-900/50 border border-white/10 rounded-2xl overflow-hidden">
           <div className="px-5 py-3 bg-slate-800/80 border-b border-white/5 flex items-center justify-between">
-            <span className="text-sm font-bold text-slate-300">Contacts ({contacts.length} au total)</span>
-            {!loading && <span className="text-xs text-slate-500">Page {currentPage}/{Math.max(1, Math.ceil(contacts.length / PAGE_SIZE))}</span>}
+            <span className="text-sm font-bold text-slate-300">Contacts ({totalContacts} au total)</span>
+            {!loading && <span className="text-xs text-slate-500">Page {currentPage}/{Math.max(1, Math.ceil(totalContacts / PAGE_SIZE))}</span>}
           </div>
           <div className="overflow-x-auto max-h-80 overflow-y-auto">
             {loading ? (
               <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-emerald-500" size={28} /></div>
-            ) : contacts.length === 0 ? (
+            ) : totalContacts === 0 ? (
               <div className="py-16 text-center text-slate-500 text-sm">Aucun acheteur trouvé pour ce filtre.</div>
             ) : (
               <table className="w-full text-sm">
@@ -3352,7 +3279,7 @@ const PushCampaignView = ({ events, addToast }: any) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {contacts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((c: any, idx: number) => (
+                  {contacts.map((c: any, idx: number) => (
                     <tr key={idx} className="border-t border-white/5 hover:bg-white/5 transition-colors">
                       <td className="px-4 py-2.5 text-slate-300 font-medium">{c.guest_name || '—'}</td>
                       <td className="px-4 py-2.5 text-slate-400 text-xs font-mono">{c.buyer_phone || '—'}</td>
@@ -3361,7 +3288,7 @@ const PushCampaignView = ({ events, addToast }: any) => {
                           ? <span className="text-blue-400 text-xs">{c.guest_email}</span>
                           : <span className="text-slate-600 text-xs">—</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500 text-xs truncate max-w-[120px]">{(c.events as any)?.title || '—'}</td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs truncate max-w-[120px]">{c.event_title || '—'}</td>
                       <td className="px-4 py-2.5 text-slate-400 text-xs">{c.amount ? `${Number(c.amount).toLocaleString('fr-FR')} FCFA` : '—'}</td>
                     </tr>
                   ))}
@@ -3370,7 +3297,7 @@ const PushCampaignView = ({ events, addToast }: any) => {
             )}
           </div>
           {/* Pagination controls */}
-          {contacts.length > PAGE_SIZE && (
+          {totalContacts > PAGE_SIZE && (
             <div className="flex items-center justify-between px-5 py-3 bg-slate-800/40 border-t border-white/5">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -3379,10 +3306,10 @@ const PushCampaignView = ({ events, addToast }: any) => {
               >
                 ← Précédent
               </button>
-              <span className="text-xs text-slate-500">{(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, contacts.length)} / {contacts.length}</span>
+              <span className="text-xs text-slate-500">{(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, totalContacts)} / {totalContacts}</span>
               <button
-                onClick={() => setCurrentPage(p => Math.min(Math.ceil(contacts.length / PAGE_SIZE), p + 1))}
-                disabled={currentPage >= Math.ceil(contacts.length / PAGE_SIZE)}
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalContacts / PAGE_SIZE), p + 1))}
+                disabled={currentPage >= Math.ceil(totalContacts / PAGE_SIZE)}
                 className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white disabled:opacity-30 flex items-center gap-1"
               >
                 Suivant →
@@ -3735,7 +3662,7 @@ const NfcEncoderSection = ({ selectedEventId, addToast }: { selectedEventId: str
 // ─── Composant : Billets Physiques ───
 
 
-const PhysicalTicketsView = ({ profile, fetchProfile, events, transactions, addToast }: any) => {
+const PhysicalTicketsView = ({ profile, fetchProfile, events, addToast }: any) => {
   const { user } = useAuth();
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');

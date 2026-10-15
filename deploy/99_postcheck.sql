@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- CONTRÔLE APRÈS MIGRATION — LECTURE SEULE (ne modifie rien)
 -- ═══════════════════════════════════════════════════════════════════════════
--- À exécuter après les 9 migrations. Toutes les lignes doivent afficher ok = true.
+-- À exécuter après les migrations (20261011 → 20261020). Toutes les lignes doivent afficher ok = true.
 -- La première colonne indique la phase concernée en cas d'échec.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -16,7 +16,8 @@ expected_functions(phase, f) AS (VALUES
   ('1c', 'physical_batch_quote'), ('1c', 'create_physical_batch'), ('1c', 'create_physical_commission_order'),
   ('2', 'queue_claim'), ('2', 'queue_complete'), ('2', 'queue_fail'), ('2', 'claim_job_lease'), ('2', 'rate_limit_hit'), ('2', 'purge_operational_data'),
   ('3', 'rollup_counters'), ('3', 'admin_transaction_kpis'), ('3', 'admin_global_totals'), ('3', 'organizer_overview'),
-  ('5', 'archive_event'), ('5', 'archive_due_events'), ('5', 'restore_event'), ('5', 'ensure_archive_partitions'), ('5', 'table_sizes')
+  ('5', 'archive_event'), ('5', 'archive_due_events'), ('5', 'restore_event'), ('5', 'ensure_archive_partitions'), ('5', 'table_sizes'),
+  ('orga', 'organizer_ambassador_commissions'), ('orga', 'organizer_agent_cash'), ('orga', 'organizer_buyer_zones'), ('orga', 'organizer_contacts')
 ),
 expected_tables(phase, t) AS (VALUES
   ('1a', 'public.orders'), ('2', 'public.job_leases'), ('2', 'public.rate_limits'),
