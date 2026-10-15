@@ -10,7 +10,8 @@ import { Rate } from 'k6/metrics';
 
 const API = __ENV.API || 'http://localhost:3001';
 const SLUG = __ENV.SLUG || '';
-const COUNTRIES = (__ENV.COUNTRIES || 'Global,CI,SN,BJ').split(',');
+// Le catalogue filtre par NOM de pays (comme le site), pas par code.
+const COUNTRIES = (__ENV.COUNTRIES || "Global,Côte d'Ivoire,Sénégal,Bénin").split(',');
 const PEAK = Number(__ENV.PEAK_VUS || 2000);
 
 const errors = new Rate('errors');
@@ -32,6 +33,7 @@ export const options = {
   thresholds: {
     'http_req_duration{page:catalogue}': ['p(95)<300'],
     'http_req_duration{page:evenement}': ['p(95)<300'],
+    'http_req_duration{page:accueil}': ['p(95)<300'],
     errors: ['rate<0.01'],
   },
 };
@@ -40,9 +42,17 @@ export default function () {
   const country = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
   const page = 1 + Math.floor(Math.random() * 3);
 
-  const list = http.get(`${API}/api/public/events?country=${country}&page=${page}&limit=20`, { tags: { page: 'catalogue' } });
+  const list = http.get(`${API}/api/public/events?country=${encodeURIComponent(country)}&page=${page}&limit=20`, { tags: { page: 'catalogue' } });
   const listOk = check(list, { 'catalogue 200': r => r.status === 200 });
   errors.add(!listOk);
+
+  // Appels déclenchés par l'accueil : chiffre public, temps forts, moyens de paiement.
+  const home = http.batch([
+    ['GET', `${API}/api/public/stats`, null, { tags: { page: 'accueil' } }],
+    ['GET', `${API}/api/public/highlights?country=${encodeURIComponent(country)}`, null, { tags: { page: 'accueil' } }],
+    ['GET', `${API}/api/public/payment-methods`, null, { tags: { page: 'accueil' } }],
+  ]);
+  errors.add(!home.every(r => r.status === 200));
 
   // Visiteur qui ouvre un événement : celui de la vente (SLUG) ou un du catalogue.
   let slug = SLUG;
