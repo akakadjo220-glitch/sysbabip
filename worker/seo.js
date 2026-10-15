@@ -1,14 +1,16 @@
 /**
- * Babipass — Worker Cloudflare devant le site.
+ * Babipass — aperçus de partage et sitemap, servis par Cloudflare Pages Functions
+ * (voir functions/event/[slug].js, functions/collecte/[slug].js,
+ * functions/tournoi/[slug].js, functions/sitemap.xml.js).
  *
- * WhatsApp, Facebook, X… ne lancent pas le JavaScript du site : sans ce Worker,
- * tout lien partagé affiche l'aperçu générique de Babipass. Ici, pour les pages
- * /event/:slug, /collecte/:slug et /tournoi/:slug, on renvoie le même index.html
- * avec le titre, la description et l'affiche de la page, plus les données
- * structurées « Event » pour Google. /sitemap.xml est généré à partir de la base.
+ * WhatsApp, Facebook, X… ne lancent pas le JavaScript du site : sans cela, tout
+ * lien partagé affiche l'aperçu générique de Babipass. Pour les pages événement,
+ * cagnotte et tournoi, on renvoie le même index.html avec le titre, la
+ * description et l'affiche de la page, plus les données structurées « Event »
+ * pour Google. /sitemap.xml est généré à partir de la base.
  *
  * Règle d'or : si quoi que ce soit échoue (API lente, page inconnue), on sert
- * l'index.html normal. Le Worker ne doit jamais empêcher le site de s'afficher.
+ * l'index.html normal. Ce code ne doit jamais empêcher le site de s'afficher.
  */
 
 const SITE = 'https://babipass.com';
@@ -17,39 +19,58 @@ const META_TIMEOUT_MS = 1500;
 const META_CACHE_S = 300;
 const SITEMAP_CACHE_S = 3600;
 
-const PAGE_RE = /^\/(event|collecte|tournoi)\/([^/]+)\/?$/;
-
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    if (url.pathname === '/sitemap.xml') {
-      return sitemap(env, ctx).catch(() => env.ASSETS.fetch(request));
-    }
-
-    const match = url.pathname.match(PAGE_RE);
-    if (!match || request.method !== 'GET') return env.ASSETS.fetch(request);
-
-    // index.html de l'application (la page elle-même est rendue par React).
-    const shell = await env.ASSETS.fetch(new Request(new URL('/', url), request));
-    if (!shell.ok || !(shell.headers.get('content-type') || '').includes('text/html')) return shell;
-
-    let meta = null;
-    try {
-      const slug = decodeURIComponent(match[2]).slice(0, 200);
-      meta = await withTimeout(loadMeta(match[1], slug, env, ctx), META_TIMEOUT_MS);
-    } catch {
-      meta = null;
-    }
-    if (!meta) return shell;
-
-    meta.url = `${SITE}${url.pathname.replace(/\/$/, '')}`;
-    const response = rewrite(shell, meta);
-    const headers = new Headers(response.headers);
-    headers.set('Cache-Control', 'no-cache'); // comme index.html : toujours la dernière version du site
-    return new Response(response.body, { status: 200, headers });
-  },
+// Valeurs publiques (déjà présentes dans le code du site) ; surchargeables par
+// les variables d'environnement du projet Pages.
+const DEFAULTS = {
+  API_URL: 'https://api.babipass.com',
+  SUPABASE_URL: 'https://supabasekong-pb8ykq5lxueompxiu9p5ust2.51.255.162.88.sslip.io',
+  // Clé « anon » publique : lecture de ce que tout visiteur peut voir (RLS).
+  SUPABASE_ANON_KEY: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4MzUxNDgyMCwiZXhwIjo0OTM5MTg4NDIwLCJyb2xlIjoiYW5vbiJ9.Jckb-tWy6_BmNXv1VJswhBxcxdIlpFiD5rl4GZKC_Ec',
 };
+
+function config(env) {
+  return {
+    API_URL: env?.API_URL || DEFAULTS.API_URL,
+    SUPABASE_URL: env?.SUPABASE_URL || DEFAULTS.SUPABASE_URL,
+    SUPABASE_ANON_KEY: env?.SUPABASE_ANON_KEY || DEFAULTS.SUPABASE_ANON_KEY,
+  };
+}
+
+/** Page événement / cagnotte / tournoi : index.html enrichi pour le partage. */
+export async function sharePage(kind, context) {
+  const { request, env } = context;
+  const ctx = { waitUntil: (p) => context.waitUntil(p) };
+  const url = new URL(request.url);
+
+  // index.html de l'application (la page elle-même est rendue par React).
+  const shell = await env.ASSETS.fetch(new Request(new URL('/', url), request));
+  if (!shell.ok || !(shell.headers.get('content-type') || '').includes('text/html')) return shell;
+
+  let meta = null;
+  try {
+    const slug = decodeURIComponent(String(context.params.slug || '')).slice(0, 200);
+    meta = slug ? await withTimeout(loadMeta(kind, slug, config(env), ctx), META_TIMEOUT_MS) : null;
+  } catch {
+    meta = null;
+  }
+  if (!meta) return shell;
+
+  meta.url = `${SITE}${url.pathname.replace(/\/$/, '')}`;
+  const response = rewrite(shell, meta);
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-cache'); // comme index.html : toujours la dernière version du site
+  return new Response(response.body, { status: 200, headers });
+}
+
+/** /sitemap.xml généré à partir de la base. */
+export async function sitemapResponse(context) {
+  const ctx = { waitUntil: (p) => context.waitUntil(p) };
+  try {
+    return await sitemap(config(context.env), ctx);
+  } catch {
+    return new Response('Sitemap temporairement indisponible', { status: 503, headers: { 'Retry-After': '300' } });
+  }
+}
 
 // ─── Données de la page ─────────────────────────────────────────────────────
 async function loadMeta(kind, slug, env, ctx) {
