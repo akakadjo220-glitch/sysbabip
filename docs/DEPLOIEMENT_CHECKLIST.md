@@ -10,7 +10,7 @@ nouvelles fonctions SQL, et l'ancien site ne fonctionne plus une fois les accès
 Le déploiement se fait donc en **une fenêtre de maintenance** (site fermé 30 à 60 min) :
 
 ```
-sauvegarde → précontrôle → 7 migrations → post-contrôle → serveur (API + worker) → site → tests → réouverture
+sauvegarde → précontrôle → 8 migrations → post-contrôle → serveur (API + worker) → site → tests → réouverture
 ```
 
 Retour arrière possible **tant que le site n'est pas rouvert** (§ 8).
@@ -116,8 +116,9 @@ pg_dump --format=custom --no-owner "$DATABASE_URL" > babipass_avant_deploiement_
 | 6 | `20261016_phase3_reads.sql` | Index, compteurs de vues répartis, statistiques en SQL | **minutes si grosses tables** | voir note ci-dessous |
 | — | *(phase 4 : pas de migration)* | — | — | — |
 | 7 | `20261017_phase5_archive.sql` | Schéma `archive`, archivage (inactif tant que `ARCHIVE_ENABLED=false`) | secondes | — |
+| 8 | `20261018_close_remaining_open_policies.sql` | Ferme les dernières policies ouvertes relevées en base : `transactions`, `agents` (PIN), `payout_settings` illisibles par les anonymes ; avis et liens d'affiliation non modifiables par le public | secondes | `NOTICE` : liste des policies supprimées |
 
-- [ ] Migration 1 OK  - [ ] 2 OK  - [ ] 3 OK  - [ ] 4 OK  - [ ] 5 OK  - [ ] 6 OK  - [ ] 7 OK
+- [ ] Migration 1 OK  - [ ] 2 OK  - [ ] 3 OK  - [ ] 4 OK  - [ ] 5 OK  - [ ] 6 OK  - [ ] 7 OK  - [ ] 8 OK
 
 **Note migration 6** : si `tickets` ou `transactions` dépassent quelques millions de lignes, créer
 d'abord les index un par un avec `CREATE INDEX CONCURRENTLY …` (hors transaction, mêmes noms que

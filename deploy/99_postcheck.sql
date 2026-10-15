@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- CONTRÔLE APRÈS MIGRATION — LECTURE SEULE (ne modifie rien)
 -- ═══════════════════════════════════════════════════════════════════════════
--- À exécuter après les 7 migrations. Toutes les lignes doivent afficher ok = true.
+-- À exécuter après les 8 migrations. Toutes les lignes doivent afficher ok = true.
 -- La première colonne indique la phase concernée en cas d'échec.
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -34,6 +34,25 @@ server_only(f) AS (VALUES
   ('queue_claim'), ('rate_limit_reset'), ('rollup_counters'), ('archive_due_events'), ('restore_event')
 ),
 checks AS (
+  -- Complément 20261018 : plus aucun accès anonyme ni policy ouverte sur ces tables
+  SELECT 'compl' AS phase, 'anon sans droit sur ' || t AS controle,
+         NOT (has_table_privilege('anon', 'public.' || t, 'SELECT')
+              OR has_table_privilege('anon', 'public.' || t, 'INSERT')
+              OR has_table_privilege('anon', 'public.' || t, 'UPDATE')
+              OR has_table_privilege('anon', 'public.' || t, 'DELETE')) AS ok
+  FROM unnest(ARRAY['transactions', 'agents', 'payout_settings']) AS t
+  WHERE to_regclass('public.' || t) IS NOT NULL
+  UNION ALL
+  SELECT 'compl', 'aucune policy ouverte sur transactions / agents / payout_settings',
+         NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                     AND tablename IN ('transactions', 'agents', 'payout_settings')
+                     AND (coalesce(qual, '') = 'true' OR coalesce(with_check, '') = 'true'))
+  UNION ALL
+  SELECT 'compl', 'aucune écriture publique sur reviews / affiliate_links',
+         NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                     AND tablename IN ('reviews', 'affiliate_links') AND cmd IN ('UPDATE', 'DELETE', 'ALL')
+                     AND (coalesce(qual, '') = 'true' OR coalesce(with_check, '') = 'true'))
+  UNION ALL
   SELECT phase, 'fonction ' || f || ' présente' AS controle,
          EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                  WHERE n.nspname = 'public' AND p.proname = f) AS ok
