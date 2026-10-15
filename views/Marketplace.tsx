@@ -470,7 +470,11 @@ export const Marketplace: React.FC = () => {
 
 // --- Sub Components ---
 
-const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ event, onClick }) => {
+export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ event, onClick }) => {
+  // Stock affiché seulement s'il est connu ; un événement passé n'invite plus à réserver.
+  const sold = Number((event as any).sold) || 0;
+  const capacity = Number((event as any).capacity) || 0;
+  const ended = (event as any).status === 'completed' || new Date(event.date).getTime() < Date.now();
   const [viewCount, setViewCount] = useState<number>(0);
   const [rating, setRating] = useState<number>(0);
   const [reviewCount, setReviewCount] = useState<number>(0);
@@ -559,16 +563,22 @@ const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ event, onC
             </div>
           </div>
 
-          <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2 mt-4 overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-orange-500 to-cyan-400 h-1.5 rounded-full"
-              style={{ width: `${(event.sold / event.capacity) * 100}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-slate-500 mb-4">
-            <span>{event.sold} vendus</span>
-            <span className="text-orange-400 font-medium">Reste {event.capacity - event.sold}</span>
-          </div>
+          {ended ? (
+            <p className="text-xs text-slate-500 mt-4 mb-4">Événement terminé{sold > 0 ? ` · ${sold} billets vendus` : ''}</p>
+          ) : capacity > 0 ? (
+            <>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2 mt-4 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-orange-500 to-cyan-400 h-1.5 rounded-full"
+                  style={{ width: `${Math.min(100, (sold / capacity) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-slate-500 mb-4">
+                <span>{sold} vendus</span>
+                <span className="text-orange-400 font-medium">Reste {Math.max(0, capacity - sold)}</span>
+              </div>
+            </>
+          ) : <div className="mb-4" />}
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t border-slate-700/50 mt-auto">
@@ -579,7 +589,7 @@ const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ event, onC
             </div>
           </div>
           <button className="px-4 py-2 bg-white/5 hover:bg-orange-600 border border-white/10 hover:border-orange-600 text-white rounded-lg text-sm font-medium transition-all group-hover:bg-orange-600 group-hover:border-orange-600">
-            Réserver
+            {ended ? 'Voir' : 'Réserver'}
           </button>
         </div>
       </div>

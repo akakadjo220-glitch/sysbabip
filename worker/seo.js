@@ -89,6 +89,23 @@ async function loadMeta(kind, slug, env, ctx) {
       type: 'website',
     } : null;
   }
+  if (kind === 'organisateur') {
+    if (!/^[0-9a-f-]{36}$/i.test(slug)) return null;
+    const [rows, upcoming] = await Promise.all([
+      supabaseGet(env, ctx, `organizer_public_profiles?id=eq.${slug}&select=name,company,avatar&limit=1`),
+      supabaseGet(env, ctx, `events?organizer_id=eq.${slug}&status=eq.published&select=id&limit=50`).catch(() => []),
+    ]);
+    const o = rows?.[0];
+    if (!o) return null;
+    const name = o.company || o.name || 'Organisateur';
+    const n = Array.isArray(upcoming) ? upcoming.length : 0;
+    return {
+      title: `Événements de ${name} | Babipass`,
+      description: `${n > 0 ? `${n} événement${n > 1 ? 's' : ''} à venir` : 'Prochains événements bientôt'} — billets en ligne de ${name}, paiement Wave, Orange Money, MTN, carte.`,
+      image: imageOrDefault(o.avatar),
+      type: 'profile',
+    };
+  }
   if (kind === 'tournoi') {
     const rows = await supabaseGet(env, ctx,
       `tournaments?slug=eq.${encodeURIComponent(slug)}&select=name,description,logo_url,start_date&limit=1`);
@@ -191,7 +208,7 @@ async function sitemap(env, ctx) {
   if (hit) return hit;
 
   const [events, campaigns, tournaments] = await Promise.all([
-    supabaseGet(env, ctx, 'events?status=in.(published,completed)&select=slug,id,date,status&order=date.desc&limit=5000'),
+    supabaseGet(env, ctx, 'events?status=in.(published,completed)&select=slug,id,date,status,organizer_id&order=date.desc&limit=5000'),
     supabaseGet(env, ctx, 'fundraising_campaigns?status=eq.active&select=slug,created_at&limit=2000').catch(() => []),
     supabaseGet(env, ctx, 'tournaments?select=slug,start_date&limit=2000').catch(() => []),
   ]);
@@ -203,6 +220,9 @@ async function sitemap(env, ctx) {
       loc: `${SITE}/event/${encodeURIComponent(e.slug || e.id)}`,
       changefreq: e.status === 'published' ? 'daily' : 'monthly',
       priority: e.status === 'published' ? '0.9' : '0.4',
+    })),
+    ...[...new Set((events || []).map(e => e.organizer_id).filter(Boolean))].map(id => ({
+      loc: `${SITE}/organisateur/${id}`, changefreq: 'weekly', priority: '0.6',
     })),
     ...(campaigns || []).filter(c => c.slug).map(c => ({ loc: `${SITE}/collecte/${encodeURIComponent(c.slug)}`, changefreq: 'daily', priority: '0.7' })),
     ...(tournaments || []).filter(t => t.slug).map(t => ({ loc: `${SITE}/tournoi/${encodeURIComponent(t.slug)}`, changefreq: 'weekly', priority: '0.7' })),

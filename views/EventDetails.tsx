@@ -22,7 +22,7 @@ import { StadiumMap } from '../components/StadiumMap';
 import {
   Calendar, MapPin, Clock, ArrowLeft, Share2, Heart,
   Info, ShieldCheck, Ticket, CheckCircle, Smartphone, CreditCard,
-  Download, QrCode, Mail, Link, X, Copy, Facebook, Twitter, Linkedin, Loader2, WifiOff, AlertTriangle, Timer, ShieldAlert, Banknote, Flame, Zap, Users, Phone, Star, Eye
+  Download, QrCode, Mail, Link, X, Copy, Facebook, Twitter, MessageCircle, Loader2, WifiOff, AlertTriangle, Timer, ShieldAlert, Banknote, Flame, Zap, Users, Phone, Star, Eye
 } from 'lucide-react';
 
 // Anti-Fraud Constants
@@ -370,8 +370,8 @@ export const EventDetails: React.FC = () => {
 
     const shareData = {
       title: event.title,
-      text: `Découvrez l'événement ${event.title} sur Babipass !`,
-      url: window.location.href
+      text: eventShareText(event),
+      url: eventShareUrl(event)
     };
 
     // Use Native Share API if available (Mobile)
@@ -462,6 +462,19 @@ export const EventDetails: React.FC = () => {
       >
         <Share2 size={24} />
       </button>
+      {/* Partage WhatsApp direct : le canal n°1 pour faire venir ses amis */}
+      {event && (
+        <a
+          href={whatsappShareLink(event)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed top-36 right-4 z-40 bg-[#25D366] p-3 rounded-full text-white hover:scale-110 transition-transform shadow-lg shadow-black/40"
+          title="Partager sur WhatsApp"
+          aria-label="Partager sur WhatsApp"
+        >
+          <MessageCircle size={24} />
+        </a>
+      )}
 
       {/* Hero Section */}
       <div className="relative h-[60vh] w-full overflow-hidden bg-slate-900">
@@ -510,6 +523,18 @@ export const EventDetails: React.FC = () => {
               <span>{event.location}, {event.city}</span>
             </div>
           </div>
+          {/* Organisateur : lien vers tous ses événements */}
+          {(event as any).organizer_id && ((event as any).profiles?.company || (event as any).profiles?.name) && (
+            <button
+              onClick={() => navigate(`/organisateur/${(event as any).organizer_id}`)}
+              className="mt-4 inline-flex items-center gap-2 text-sm text-slate-200 hover:text-orange-300 transition-colors"
+            >
+              {(event as any).profiles?.avatar
+                ? <img src={(event as any).profiles.avatar} alt="" className="w-7 h-7 rounded-full object-cover border border-white/20" />
+                : <Users size={18} className="text-orange-400" />}
+              <span>Organisé par <strong className="font-bold">{(event as any).profiles?.company || (event as any).profiles?.name}</strong> · voir ses événements →</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1305,14 +1330,28 @@ const EventDetailsSkeleton: React.FC = () => (
   </div>
 );
 
+// Lien propre de l'événement (c'est lui qui donne le bel aperçu WhatsApp / Facebook).
+const eventShareUrl = (event: Event) => `https://babipass.com/event/${encodeURIComponent((event as any).slug || event.id)}`;
+const eventShareText = (event: Event) => `🎟️ ${event.title} — billets disponibles sur Babipass`;
+const whatsappShareLink = (event: Event) =>
+  `https://wa.me/?text=${encodeURIComponent(`${eventShareText(event)}\n${eventShareUrl(event)}`)}`;
+
 const ShareModal: React.FC<{ event: Event | null; onClose: () => void }> = ({ event, onClose }) => {
+  const [copied, setCopied] = useState(false);
   if (!event) return null;
 
-  const shareUrl = window.location.href;
+  const shareUrl = eventShareUrl(event);
+  const text = eventShareText(event);
+  const open = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(shareUrl);
-    alert('Lien copié !');
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('Copiez ce lien :', shareUrl);
+    }
   };
 
   return (
@@ -1328,36 +1367,36 @@ const ShareModal: React.FC<{ event: Event | null; onClose: () => void }> = ({ ev
         <h3 className="text-xl font-bold text-white mb-6">Partager cet événement</h3>
 
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <button className="flex flex-col items-center gap-2 group">
+          <button onClick={() => open(whatsappShareLink(event))} className="flex flex-col items-center gap-2 group">
+            <div className="w-12 h-12 rounded-full bg-[#25D366]/20 text-[#25D366] flex items-center justify-center group-hover:bg-[#25D366] group-hover:text-white transition-colors">
+              <MessageCircle size={20} />
+            </div>
+            <span className="text-xs text-slate-400">WhatsApp</span>
+          </button>
+          <button onClick={() => open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`)} className="flex flex-col items-center gap-2 group">
             <div className="w-12 h-12 rounded-full bg-[#1877F2]/20 text-[#1877F2] flex items-center justify-center group-hover:bg-[#1877F2] group-hover:text-white transition-colors">
               <Facebook size={20} />
             </div>
             <span className="text-xs text-slate-400">Facebook</span>
           </button>
-          <button className="flex flex-col items-center gap-2 group">
-            <div className="w-12 h-12 rounded-full bg-[#1DA1F2]/20 text-[#1DA1F2] flex items-center justify-center group-hover:bg-[#1DA1F2] group-hover:text-white transition-colors">
+          <button onClick={() => open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`)} className="flex flex-col items-center gap-2 group">
+            <div className="w-12 h-12 rounded-full bg-slate-700 text-slate-200 flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
               <Twitter size={20} />
             </div>
-            <span className="text-xs text-slate-400">Twitter</span>
-          </button>
-          <button className="flex flex-col items-center gap-2 group">
-            <div className="w-12 h-12 rounded-full bg-[#0A66C2]/20 text-[#0A66C2] flex items-center justify-center group-hover:bg-[#0A66C2] group-hover:text-white transition-colors">
-              <Linkedin size={20} />
-            </div>
-            <span className="text-xs text-slate-400">LinkedIn</span>
+            <span className="text-xs text-slate-400">X</span>
           </button>
           <button onClick={copyToClipboard} className="flex flex-col items-center gap-2 group">
             <div className="w-12 h-12 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
               <Copy size={20} />
             </div>
-            <span className="text-xs text-slate-400">Copier</span>
+            <span className="text-xs text-slate-400">{copied ? 'Copié ✓' : 'Copier'}</span>
           </button>
         </div>
 
         <div className="bg-slate-900 rounded-lg p-3 flex items-center justify-between border border-white/5">
           <span className="text-slate-400 text-xs truncate max-w-[200px]">{shareUrl}</span>
           <button onClick={copyToClipboard} className="text-orange-400 text-xs font-bold hover:text-orange-300">
-            Copier
+            {copied ? 'Lien copié ✓' : 'Copier'}
           </button>
         </div>
       </div>

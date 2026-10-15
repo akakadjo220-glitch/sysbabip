@@ -1,0 +1,17 @@
+{
+  "name": "Babipass — Billetterie",
+  "short_name": "Babipass",
+  "description": "Vos billets de concerts, festivals et matchs, même sans connexion.",
+  "lang": "fr",
+  "start_url": "/?source=app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "https://insforgeinst.site/images/2026/07/09/log-babipass.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Mes billets", "url": "/tickets" }
+  ]
+}

@@ -14,6 +14,7 @@ const EventDetails = lazyNamed(() => import('./views/EventDetails'), 'EventDetai
 const MyTickets = lazyNamed(() => import('./views/MyTickets'), 'MyTickets');
 const FundraisingPage = lazyNamed(() => import('./views/FundraisingPage'), 'FundraisingPage');
 const TournamentPage = lazyNamed(() => import('./views/TournamentPage'), 'TournamentPage');
+const OrganizerPublicPage = lazyNamed(() => import('./views/OrganizerPublicPage'), 'OrganizerPublicPage');
 const About = lazyNamed(() => import('./views/About'), 'About');
 const FAQ = lazyNamed(() => import('./views/FAQ'), 'FAQ');
 const Privacy = lazyNamed(() => import('./views/Privacy'), 'Privacy');
@@ -123,6 +124,7 @@ const AppContent: React.FC = () => {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/tournoi/:slug" element={<TournamentPage />} />
+          <Route path="/organisateur/:id" element={<OrganizerPublicPage />} />
 
           <Route path="/organizer/login" element={<OrganizerLogin />} />
           <Route path="/sysbap/login" element={<AdminLogin />} />
