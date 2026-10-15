@@ -36,3 +36,6 @@ didit_logs*.json
 *.bak-phase0
 test_out.txt
 logo_base64.txt
+
+# Cloudflare Wrangler (fichiers locaux)
+.wrangler/
