@@ -10,6 +10,7 @@ import { AdCarousel } from '../components/AdCarousel';
 import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, List, SlidersHorizontal, ChevronLeft, ChevronRight, Globe, Loader2, Banknote, ShieldCheck, Ticket, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { lazyNamed } from '../utils/lazyPage';
+import { detectCountry } from '../utils/detectCountry';
 
 // La carte (Mapbox, ~460 Ko) n'est téléchargée que si le visiteur ouvre la vue « Carte ».
 const PublicMap = lazyNamed(() => import('../components/PublicMap'), 'PublicMap');
@@ -135,9 +136,43 @@ export const Marketplace: React.FC = () => {
     setCurrentPage(1);
   }, [searchTerm, selectedCategory, cityFilter, userCountry]);
 
-  // If no country is selected, show the selector
+  // Première visite : pas d'écran de choix, le pays est détecté (Cloudflare) ;
+  // le visiteur peut toujours en changer via le bouton du pays.
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  useEffect(() => {
+    if (authLoading || userCountry) return;
+    let cancelled = false;
+    detectCountry().then(country => { if (!cancelled) setUserCountry(country); });
+    return () => { cancelled = true; };
+  }, [authLoading, userCountry]);
+
+  // Chiffre réel affiché à la place d'un slogan.
+  const [ticketsIssued, setTicketsIssued] = useState(0);
+  useEffect(() => {
+    CatalogService.ticketsIssued().then(setTicketsIssued).catch(() => setTicketsIssued(0));
+  }, []);
+
+  // Accueil jamais vide : sans événement à venir, on montre les derniers temps forts.
+  const [highlights, setHighlights] = useState<Event[]>([]);
+  const noFilters = selectedCategory === 'Tous' && cityFilter === 'Tous' && !debouncedSearch;
+  useEffect(() => {
+    if (loading || !userCountry || totalEvents > 0 || !noFilters) return;
+    CatalogService.highlights(userCountry).then(setHighlights).catch(() => setHighlights([]));
+  }, [loading, userCountry, totalEvents, noFilters]);
+
+  // Catégories : les 5 premières visibles, les autres derrière « Plus ».
+  const [showAllCategories, setShowAllCategories] = useState(false);
+
+  if (showCountryPicker) {
+    return <CountrySelector onSelect={(country) => { setUserCountry(country); setShowCountryPicker(false); }} />;
+  }
+
   if (!userCountry) {
-    return <CountrySelector onSelect={setUserCountry} />;
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-orange-500" size={40} />
+      </div>
+    );
   }
 
   // Filtres (pays, catégorie, ville, recherche) et pagination faits par le serveur.
@@ -168,11 +203,14 @@ export const Marketplace: React.FC = () => {
       <section className="relative flex flex-col gap-4 animate-in slide-in-from-bottom-4 fade-in duration-700 mt-2">
         {/* Top Pills */}
         <div className="flex flex-wrap items-center gap-2 md:gap-3 px-2 z-20 pt-2 md:pt-8">
-          <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-300 text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md">
-            La billetterie #1 en Afrique
-          </div>
+          {ticketsIssued >= 1000 && (
+            <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-300 text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md">
+              +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis
+            </div>
+          )}
           <button
-            onClick={() => setUserCountry('')}
+            onClick={() => setShowCountryPicker(true)}
+            title="Changer de pays"
             className="inline-flex items-center gap-1.5 md:gap-2 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-colors"
           >
             <Globe size={12} />
@@ -191,11 +229,6 @@ export const Marketplace: React.FC = () => {
             <Ticket size={12} />
             Mes Billets
           </button>
-        </div>
-
-        {/* The Carousel */}
-        <div className="w-full shadow-2xl relative z-10">
-          <AdCarousel />
         </div>
 
         {/* Floating Search Dock (Below Carousel) */}
@@ -232,7 +265,10 @@ export const Marketplace: React.FC = () => {
       {/* Control Bar */}
       <div className="sticky top-0 z-30 py-3 md:py-4 bg-[#0f172a]/95 backdrop-blur-xl border-b border-white/10 -mx-4 px-4 md:mx-0 md:px-0 md:rounded-xl md:border-none md:bg-transparent md:backdrop-blur-none flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl md:shadow-none">
         <nav aria-label="Catégories d'événements" className="flex overflow-x-auto pb-2 md:pb-0 gap-2 w-full md:w-auto no-scrollbar mask-gradient snap-x">
-        {categories.map((cat) => {
+        {(showAllCategories
+            ? categories
+            : [...categories.slice(0, 6), ...(categories.indexOf(selectedCategory) >= 6 ? [selectedCategory] : [])]
+          ).map((cat) => {
             const SPORT_ICONS: Record<string, string> = {
               'Football': '⚽', 'Basketball': '🏀', 'Rugby': '🏉',
               'Athlétisme': '🏃', 'Sport': '🏆', 'Concert': '🎵',
@@ -254,6 +290,14 @@ export const Marketplace: React.FC = () => {
               </button>
             );
           })}
+          {categories.length > 6 && (
+            <button
+              onClick={() => setShowAllCategories(v => !v)}
+              className="snap-start px-4 md:px-5 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-bold whitespace-nowrap bg-slate-800/50 text-orange-300 hover:bg-slate-700 hover:text-white border border-slate-700 transition-all"
+            >
+              {showAllCategories ? 'Moins' : `Plus (${categories.length - 6})`}
+            </button>
+          )}
         </nav>
 
         <div className="flex items-center gap-3 w-full md:w-auto bg-slate-800/50 p-1 rounded-xl border border-slate-700">
@@ -303,9 +347,28 @@ export const Marketplace: React.FC = () => {
             ))}
           </div>
 
-          {!loading && totalEvents === 0 && (
+          {!loading && totalEvents === 0 && (noFilters && highlights.length > 0 ? (
+            <div className="space-y-6">
+              <div className="text-center max-w-2xl mx-auto py-6">
+                <h2 className="text-2xl md:text-3xl font-black text-white">De nouveaux événements arrivent bientôt</h2>
+                <p className="text-slate-400 mt-2">
+                  En attendant, revivez les derniers temps forts vécus avec Babipass.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                {highlights.map(event => (
+                  <div key={event.id} className="relative opacity-90 hover:opacity-100 transition-opacity">
+                    <span className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-full bg-slate-900/90 border border-white/15 text-[10px] font-bold uppercase tracking-widest text-slate-200">
+                      Terminé
+                    </span>
+                    <EventCard event={event} onClick={() => navigate(`/event/${event.slug || event.id}`)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
             <EmptyState userCountry={userCountry} />
-          )}
+          ))}
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
@@ -348,6 +411,11 @@ export const Marketplace: React.FC = () => {
           <PublicMap events={mapEvents} />
         </Suspense>
       )}
+
+      {/* Publicité : après les événements, jamais avant (le contenu d'abord). */}
+      <div className="w-full shadow-2xl relative z-10 mt-16">
+        <AdCarousel />
+      </div>
 
       {/* 🚀 Section d'Autorité SEO & Indexation Google / IA (Modèle Sitelinks Jumia) */}
       <section aria-label="À propos de Babipass" className="mt-20 pt-10 border-t border-white/10 text-slate-400 text-xs md:text-sm">

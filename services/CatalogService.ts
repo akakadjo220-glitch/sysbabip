@@ -49,6 +49,18 @@ export const CatalogService = {
     return { ...data, events: (data.events || []).map(withTicketTypes) };
   },
 
+  /** Derniers événements terminés (accueil sans événement à venir). */
+  async highlights(country: string): Promise<any[]> {
+    const data = await getJson(`/api/public/highlights?country=${encodeURIComponent(country)}`);
+    return (data.events || []).map(withTicketTypes);
+  },
+
+  /** Nombre de billets émis sur la plateforme (chiffre public, mis en cache). */
+  async ticketsIssued(): Promise<number> {
+    const data = await getJson('/api/public/stats');
+    return Number(data.tickets_issued) || 0;
+  },
+
   async mapEvents(country: string): Promise<any[]> {
     const data = await getJson(`/api/public/events-map?country=${encodeURIComponent(country)}`);
     return (data.events || []).map(withTicketTypes);
