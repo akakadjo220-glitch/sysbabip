@@ -14,6 +14,7 @@ import { SEO } from '../components/SEO';
 import { generateEventSEO } from '../utils/seoEngine';
 import { lazyNamed } from '../utils/lazyPage';
 import { loadPaystack } from '../utils/loadPaystack';
+import { paymentOptionsFor, approximateLocation } from '../utils/paymentOptions';
 
 // Carte et PDF chargés à la demande : la page et le bouton d'achat s'affichent d'abord.
 const EventLocationMap = lazyNamed(() => import('../components/EventLocationMap'), 'EventLocationMap');
@@ -1374,7 +1375,11 @@ const CheckoutModal: React.FC<{
   onClose: (completed?: boolean) => void
 }> = ({ total, eventName, eventData, cart, participantName, setParticipantName, onClose }) => {
   const eId = eventData.id;
-  const [step, setStep] = useState<any>(() => sessionStorage.getItem(`checkout_step_${eId}`) || 'auth');
+  const [step, setStep] = useState<any>(() => {
+    const saved = sessionStorage.getItem(`checkout_step_${eId}`) || 'auth';
+    return saved.startsWith('pay_') ? 'method' : saved;
+  });
+  const [error, setError] = useState('');
   const [contactMethod, setContactMethod] = useState<'wa' | 'email'>(() => (sessionStorage.getItem(`checkout_method_${eId}`) as any) || 'wa');
   const [contactValue, setContactValue] = useState(() => sessionStorage.getItem(`checkout_contact_${eId}`) || '');
   const [paymentMode, setPaymentMode] = useState<'full' | 'installment'>(() => (sessionStorage.getItem(`checkout_mode_${eId}`) as any) || 'full');
@@ -1410,106 +1415,38 @@ const CheckoutModal: React.FC<{
     };
     loadToggles();
 
-    // Capturer la localisation PRÉCISE de l'acheteur (GPS/WiFi > IP fallback)
-    const fetchLocation = async () => {
-      // 1. Essayer la Geolocation du navigateur (précision GPS/WiFi réelle)
-      if (navigator.geolocation) {
-        try {
-          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: false, // WiFi/Cell suffisant, pas besoin du GPS fin
-              timeout: 8000,
-              maximumAge: 300000 // Cache 5 min pour éviter les re-prompts
-            });
-          });
-
-          const { latitude, longitude } = position.coords;
-          let city = 'Inconnu';
-          let country = 'Inconnu';
-
-          // Reverse-geocode léger pour obtenir ville/pays
-          try {
-            const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=fr`, {
-              headers: { 'User-Agent': 'Babipass/1.0' }
-            });
-            if (geoRes.ok) {
-              const geoData = await geoRes.json();
-              city = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.municipality || 'Inconnu';
-              country = geoData.address?.country || 'Inconnu';
-            }
-          } catch (_) { /* reverse-geocode failed, keep defaults */ }
-
-          setBuyerLocation({ lat: latitude, lng: longitude, city, country });
-          return; // Succès, pas besoin du fallback IP
-        } catch (_) {
-          // L'utilisateur a refusé ou timeout → on tombe sur le fallback IP
-        }
-      }
-
-      // 2. Fallback IP (si geolocation refusée ou non supportée)
-      const isLocal = window.location.hostname === 'localhost' || 
-                    window.location.hostname === '127.0.0.1' || 
-                    window.location.hostname.startsWith('192.168.');
-      if (isLocal) return;
-
-      try {
-        const res1 = await fetch('https://ipwho.is/');
-        if (res1.ok) {
-          const data1 = await res1.json();
-          if (data1.success && data1.latitude) {
-            setBuyerLocation({ lat: data1.latitude, lng: data1.longitude, city: data1.city, country: data1.country });
-            return;
-          }
-        }
-      } catch (_) { /* silent */ }
-
-      try {
-        const res2 = await fetch('https://freeipapi.com/api/json');
-        if (res2.ok) {
-          const data2 = await res2.json();
-          if (data2.latitude) {
-            setBuyerLocation({ lat: data2.latitude, lng: data2.longitude, city: data2.cityName, country: data2.countryName });
-          }
-        }
-      } catch (_) { /* silent */ }
-    };
-    fetchLocation();
+    // Pays et position approximatifs (Cloudflare) : aucune demande d'autorisation
+    // au moment de payer, aucun service tiers.
+    approximateLocation().then(({ countryCode, location }) => {
+      if (countryCode && PAYMENT_ROUTING[countryCode]) setVisitorCountryCode(countryCode);
+      if (location) setBuyerLocation(location);
+    });
   }, []);
 
-  // Custom Payment Form States
-  const [momoPhone, setMomoPhone] = useState(() => sessionStorage.getItem(`checkout_momo_phone_${eId}`) || '');
-  const [momoNetwork, setMomoNetwork] = useState(() => sessionStorage.getItem(`checkout_momo_net_${eId}`) || 'ORANGE_CI');
-  const [feexpayPhone, setFeexpayPhone] = useState(() => sessionStorage.getItem(`checkout_feex_phone_${eId}`) || '');
-  const [feexpayNetwork, setFeexpayNetwork] = useState(() => sessionStorage.getItem(`checkout_feex_net_${eId}`) || 'MTN_BJ');
-  const [intouchPhone, setIntouchPhone] = useState(() => sessionStorage.getItem(`checkout_intouch_phone_${eId}`) || '');
-  const [intouchNetwork, setIntouchNetwork] = useState(() => sessionStorage.getItem(`checkout_intouch_net_${eId}`) || 'ORANGE_SN');
-  const [paydunyaPhone, setPaydunyaPhone] = useState(() => sessionStorage.getItem(`checkout_paydunya_phone_${eId}`) || '');
-  const [paydunyaNetwork, setPaydunyaNetwork] = useState(() => sessionStorage.getItem(`checkout_paydunya_net_${eId}`) || 'orange-money-senegal');
-  const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '' });
-
-  // Persistence for internal form states
+  // Moyen de paiement choisi et numéro qui paie (prérempli avec le numéro WhatsApp).
+  const [selectedOption, setSelectedOption] = useState(() => sessionStorage.getItem(`checkout_option_${eId}`) || '');
+  const [payPhone, setPayPhone] = useState(() => sessionStorage.getItem(`checkout_pay_phone_${eId}`) || '');
   useEffect(() => {
-    sessionStorage.setItem(`checkout_momo_phone_${eId}`, momoPhone);
-    sessionStorage.setItem(`checkout_momo_net_${eId}`, momoNetwork);
-    sessionStorage.setItem(`checkout_feex_phone_${eId}`, feexpayPhone);
-    sessionStorage.setItem(`checkout_feex_net_${eId}`, feexpayNetwork);
-    sessionStorage.setItem(`checkout_intouch_phone_${eId}`, intouchPhone);
-    sessionStorage.setItem(`checkout_intouch_net_${eId}`, intouchNetwork);
-    sessionStorage.setItem(`checkout_paydunya_phone_${eId}`, paydunyaPhone);
-    sessionStorage.setItem(`checkout_paydunya_net_${eId}`, paydunyaNetwork);
-  }, [eId, momoPhone, momoNetwork, feexpayPhone, feexpayNetwork, intouchPhone, intouchNetwork, paydunyaPhone, paydunyaNetwork]);
+    sessionStorage.setItem(`checkout_option_${eId}`, selectedOption);
+    sessionStorage.setItem(`checkout_pay_phone_${eId}`, payPhone);
+  }, [eId, selectedOption, payPhone]);
 
   const navigate = useNavigate();
 
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (!contactValue || contactValue.trim() === '') {
-      alert("Veuillez entrer un contact valide.");
+      setError("Indiquez votre numéro WhatsApp ou votre e-mail pour recevoir le billet.");
       return;
     }
 
     // Concaténer l'indicatif si c'est un numéro WhatsApp qui ne commence pas déjà par un +
     let finalContact = contactValue.trim().replace(/\s/g, ''); // Nettoyer les espaces
+    if (contactMethod === 'wa' && !payPhone && !finalContact.startsWith('+')) {
+      // Le même numéro sert par défaut à payer (modifiable à l'étape suivante).
+      setPayPhone(finalContact.replace(/[^0-9]/g, ''));
+    }
     if (contactMethod === 'wa' && !finalContact.startsWith('+')) {
       const dialCode = (visitorCountry?.dialCode || '+225').replace('+', '');
       // Pour la CI (10 chiffres), on garde le 0 initial car il fait partie du préfixe opérateur (01, 05, 07, etc.)
@@ -1598,13 +1535,13 @@ const CheckoutModal: React.FC<{
       return;
     }
     if (result.status === 'pending') {
-      alert(`Paiement pas encore confirmé (réf. ${ref}). Si vous l'avez validé sur votre téléphone, vos billets vous seront envoyés automatiquement dès confirmation.`);
+      setError(`Paiement pas encore confirmé (réf. ${ref}). Si vous l'avez validé sur votre téléphone, vos billets vous seront envoyés automatiquement dès confirmation.`);
     } else if (result.status === 'refund_required') {
-      alert(`Votre paiement est arrivé après la fin de la réservation et il ne reste plus de place. Contactez le support pour le remboursement (réf. ${ref}).`);
+      setError(`Votre paiement est arrivé après la fin de la réservation et il ne reste plus de place. Contactez le support pour le remboursement (réf. ${ref}).`);
     } else if (result.status === 'amount_mismatch') {
-      alert(`Le montant payé ne correspond pas à la commande. Contactez le support (réf. ${ref}).`);
+      setError(`Le montant payé ne correspond pas à la commande. Contactez le support (réf. ${ref}).`);
     } else {
-      alert("Paiement échoué ou délai dépassé. Vos places ont été libérées.");
+      setError("Paiement non abouti ou délai dépassé. Vos places ont été libérées : vous pouvez réessayer.");
     }
     setStep(retryStep);
   };
@@ -1615,9 +1552,10 @@ const CheckoutModal: React.FC<{
       await loadPaystack();
     } catch (err) {
       console.error(err);
-      alert("Le module de paiement Paystack n'a pas pu être chargé. Vérifiez votre connexion et réessayez.");
+      setError("Le paiement par carte n'a pas pu s'ouvrir. Vérifiez votre connexion et réessayez.");
       return;
     }
+    setError('');
     setStep('processing');
     try {
       const created = await CheckoutService.createOrder(buildOrderInput('paystack'), { onQueued: handleQueued });
@@ -1634,18 +1572,18 @@ const CheckoutModal: React.FC<{
         callback: function () {
           // Le statut renvoyé par le popup n'est pas une preuve : le serveur vérifie.
           setStep('processing');
-          settleOrder(created, 'pay_card');
+          settleOrder(created, 'method');
         },
         onClose: function () {
-          setStep('pay_card'); // L'utilisateur a fermé le popup (la réservation expirera seule)
+          setStep('method'); // L'utilisateur a fermé la fenêtre (la réservation expirera seule)
         }
       });
       handler.openIframe();
     } catch (err: any) {
       console.error("Erreur lancement Paystack", err);
       setQueueWait(null);
-      alert(err.message || 'Erreur lors du lancement de Paystack');
-      setStep('pay_card');
+      setError(err.message || "Le paiement par carte n'a pas pu démarrer. Réessayez.");
+      setStep('method');
     }
   };
 
@@ -1654,6 +1592,7 @@ const CheckoutModal: React.FC<{
     payment: CreateOrderInput['payment'],
     retryStep: typeof step
   ) => {
+    setError('');
     setStep('processing');
     try {
       const created = await CheckoutService.createOrder(buildOrderInput(provider, payment), { onQueued: handleQueued });
@@ -1661,29 +1600,23 @@ const CheckoutModal: React.FC<{
       await settleOrder(created, retryStep);
     } catch (err: any) {
       setQueueWait(null);
-      alert(err.message || 'Le paiement a échoué.');
+      setError(err.message || "Le paiement n'a pas pu démarrer. Réessayez.");
       setStep(retryStep);
     }
   };
 
-  const handleMomoSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    payWithMobileMoney('pawapay', { phone: momoPhone, network: momoNetwork }, 'pay_momo');
-  };
+  const paymentOptions = paymentOptionsFor(visitorCountryCode, activeGateways);
+  const chosen = paymentOptions.find(o => o.key === selectedOption) || null;
 
-  const handleFeexpaySubmit = (e: React.FormEvent) => {
+  const handleMobileMoneySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    payWithMobileMoney('feexpay', { phone: feexpayPhone, network: feexpayNetwork }, 'pay_feexpay');
-  };
-
-  const handleIntouchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    payWithMobileMoney('intouch', { phone: intouchPhone, network: intouchNetwork }, 'pay_intouch');
-  };
-
-  const handlePaydunyaSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    payWithMobileMoney('paydunya', { phone: paydunyaPhone, network: paydunyaNetwork }, 'pay_paydunya');
+    if (!chosen || chosen.kind !== 'momo') return;
+    const phone = payPhone.replace(/[^0-9]/g, '');
+    if (phone.length < 8) {
+      setError(`Indiquez le numéro ${chosen.label} qui va payer.`);
+      return;
+    }
+    payWithMobileMoney(chosen.gateway as Exclude<CheckoutProvider, 'paystack'>, { phone, network: chosen.network }, 'method');
   };
 
   return (
@@ -1692,481 +1625,185 @@ const CheckoutModal: React.FC<{
 
         {step === 'auth' && (
           <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">Création Billet</h3>
-              <button onClick={() => onClose(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-xl font-bold text-white">Vos informations</h3>
+              <button onClick={() => onClose(false)} aria-label="Fermer" className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
+            <p className="text-xs text-slate-500 mb-6">Étape 1 sur 2 · Votre billet est envoyé dès le paiement validé</p>
 
-            {/* Country Selector */}
-            <div className="mb-6 bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
-              <span className="text-slate-300 text-sm font-medium">Votre pays de localisation</span>
-              <select
-                value={visitorCountryCode}
-                onChange={e => setVisitorCountryCode(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-orange-500"
-              >
-                {Object.values(PAYMENT_ROUTING).map(country => (
-                  <option key={country.code} value={country.code}>
-                    {country.name} ({country.currency})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {error && (
+              <div role="alert" className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">{error}</div>
+            )}
 
-            <p className="text-slate-300 text-sm mb-6">Comment souhaitez-vous recevoir ce billet ?</p>
-
-            <div className="flex bg-slate-800 p-1 rounded-xl mb-6">
-              <button
-                onClick={() => setContactMethod('wa')}
-                className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${contactMethod === 'wa' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-              >
-                <Smartphone size={16} /> WhatsApp
-              </button>
-              <button
-                onClick={() => setContactMethod('email')}
-                className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${contactMethod === 'email' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-              >
-                <Mail size={16} /> Email
-              </button>
-            </div>
-
-            <form onSubmit={handleSendOtp}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Prénom et Nom du Participant</label>
+            <form onSubmit={handleSendOtp} className="space-y-4">
+              <div>
+                <label htmlFor="checkout-name" className="block text-sm font-medium text-slate-300 mb-2">Nom du participant</label>
                 <input
+                  id="checkout-name"
                   type="text"
+                  autoComplete="name"
                   value={participantName}
                   onChange={(e) => setParticipantName(e.target.value)}
-                  placeholder="Ex: Jean Dupont"
+                  placeholder="Ex : Aya Koné"
                   className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all font-medium"
                   required
                 />
               </div>
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  {contactMethod === 'wa' ? 'Numéro WhatsApp (Réception du billet)' : 'Adresse Email (Réception du billet)'}
-                </label>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="checkout-contact" className="text-sm font-medium text-slate-300">
+                    {contactMethod === 'wa' ? 'Numéro WhatsApp' : 'Adresse e-mail'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setContactMethod(contactMethod === 'wa' ? 'email' : 'wa'); setContactValue(''); }}
+                    className="text-xs font-semibold text-orange-400 hover:text-orange-300"
+                  >
+                    {contactMethod === 'wa' ? 'Recevoir par e-mail' : 'Recevoir sur WhatsApp'}
+                  </button>
+                </div>
                 <div className="relative flex items-center">
                   {contactMethod === 'wa' && (
-                    <div className="absolute left-0 top-0 bottom-0 flex items-center justify-center bg-slate-800/80 border-y border-l border-slate-700 rounded-l-xl px-3 text-slate-300 font-mono font-bold text-sm">
-                      {visitorCountry?.dialCode || '+225'}
-                    </div>
+                    <select
+                      aria-label="Indicatif du pays"
+                      value={visitorCountryCode}
+                      onChange={e => setVisitorCountryCode(e.target.value)}
+                      className="absolute left-0 top-0 bottom-0 w-[5.5rem] bg-slate-800/80 border-y border-l border-slate-700 rounded-l-xl pl-2 text-slate-300 font-mono font-bold text-sm outline-none appearance-none cursor-pointer"
+                    >
+                      {Object.values(PAYMENT_ROUTING).map(country => (
+                        <option key={country.code} value={country.code}>{country.code} {country.dialCode}</option>
+                      ))}
+                    </select>
                   )}
                   <input
+                    id="checkout-contact"
                     type={contactMethod === 'wa' ? 'tel' : 'email'}
+                    inputMode={contactMethod === 'wa' ? 'tel' : 'email'}
+                    autoComplete={contactMethod === 'wa' ? 'tel-national' : 'email'}
                     value={contactValue}
                     onChange={(e) => setContactValue(e.target.value)}
-                    placeholder={contactMethod === 'wa' ? '01 23 45 67 89' : 'jean@exemple.com'}
-                    className={`w-full bg-slate-900/60 border border-slate-700 rounded-xl py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all font-mono ${contactMethod === 'wa' ? 'pl-16 pr-4' : 'px-4'}`}
+                    placeholder={contactMethod === 'wa' ? '07 00 00 00 00' : 'aya@exemple.com'}
+                    className={`w-full bg-slate-900/60 border border-slate-700 rounded-xl py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all font-mono ${contactMethod === 'wa' ? 'pl-[6.25rem] pr-4' : 'px-4'}`}
                     required
                   />
                 </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  {contactMethod === 'wa' ? 'Votre billet arrive sur WhatsApp. Ce numéro servira aussi au paiement (modifiable).' : 'Votre billet arrive par e-mail.'}
+                </p>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 bg-white text-slate-900 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]"
               >
-                Continuer
+                Continuer vers le paiement · {formatCurrency(convertedTotal, displayCurrency)}
               </button>
             </form>
           </div>
         )}
 
-
-
         {step === 'method' && (
           <div className="p-6 animate-in fade-in slide-in-from-right-4">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setStep('auth')} className="text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
+            <div className="flex justify-between items-center mb-1">
+              <button onClick={() => { setError(''); setStep('auth'); }} aria-label="Retour" className="text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
               <h3 className="text-xl font-bold text-white">Paiement</h3>
-              <button onClick={() => onClose(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+              <button onClick={() => onClose(false)} aria-label="Fermer" className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
+            <p className="text-xs text-slate-500 mb-5 text-center">Étape 2 sur 2</p>
 
-            <div className="bg-slate-800/50 p-4 rounded-xl mb-6 border border-white/5">
-              <div className="mb-4">
-                <p className="text-sm font-medium text-slate-300 mb-2">Mode de paiement</p>
-                <div className="flex gap-2 bg-slate-900/50 p-1 rounded-xl">
-                  <button
-                    onClick={() => setPaymentMode('full')}
-                    className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${paymentMode === 'full' ? 'bg-orange-600/20 border-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.15)]' : 'border-transparent text-slate-400 hover:bg-slate-800'}`}
-                  >
-                    <span className="font-bold text-sm">Totalité</span>
-                  </button>
-                  <button
-                    onClick={() => setPaymentMode('installment')}
-                    className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border transition-all relative ${paymentMode === 'installment' ? 'bg-amber-500/10 border-amber-500 text-amber-100 shadow-[0_0_15px_rgba(245,158,11,0.15)]' : 'border-transparent text-slate-400 hover:bg-slate-800'}`}
-                  >
-                    <span className="font-bold flex items-center gap-1 text-sm">3 Fois <span className="bg-amber-500 text-amber-950 text-[9px] px-1 rounded uppercase font-black">Tontine</span></span>
-                  </button>
-                </div>
+            {error && (
+              <div role="alert" className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">{error}</div>
+            )}
+
+            <div className="bg-slate-800/50 p-4 rounded-xl mb-5 border border-white/5">
+              <div className="flex gap-2 bg-slate-900/50 p-1 rounded-xl mb-4">
+                <button
+                  onClick={() => setPaymentMode('full')}
+                  className={`flex-1 p-2 rounded-lg border text-sm font-bold transition-all ${paymentMode === 'full' ? 'bg-orange-600/20 border-orange-500 text-white' : 'border-transparent text-slate-400 hover:bg-slate-800'}`}
+                >
+                  Tout payer
+                </button>
+                <button
+                  onClick={() => setPaymentMode('installment')}
+                  className={`flex-1 p-2 rounded-lg border text-sm font-bold transition-all flex items-center justify-center gap-1 ${paymentMode === 'installment' ? 'bg-amber-500/10 border-amber-500 text-amber-100' : 'border-transparent text-slate-400 hover:bg-slate-800'}`}
+                >
+                  En 3 fois <span className="bg-amber-500 text-amber-950 text-[9px] px-1 rounded uppercase font-black">Tontine</span>
+                </button>
               </div>
-
-              <div className="flex justify-between items-end border-t border-white/10 pt-4">
+              <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-slate-400 text-sm mb-1">{paymentMode === 'installment' ? 'À payer maintenant (1/3)' : 'Total à payer'}</p>
+                  <p className="text-slate-400 text-sm">{paymentMode === 'installment' ? 'À payer maintenant (1/3)' : 'Total à payer'}</p>
                   <p className="text-slate-500 text-xs truncate max-w-[150px]">{eventName}</p>
                 </div>
                 <div className="text-3xl font-black text-white">{formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)}</div>
               </div>
             </div>
 
-            <p className="text-sm font-medium text-slate-300 mb-3">Choisir un moyen de paiement ({visitorCountry?.name})</p>
-            <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-300 mb-3">Payer avec</p>
+            {paymentOptions.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {paymentOptions.map(option => (
+                  <button
+                    key={option.key}
+                    onClick={() => { setSelectedOption(option.key); setError(''); }}
+                    aria-pressed={selectedOption === option.key}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all ${selectedOption === option.key ? 'border-orange-500 bg-orange-500/10 ring-1 ring-orange-500' : 'border-slate-700 bg-slate-800/50 hover:border-slate-500'} ${option.kind === 'card' && paymentOptions.length % 2 === 1 ? 'col-span-2' : ''}`}
+                  >
+                    {option.kind === 'card'
+                      ? <CreditCard size={18} className="text-indigo-300 shrink-0" />
+                      : <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${option.color}`} />}
+                    <span className="text-white font-bold text-sm">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 text-center border-dashed border border-slate-700 rounded-xl">
+                <p className="text-slate-400 text-sm">Aucun moyen de paiement n'est disponible pour ce pays pour le moment.</p>
+              </div>
+            )}
 
-              {visitorCountry?.gateways.map(gatewayConfig => {
-                // Vérifier si cette passerelle a été activée par l'admin Panafricain
-                const isGatewayActive = activeGateways[gatewayConfig.id as keyof typeof activeGateways];
-                if (!isGatewayActive) return null;
-
-                if (gatewayConfig.id === 'pawapay' && gatewayConfig.methods.includes('momo')) {
-                  return (
-                    <button
-                      key="pawapay"
-                      onClick={() => {
-                        setMomoNetwork(gatewayConfig.operators?.[0] || 'ORANGE_CI'); // Auto-sélection
-                        setStep('pay_momo');
-                      }}
-                      className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-orange-500 hover:bg-orange-500/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center">
-                          <Smartphone size={20} />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-white font-bold group-hover:text-orange-300 transition-colors">Mobile Money (PawaPay)</p>
-                          <p className="text-xs text-slate-500">{gatewayConfig.operators?.join(', ')}</p>
-                        </div>
-                      </div>
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-600 group-hover:border-orange-500"></div>
-                    </button>
-                  );
-                }
-
-                if (gatewayConfig.id === 'feexpay' && gatewayConfig.methods.includes('momo')) {
-                  return (
-                    <button
-                      key="feexpay"
-                      onClick={() => {
-                        setFeexpayNetwork(gatewayConfig.operators?.[0] || 'MTN_BJ');
-                        setStep('pay_feexpay');
-                      }}
-                      className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-green-500 hover:bg-green-500/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center font-bold">F</div>
-                        <div className="text-left">
-                          <p className="text-white font-bold group-hover:text-green-300 transition-colors">FeexPay</p>
-                          <p className="text-xs text-slate-500">{gatewayConfig.operators?.join(', ')}</p>
-                        </div>
-                      </div>
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-600 group-hover:border-green-500"></div>
-                    </button>
-                  );
-                }
-
-                if (gatewayConfig.id === 'intouch' && gatewayConfig.methods.includes('momo')) {
-                  return (
-                    <button
-                      key="intouch"
-                      onClick={() => {
-                        setIntouchNetwork(gatewayConfig.operators?.[0] || 'ORANGE_SN');
-                        setStep('pay_intouch');
-                      }}
-                      className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-red-500 hover:bg-red-500/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center font-bold">I</div>
-                        <div className="text-left">
-                          <p className="text-white font-bold group-hover:text-red-300 transition-colors">InTouch</p>
-                          <p className="text-xs text-slate-500">{gatewayConfig.operators?.join(', ')}</p>
-                        </div>
-                      </div>
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-600 group-hover:border-red-500"></div>
-                    </button>
-                  );
-                }
-
-                if (gatewayConfig.id === 'paydunya' && gatewayConfig.methods.includes('momo')) {
-                  return (
-                    <button
-                      key="paydunya"
-                      onClick={() => {
-                        setPaydunyaNetwork(gatewayConfig.operators?.[0] || 'orange-money-senegal');
-                        setStep('pay_paydunya');
-                      }}
-                      className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-blue-500 hover:bg-blue-500/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center font-bold">P</div>
-                        <div className="text-left">
-                          <p className="text-white font-bold group-hover:text-blue-300 transition-colors">PayDunya</p>
-                          <p className="text-xs text-slate-500">{gatewayConfig.operators?.join(', ')}</p>
-                        </div>
-                      </div>
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-600 group-hover:border-blue-500"></div>
-                    </button>
-                  );
-                }
-
-                if (gatewayConfig.id === 'paystack' && gatewayConfig.methods.includes('card')) {
-                  return (
-                    <button
-                      key="paystack_card"
-                      onClick={() => setStep('pay_card')}
-                      className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-indigo-500 hover:bg-indigo-500/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-500 flex items-center justify-center">
-                          <CreditCard size={20} />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-white font-bold group-hover:text-indigo-300 transition-colors">Carte / Mobile Money (Paystack)</p>
-                          <p className="text-xs text-slate-500">Visa, Mastercard, Mobile Money</p>
-                        </div>
-                      </div>
-                      <div className="w-5 h-5 rounded-full border-2 border-slate-600 group-hover:border-indigo-500"></div>
-                    </button>
-                  );
-                }
-
-                return null;
-              })}
-
-              {(!visitorCountry || !visitorCountry.gateways.some(g => activeGateways[g.id as keyof typeof activeGateways])) && (
-                <div className="p-4 text-center border-dashed border border-slate-700 rounded-xl">
-                  <p className="text-slate-400 text-sm">Aucun moyen de paiement activé pour ce pays.</p>
+            {chosen?.kind === 'momo' && (
+              <form onSubmit={handleMobileMoneySubmit} className="mt-5 space-y-3 animate-in fade-in">
+                <div>
+                  <label htmlFor="checkout-pay-phone" className="block text-sm font-medium text-slate-300 mb-2">Numéro {chosen.label} qui paie</label>
+                  <input
+                    id="checkout-pay-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    value={payPhone}
+                    onChange={(e) => setPayPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="07 00 00 00 00"
+                    className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-mono text-lg tracking-wider"
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-2">{chosen.hint}</p>
                 </div>
-              )}
-            </div>
-
-            <div className="mt-6 text-center">
-              <p className="text-xs text-slate-500 flex items-center justify-center gap-1">
-                <ShieldCheck size={12} /> Transaction cryptée et sécurisée
-              </p>
-            </div>
-          </div>
-        )}
-
-        {step === 'pay_momo' && (
-          <div className="p-6 animate-in fade-in slide-in-from-right-4">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setStep('method')} className="text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
-              <h3 className="text-xl font-bold text-white">Mobile Money</h3>
-              <button onClick={() => onClose(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
-            </div>
-
-            <p className="text-slate-300 text-sm mb-6">Paiement sécurisé via PawaPay</p>
-
-            <form onSubmit={handleMomoSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Réseau</label>
-                <select
-                  value={momoNetwork}
-                  onChange={e => setMomoNetwork(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-bold"
+                <button
+                  type="submit"
+                  className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]"
                 >
-                  <option value="ORANGE_CI">Orange CI</option>
-                  <option value="MTN_CI">MTN CI</option>
-                  <option value="WAVE_CI">Wave CI</option>
-                  <option value="MOOV_CI">Moov CI</option>
-                </select>
-              </div>
+                  Payer {formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)} avec {chosen.label}
+                </button>
+              </form>
+            )}
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Numéro Mobile Money</label>
-                <input
-                  type="tel"
-                  value={momoPhone}
-                  onChange={(e) => setMomoPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Ex: 0102030405"
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-mono text-lg tracking-wider"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]"
-              >
-                Payer {formatCurrency(paymentMode === 'installment' ? total / 3 : total)}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {step === 'pay_card' && (
-          <div className="p-6 animate-in fade-in slide-in-from-right-4">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setStep('method')} className="text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
-              <h3 className="text-xl font-bold text-white">Carte Bancaire</h3>
-              <button onClick={() => onClose(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
-            </div>
-
-            <p className="text-slate-300 text-sm mb-6 flex items-center justify-center gap-2">
-              <ShieldCheck size={16} className="text-emerald-500" /> API Sécurisée Paystack
-            </p>
-
-            <div className="text-center mb-6">
-              <p className="text-sm text-slate-400">Vous allez être redirigé(e) vers la passerelle sécurisée Paystack pour finaliser le paiement par carte Visa ou Mastercard.</p>
-            </div>
-
-            <form onSubmit={handleCardSubmit}>
-              <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(79,70,229,0.4)]"
-              >
-                Ouvrir Paystack et Payer {formatCurrency(paymentMode === 'installment' ? total / 3 : total)}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {step === 'pay_feexpay' && (
-          <div className="p-6 animate-in fade-in slide-in-from-right-4">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setStep('method')} className="text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
-              <h3 className="text-xl font-bold text-white">FeexPay</h3>
-              <button onClick={() => onClose(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
-            </div>
-
-            <p className="text-slate-300 text-sm mb-6 flex items-center gap-2">
-              <ShieldCheck size={16} className="text-emerald-500" /> API Sécurisée Bénin/Afrique de l'Ouest
-            </p>
-
-            <form onSubmit={handleFeexpaySubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Réseau Opérateur</label>
-                <select
-                  value={feexpayNetwork}
-                  onChange={e => setFeexpayNetwork(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+            {chosen?.kind === 'card' && (
+              <form onSubmit={handleCardSubmit} className="mt-5 space-y-3 animate-in fade-in">
+                <p className="text-xs text-slate-500">Une fenêtre de paiement sécurisée s'ouvre pour saisir votre carte. Babipass ne voit jamais votre numéro de carte.</p>
+                <button
+                  type="submit"
+                  className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(79,70,229,0.4)]"
                 >
-                  <option value="MTN_BJ">MTN Bénin</option>
-                  <option value="MOOV_BJ">Moov Bénin</option>
-                  <option value="CELTIIS_BJ">Celtiis Bénin</option>
-                  <option value="TOGOCEL">Togo Cellulaire</option>
-                </select>
-              </div>
+                  Payer {formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)} par carte
+                </button>
+              </form>
+            )}
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Numéro Mobile Money</label>
-                <input
-                  type="tel"
-                  value={feexpayPhone}
-                  onChange={(e) => setFeexpayPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Ex: 01020304"
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-green-500 font-mono tracking-wider"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
-              >
-                Payer {formatCurrency(paymentMode === 'installment' ? total / 3 : total)}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {step === 'pay_intouch' && (
-          <div className="p-6 animate-in fade-in slide-in-from-right-4">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setStep('method')} className="text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
-              <h3 className="text-xl font-bold text-white">Guichet InTouch</h3>
-              <button onClick={() => onClose(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
-            </div>
-
-            <p className="text-slate-300 text-sm mb-6 flex items-center gap-2">
-              <ShieldCheck size={16} className="text-emerald-500" /> Agrégateur de Paiement Multi-Réseaux
+            <p className="mt-5 text-xs text-slate-500 flex items-center justify-center gap-1">
+              <ShieldCheck size={12} /> Paiement vérifié par Babipass avant l'envoi du billet
             </p>
-
-            <form onSubmit={handleIntouchSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Pays & Réseau</label>
-                <select
-                  value={intouchNetwork}
-                  onChange={e => setIntouchNetwork(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
-                >
-                  <option value="ORANGE_SN">Orange Sénégal</option>
-                  <option value="WAVE_SN">Wave Sénégal</option>
-                  <option value="ORANGE_ML">Orange Mali</option>
-                  <option value="ORANGE_CM">Orange Cameroun</option>
-                </select>
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Numéro Mobile Money</label>
-                <input
-                  type="tel"
-                  value={intouchPhone}
-                  onChange={(e) => setIntouchPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Ex: 771234567"
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-red-500 font-mono tracking-wider"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(225,29,72,0.4)]"
-              >
-                Payer {formatCurrency(paymentMode === 'installment' ? total / 3 : total)}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {step === 'pay_paydunya' && (
-          <div className="p-6 animate-in fade-in slide-in-from-right-4">
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setStep('method')} className="text-slate-400 hover:text-white"><ArrowLeft size={20} /></button>
-              <h3 className="text-xl font-bold text-white">PayDunya</h3>
-              <button onClick={() => onClose(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
-            </div>
-
-            <p className="text-slate-300 text-sm mb-6 flex items-center gap-2">
-              <ShieldCheck size={16} className="text-emerald-500" /> Paiement sécurisé via PayDunya
-            </p>
-
-            <form onSubmit={handlePaydunyaSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Opérateur de paiement</label>
-                <select
-                  value={paydunyaNetwork}
-                  onChange={e => setPaydunyaNetwork(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                >
-                  <option value="orange-money-senegal">Orange Money Sénégal</option>
-                  <option value="wave-senegal">Wave Sénégal</option>
-                  <option value="free-money-senegal">Free Money Sénégal</option>
-                  <option value="expresso-senegal">E-Money Expresso</option>
-                </select>
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Numéro de téléphone</label>
-                <input
-                  type="tel"
-                  value={paydunyaPhone}
-                  onChange={(e) => setPaydunyaPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Ex: 771234567"
-                  className="w-full bg-slate-900/60 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono tracking-wider"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(37,99,235,0.4)]"
-              >
-                Payer {formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)}
-              </button>
-            </form>
           </div>
         )}
 
