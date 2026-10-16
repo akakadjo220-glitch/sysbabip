@@ -502,7 +502,7 @@ export const EventDetails: React.FC = () => {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-600/90 text-white text-xs font-bold uppercase mb-4 shadow-lg animate-in slide-in-from-bottom-4 duration-500">
             <Ticket size={14} /> {event.category}
           </div>
-          <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-orange-100 to-white shimmer-text bg-[length:200%_auto] mb-4 leading-tight drop-shadow-xl animate-in slide-in-from-bottom-4 duration-700 delay-100 fill-mode-both">
+          <h1 className="text-4xl md:text-6xl font-black text-white mb-4 leading-tight drop-shadow-lg animate-in slide-in-from-bottom-4 duration-700 delay-100 fill-mode-both">
             {event.title}
           </h1>
           <div className="flex flex-wrap gap-6 text-slate-200 text-sm md:text-base font-medium">
@@ -628,7 +628,7 @@ export const EventDetails: React.FC = () => {
                     />
                   </div>
                 )}
-                <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300 flex items-center gap-2">
+                <h3 className="text-2xl font-black text-white flex items-center gap-2">
                   ✨ Ce qui vous attend...
                 </h3>
                 <div className="relative">
@@ -672,7 +672,7 @@ export const EventDetails: React.FC = () => {
             <div className="sticky top-24 space-y-4" id="ticket-section">
               <div className="glass-panel p-6 rounded-3xl border border-orange-500/30 shadow-2xl shadow-orange-500/10">
                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                  <Ticket className="text-orange-400 animate-pulse" /> Billetterie
+                  <Ticket className="text-orange-400" /> Billetterie
                 </h3>
 
                 {!isSoldOut && (
@@ -793,7 +793,7 @@ export const EventDetails: React.FC = () => {
                 <div className="glass-panel p-6 rounded-3xl border border-emerald-500/40 shadow-2xl shadow-emerald-500/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-xl font-bold text-emerald-400 flex items-center gap-2">
-                      <Banknote className="animate-pulse" /> Revente Sécurisée
+                      <Banknote /> Revente Sécurisée
                     </h3>
                     <span className="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2 py-1 rounded-full border border-emerald-500/30">
                       {resaleListings.length} dispo.
@@ -1721,7 +1721,7 @@ const CheckoutModal: React.FC<{
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]"
+                className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:brightness-110"
               >
                 Continuer vers le paiement · {formatCurrency(convertedTotal, displayCurrency)}
               </button>
@@ -1779,7 +1779,7 @@ const CheckoutModal: React.FC<{
               {chosen && (
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:shadow-[0_0_20px_rgba(249,115,22,0.4)]"
+                  className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-500 text-white rounded-xl font-bold transition-all hover:brightness-110"
                 >
                   Payer {formatCurrency(paymentMode === 'installment' ? convertedTotal / 3 : convertedTotal, displayCurrency)}{chosen.kind === 'momo' ? ` avec ${chosen.label}` : ''}
                 </button>

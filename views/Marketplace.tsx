@@ -255,7 +255,7 @@ export const Marketplace: React.FC = () => {
                 {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
               </select>
             </div>
-            <button className="w-full sm:w-auto bg-orange-600 text-white px-8 py-3 rounded-xl md:rounded-full font-bold transition-all flex items-center justify-center text-sm md:text-base hover:scale-110 active:scale-95 animate-glow-pulse">
+            <button className="w-full sm:w-auto bg-orange-600 text-white px-8 py-3 rounded-xl md:rounded-full font-bold transition-all flex items-center justify-center text-sm md:text-base hover:bg-orange-500 active:scale-[0.98] animate-glow-pulse">
               Rechercher
             </button>
           </div>
@@ -281,7 +281,7 @@ export const Marketplace: React.FC = () => {
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`snap-start px-4 md:px-5 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all transform hover:scale-105 active:scale-95 ${selectedCategory === cat
+                className={`snap-start px-4 md:px-5 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-colors ${selectedCategory === cat
                   ? 'bg-gradient-to-r from-orange-600 to-amber-500 text-white shadow-lg shadow-orange-500/30'
                   : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700'
                   }`}
@@ -331,10 +331,10 @@ export const Marketplace: React.FC = () => {
             {currentEvents.map((event, index) => (
               <div
                 key={event.id}
-                className="perspective-1000 animate-in fade-in zoom-in duration-500 fill-mode-both"
-                style={{ animationDelay: `${index * 100}ms` }}
+                className="animate-in fade-in duration-500 fill-mode-both"
+                style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
               >
-                <div className="preserve-3d h-full">
+                <div className="h-full">
                   <EventCard
                     event={event}
                     onClick={() => {
@@ -513,7 +513,7 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
         <img
           src={event.image}
           alt={event.title}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1e293b] via-transparent to-transparent opacity-60" />
 

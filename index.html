@@ -208,7 +208,8 @@
 
     /* Ken Burns Effect for Flags */
     .animate-ken-burns {
-      animation: kenBurns 20s ease-in-out infinite alternate;
+      /* Mouvement à peine perceptible : l'affiche reste lisible. */
+      animation: kenBurns 40s ease-in-out infinite alternate;
     }
 
     @keyframes kenBurns {
@@ -216,12 +217,8 @@
         transform: scale(1) translate(0, 0);
       }
 
-      50% {
-        transform: scale(1.1) translate(-2%, 1%);
-      }
-
       100% {
-        transform: scale(1.2) translate(2%, -1%);
+        transform: scale(1.05);
       }
     }
 
@@ -262,8 +259,9 @@
     }
 
     /* Advanced Breathtaking Animations */
+    /* Plus de halo clignotant : une ombre douce et fixe suffit. */
     .animate-glow-pulse {
-      animation: glowPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      box-shadow: 0 8px 24px -8px rgba(249, 115, 22, 0.45);
     }
 
     @keyframes glowPulse {
@@ -282,7 +280,6 @@
 
     .shimmer-text {
       background-size: 200% auto;
-      animation: shimmer 3s linear infinite;
     }
 
     @keyframes shimmer {
@@ -298,6 +295,16 @@
 
     .preserve-3d {
       transform-style: preserve-3d;
+    }
+
+    /* Respect du réglage « Réduire les animations » du téléphone / de l'ordinateur. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
     }
 
     .hover-3d-tilt {
