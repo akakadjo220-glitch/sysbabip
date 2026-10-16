@@ -11,6 +11,7 @@ import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, Lis
 import { Link } from 'react-router-dom';
 import { lazyNamed } from '../utils/lazyPage';
 import { detectCountry } from '../utils/detectCountry';
+import { HeroPhoneDemo, HeroStepsTicker } from '../components/HeroMotion';
 
 // La carte (Mapbox, ~460 Ko) n'est téléchargée que si le visiteur ouvre la vue « Carte ».
 const PublicMap = lazyNamed(() => import('../components/PublicMap'), 'PublicMap');
@@ -200,7 +201,8 @@ export const Marketplace: React.FC = () => {
         structuredData={marketplaceSeo.structuredData}
       />
       {/* Accroche : une promesse claire, des preuves réelles, une seule recherche */}
-      <section className="pt-4 md:pt-10 pb-2 animate-in fade-in duration-500">
+      <section className="pt-4 md:pt-10 pb-2 animate-in fade-in duration-500 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-12">
+        <div className="min-w-0">
         <h1 className="text-[28px] leading-[1.15] md:text-5xl font-black text-white max-w-3xl">
           Vos prochaines sorties, <span className="text-orange-400">réservées en quelques clics.</span>
         </h1>
@@ -208,7 +210,11 @@ export const Marketplace: React.FC = () => {
           Concerts, festivals, matchs et soirées. Payez avec Mobile Money ou carte, recevez votre billet sur WhatsApp.
         </p>
 
-        <ul className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
+        {/* Mobile : les étapes animées remplacent la ligne de preuves (hauteur fixe) */}
+        <div className="mt-4 md:hidden">
+          <HeroStepsTicker ticketsIssued={ticketsIssued} />
+        </div>
+        <ul className="mt-4 hidden md:flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
           {ticketsIssued >= 1000 && (
             <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis</li>
           )}
@@ -250,6 +256,12 @@ export const Marketplace: React.FC = () => {
           <Globe size={13} />
           {userCountry === 'Global' ? 'Tous les pays' : userCountry} · changer
         </button>
+        </div>
+
+        {/* Ordinateur : le téléphone animé occupe l'espace à droite de l'accroche */}
+        <div className="hidden md:block">
+          <HeroPhoneDemo />
+        </div>
       </section>
 
       {/* Control Bar */}
