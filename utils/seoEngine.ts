@@ -280,7 +280,7 @@ export const generateMarketplaceSEO = (userCountry = 'Côte d\'Ivoire'): Generat
         },
         contactPoint: {
           '@type': 'ContactPoint',
-          telephone: '+2250000000000',
+          telephone: '+2250799709309',
           contactType: 'customer service',
           availableLanguage: ['French', 'English'],
           areaServed: ['CI', 'SN', 'ML', 'BF', 'TG', 'BJ']

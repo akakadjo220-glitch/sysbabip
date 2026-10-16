@@ -480,18 +480,9 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
   const [reviewCount, setReviewCount] = useState<number>(0);
 
   useEffect(() => {
-    const pseudoRandom = event.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    
-    // Real ratings from DB or specific 4.5-5.0 fallback
-    const dbRating = Number((event as any).average_rating || 0);
-    const dbReviews = Number((event as any).total_reviews || 0);
-    
-    // User requested range: 4.5 to 5.0
-    const fallbackRating = 4.5 + ((pseudoRandom % 6) / 10); 
-    const fallbackReviews = 12 + (pseudoRandom % 88);
-
-    setRating(dbRating > 0 ? dbRating : fallbackRating);
-    setReviewCount(dbReviews > 0 ? dbReviews : fallbackReviews);
+    // Uniquement les vrais avis : sans avis, la carte affiche « Nouveau ».
+    setRating(Number((event as any).average_rating || 0));
+    setReviewCount(Number((event as any).total_reviews || 0));
 
     // Real views from DB + local view buffer
     const dbViews = Number((event as any).views || 0);
@@ -550,13 +541,17 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
           </div>
 
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-amber-500">
-                <Star size={12} fill="currentColor" className="mr-1" />
-                <span className="text-xs font-bold">{rating.toFixed(1)}</span>
+            {reviewCount > 0 && rating > 0 ? (
+              <div className="flex items-center space-x-2" title={`${reviewCount} avis vérifiés`}>
+                <div className="flex items-center bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-amber-500">
+                  <Star size={12} fill="currentColor" className="mr-1" />
+                  <span className="text-xs font-bold">{rating.toFixed(1)}</span>
+                </div>
+                <span className="text-xs text-slate-500">({reviewCount})</span>
               </div>
-              <span className="text-xs text-slate-500">({reviewCount})</span>
-            </div>
+            ) : (
+              <span className="text-[10px] font-bold uppercase tracking-widest text-sky-300 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded">Nouveau</span>
+            )}
             <div className="flex items-center text-slate-500 text-xs gap-1" title={`${viewCount} vues`}>
               <Eye size={14} />
               <span>{viewCount.toLocaleString()}</span>

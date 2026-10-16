@@ -130,7 +130,15 @@ export const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Phone size={18} className="text-emerald-500 shrink-0" />
-                <span className="text-slate-400 text-sm">+225 00 00 00 00 00</span>
+                <a
+                  href="https://wa.me/2250799709309?text=Bonjour%20Babipass%2C%20j%27ai%20besoin%20d%27aide"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-400 text-sm hover:text-white transition-colors"
+                  title="Support WhatsApp"
+                >
+                  +225 07 99 70 93 09 (WhatsApp)
+                </a>
               </li>
               <li className="flex items-center gap-3">
                 <Mail size={18} className="text-emerald-500 shrink-0" />

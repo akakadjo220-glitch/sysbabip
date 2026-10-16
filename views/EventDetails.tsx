@@ -30,31 +30,42 @@ const CART_EXPIRATION_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_ABANDONS = 3;
 const LOCKOUT_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
 
-// E-commerce Urgency Components
-const FomoBanner = () => {
+// Signaux d'urgence : uniquement des faits réels (stock, ventes, vues, date).
+// S'il n'y a rien de vrai à dire, rien ne s'affiche.
+const FomoBanner = ({ remaining, capacity, sold, views, date }: { remaining: number; capacity: number; sold: number; views: number; date: string }) => {
   const [msgIdx, setMsgIdx] = useState(0);
 
-  const messages = [
-    { icon: Users, text: `${Math.floor(Math.random() * 10) + 5} personnes consultent cette page`, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" },
-    { icon: Flame, text: "Très demandé : les billets partent vite !", color: "text-rose-500", bg: "bg-rose-500/10", border: "border-rose-500/30" },
-    { icon: Zap, text: `${Math.floor(Math.random() * 5) + 1} billets vendus dans la dernière heure`, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" }
-  ];
+  const messages: { icon: any; text: string; color: string; bg: string; border: string }[] = [];
+  if (capacity > 0 && remaining > 0 && remaining <= Math.max(20, Math.round(capacity * 0.1))) {
+    messages.push({ icon: Flame, text: `Plus que ${remaining} place${remaining > 1 ? 's' : ''} disponible${remaining > 1 ? 's' : ''}`, color: "text-rose-500", bg: "bg-rose-500/10", border: "border-rose-500/30" });
+  }
+  const daysLeft = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
+  if (daysLeft >= 0 && daysLeft <= 7) {
+    const when = daysLeft === 0 ? "C'est aujourd'hui !" : daysLeft === 1 ? "C'est demain !" : `Plus que ${daysLeft} jours`;
+    messages.push({ icon: Timer, text: when, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" });
+  }
+  if (sold >= 20) {
+    messages.push({ icon: Zap, text: `${sold.toLocaleString('fr-FR')} billets déjà vendus`, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" });
+  }
+  if (views >= 100) {
+    messages.push({ icon: Users, text: `${views.toLocaleString('fr-FR')} personnes ont consulté cet événement`, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" });
+  }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setMsgIdx((prev) => (prev + 1) % messages.length);
-    }, 6000);
+    if (messages.length < 2) return;
+    const interval = setInterval(() => setMsgIdx((prev) => prev + 1), 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [messages.length]);
 
-  const current = messages[msgIdx];
+  if (messages.length === 0) return null;
+  const current = messages[msgIdx % messages.length];
   const Icon = current.icon;
 
   return (
     <div className={`overflow-hidden transition-all duration-500 rounded-xl border ${current.bg} ${current.border} mb-6`}>
       <div className="flex items-center gap-3 p-3 animate-in fade-in slide-in-from-right-4 duration-500" key={msgIdx}>
-        <div className={`p-2 rounded-full bg-white/5 ${current.color} shadow-[0_0_15px_rgba(current-color,0.2)]`}>
-          <Icon size={18} className="animate-pulse" />
+        <div className={`p-2 rounded-full bg-white/5 ${current.color}`}>
+          <Icon size={18} />
         </div>
         <p className={`text-sm font-bold ${current.color}`}>{current.text}</p>
       </div>
@@ -62,69 +73,47 @@ const FomoBanner = () => {
   );
 };
 
+// Disponibilité : jauge seulement si la capacité est connue ; jamais de chiffre inventé.
 const StockBar = ({ capacity, sold }: { capacity: number, sold: number }) => {
   const [fillPct, setFillPct] = useState(0);
 
   const hasRealCapacity = capacity > 0;
-  const effectiveCapacity = hasRealCapacity ? capacity : 500;
-  const effectiveSold = hasRealCapacity
-    ? Math.min(sold, effectiveCapacity)
-    : (sold > 0 ? sold : 420);
-
-  // % vendu → pour la largeur de la barre
-  const soldPct = Math.min(100, (effectiveSold / effectiveCapacity) * 100);
-  // % restant → pour le label (arrondi vers le bas pour éviter "100%")
-  const remaining = effectiveCapacity - effectiveSold;
-  const remainingPct = Math.floor((remaining / effectiveCapacity) * 100);
-
-  const isCritical = soldPct >= 85;
+  const effectiveSold = hasRealCapacity ? Math.min(sold, capacity) : sold;
+  const soldPct = hasRealCapacity ? Math.min(100, (effectiveSold / capacity) * 100) : 0;
+  const remaining = hasRealCapacity ? capacity - effectiveSold : 0;
+  const isCritical = hasRealCapacity && soldPct >= 85;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Minimum 2% pour que la barre soit toujours visible
-      setFillPct(Math.max(2, soldPct));
-    }, 500);
+    const timer = setTimeout(() => setFillPct(Math.max(2, soldPct)), 500);
     return () => clearTimeout(timer);
   }, [soldPct]);
 
-  // Label selon la situation
-  const availabilityLabel = isCritical
-    ? 'Presque Complet !'
-    : hasRealCapacity
-      ? `${remaining} place${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}`
-      : sold < 5
-        ? 'Billets disponibles'
-        : `${remainingPct}% des places restantes`;
+  if (!hasRealCapacity) {
+    return (
+      <p className="mb-6 text-sm font-bold text-emerald-400">
+        Billets disponibles{sold > 0 ? ` · ${sold} déjà réservé${sold > 1 ? 's' : ''}` : ''}
+      </p>
+    );
+  }
 
-  const labelColor = isCritical
-    ? 'text-rose-500 animate-pulse'
-    : hasRealCapacity && remainingPct <= 30
-      ? 'text-amber-400'
-      : 'text-emerald-400';
+  const availabilityLabel = isCritical
+    ? 'Presque complet'
+    : `${remaining} place${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}`;
+  const labelColor = isCritical ? 'text-rose-500' : remaining / capacity <= 0.3 ? 'text-amber-400' : 'text-emerald-400';
 
   return (
     <div className="mb-6 space-y-2">
       <div className="flex justify-between items-end">
         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Disponibilité</span>
-        <span className={`text-sm font-bold ${labelColor}`}>
-          {availabilityLabel}
-        </span>
+        <span className={`text-sm font-bold ${labelColor}`}>{availabilityLabel}</span>
       </div>
       <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden shadow-inner relative">
         <div
-          className={`h-full rounded-full transition-all duration-[1500ms] ease-out relative overflow-hidden ${isCritical ? 'bg-gradient-to-r from-rose-600 to-rose-400' : 'bg-gradient-to-r from-orange-600 to-amber-400'}`}
+          className={`h-full rounded-full transition-all duration-[1500ms] ease-out ${isCritical ? 'bg-gradient-to-r from-rose-600 to-rose-400' : 'bg-gradient-to-r from-orange-600 to-amber-400'}`}
           style={{ width: `${fillPct}%` }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-        </div>
+        />
       </div>
-      <p className="text-[10px] text-slate-500 text-right">
-        {hasRealCapacity
-          ? `${effectiveSold} / ${effectiveCapacity} billets vendus`
-          : sold > 0
-            ? `${sold} billet${sold > 1 ? 's' : ''} déjà réservé${sold > 1 ? 's' : ''}`
-            : 'Soyez parmi les premiers !'}
-      </p>
+      <p className="text-[10px] text-slate-500 text-right">{effectiveSold} / {capacity} billets vendus</p>
     </div>
   );
 };
@@ -420,6 +409,13 @@ export const EventDetails: React.FC = () => {
   // Consider event sold out if sold >= capacity, or for demo purposes, if it has no capacity set yet but let's stick to true logic.
   // We'll add a demo check: if you want to test the resale, you can manually set capacity=sold in db.
   const isSoldOut = event.capacity > 0 && event.sold >= event.capacity;
+  // Stock réel : somme des catégories de billets (sinon les totaux de l'événement).
+  const stock = (() => {
+    const types = (event.ticketTypes || []) as any[];
+    const capacity = types.reduce((n, t) => n + (Number(t.quantity) || 0), 0);
+    if (capacity > 0) return { capacity, sold: types.reduce((n, t) => n + (Number(t.sold) || 0), 0) };
+    return { capacity: Number(event.capacity) || 0, sold: Number(event.sold) || 0 };
+  })();
 
   // Clôture automatique des ventes configurée par l'organisateur
   const salesCloseMinutes = Number((event as any).sales_close_before_minutes ?? 0);
@@ -681,8 +677,8 @@ export const EventDetails: React.FC = () => {
 
                 {!isSoldOut && (
                   <>
-                    <FomoBanner />
-                    <StockBar capacity={event.capacity} sold={event.sold} />
+                    <FomoBanner remaining={stock.capacity - stock.sold} capacity={stock.capacity} sold={stock.sold} views={Number((event as any).views) || 0} date={event.date} />
+                    <StockBar capacity={stock.capacity} sold={stock.sold} />
                   </>
                 )}
 
