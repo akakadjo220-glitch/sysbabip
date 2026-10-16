@@ -155,6 +155,19 @@ export const Marketplace: React.FC = () => {
   // Accueil jamais vide : sans événement à venir, on montre les derniers temps forts.
   const [highlights, setHighlights] = useState<Event[]>([]);
   const noFilters = selectedCategory === 'Tous' && cityFilter === 'Tous' && !debouncedSearch;
+
+  // « À la une » : le prochain événement à venir (première page, sans filtre).
+  const featured = React.useMemo(() => {
+    if (!noFilters || currentPage !== 1) return null;
+    const now = Date.now();
+    return [...events]
+      .filter((e: any) => e.status !== 'completed' && new Date(e.date).getTime() >= now)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] || null;
+  }, [events, noFilters, currentPage]);
+  const featuredMinPrice = (() => {
+    const prices = ((featured?.ticketTypes || []) as any[]).map(t => Number(t.price)).filter(p => p > 0);
+    return prices.length ? Math.min(...prices) : Number(featured?.price) || 0;
+  })();
   useEffect(() => {
     if (loading || !userCountry || totalEvents > 0 || !noFilters) return;
     CatalogService.highlights(userCountry).then(setHighlights).catch(() => setHighlights([]));
@@ -176,7 +189,7 @@ export const Marketplace: React.FC = () => {
   }
 
   // Filtres (pays, catégorie, ville, recherche) et pagination faits par le serveur.
-  const currentEvents = events;
+  const currentEvents = featured ? events.filter(e => e.id !== featured.id) : events;
   const uniqueCities = ['Tous', ...cityOptions];
 
   const scrollToTop = () => {
@@ -199,57 +212,91 @@ export const Marketplace: React.FC = () => {
         canonicalUrl={marketplaceSeo.canonicalUrl}
         structuredData={marketplaceSeo.structuredData}
       />
-      {/* Accroche : une promesse claire, des preuves réelles, une seule recherche */}
-      <section className="pt-4 md:pt-10 pb-2 animate-in fade-in duration-500">
-        <h1 className="text-[28px] leading-[1.15] md:text-5xl font-black text-white max-w-3xl">
-          Vos prochaines sorties, <span className="text-orange-400">réservées en quelques clics.</span>
-        </h1>
-        <p className="text-slate-300 mt-3 text-[15px] md:text-lg max-w-2xl">
-          Concerts, festivals, matchs et soirées. Payez avec Mobile Money ou carte, recevez votre billet sur WhatsApp.
-        </p>
-
-        <ul className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
-          {ticketsIssued >= 1000 && (
-            <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis</li>
-          )}
-          <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> Paiement vérifié</li>
-          <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> Billet disponible même sans réseau</li>
-        </ul>
-
-        {/* Recherche : les résultats se mettent à jour pendant la frappe */}
-        <div className="mt-5 flex gap-2">
-          <label className="relative flex-1">
-            <span className="sr-only">Rechercher un événement</span>
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input
-              type="search"
-              placeholder="Artiste, événement, ville…"
-              className="w-full bg-slate-800/80 border border-white/10 rounded-2xl pl-11 pr-4 py-3.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 text-[15px]"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </label>
-          <label className="relative w-[38%] sm:w-48 shrink-0">
-            <span className="sr-only">Ville</span>
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400" size={16} />
-            <select
-              className="w-full h-full bg-slate-800/80 border border-white/10 rounded-2xl pl-9 pr-3 py-3.5 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500 text-[15px]"
-              value={cityFilter}
-              onChange={(e) => setCityFilter(e.target.value)}
-            >
-              {uniqueCities.map(city => <option key={city} value={city}>{city === 'Tous' ? 'Toutes les villes' : city}</option>)}
-            </select>
-          </label>
+      {/* Accroche + événement « À la une » (à droite sur ordinateur, sous l'accroche sur mobile) */}
+      <section className="pt-4 md:pt-10 pb-2 flex flex-col gap-5 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,400px)] md:gap-x-10 md:gap-y-5 animate-in fade-in duration-500">
+        <div className="md:col-start-1 md:row-start-1">
+          <h1 className="text-[28px] leading-[1.15] md:text-5xl font-black text-white max-w-3xl">
+            Vos prochaines sorties, <span className="text-orange-400">réservées en quelques clics.</span>
+          </h1>
+          <p className="text-slate-300 mt-3 text-[15px] md:text-lg max-w-2xl">
+            Concerts, festivals, matchs et soirées. Payez avec Mobile Money ou carte, recevez votre billet sur WhatsApp.
+          </p>
         </div>
 
-        <button
-          onClick={() => setShowCountryPicker(true)}
-          title="Changer de pays"
-          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white"
-        >
-          <Globe size={13} />
-          {userCountry === 'Global' ? 'Tous les pays' : userCountry} · changer
-        </button>
+        {featured && (
+          <button
+            onClick={() => { incrementLocalView(featured.id); navigate(`/event/${featured.slug || featured.id}`); }}
+            className="md:col-start-2 md:row-start-1 md:row-span-2 group text-left rounded-3xl overflow-hidden border border-white/10 bg-[#1e293b] hover:border-orange-500/60 transition-colors"
+          >
+            {/* Affiche entière : fond flouté tiré de l'affiche, jamais recadrée */}
+            <div className="relative aspect-[4/5] max-h-[460px] w-full overflow-hidden bg-slate-900">
+              <img src={featured.image} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50" />
+              <img src={featured.image} alt={featured.title} className="relative w-full h-full object-contain" />
+              <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-orange-600 text-white text-[11px] font-black uppercase tracking-widest">À la une</span>
+            </div>
+            <div className="p-4 md:p-5">
+              <h2 className="text-white font-black text-lg md:text-xl leading-snug line-clamp-2">{featured.title}</h2>
+              <p className="text-slate-300 text-sm mt-1.5 flex items-center gap-1.5">
+                <Calendar size={14} className="text-orange-400 shrink-0" />
+                {new Date(featured.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {' · '}
+                {new Date(featured.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+              <p className="text-slate-400 text-sm mt-1 flex items-center gap-1.5 truncate">
+                <MapPin size={14} className="text-orange-400 shrink-0" />
+                <span className="truncate">{featured.location}, {featured.city}</span>
+              </p>
+              <span className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-500 text-white font-black group-hover:brightness-110">
+                <Ticket size={18} /> Réserver{featuredMinPrice > 0 ? ` · dès ${formatCurrency(featuredMinPrice)}` : ''}
+              </span>
+            </div>
+          </button>
+        )}
+
+        <div className="md:col-start-1 md:row-start-2">
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
+            {ticketsIssued >= 1000 && (
+              <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis</li>
+            )}
+            <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> Paiement vérifié</li>
+            <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> Billet disponible même sans réseau</li>
+          </ul>
+
+          {/* Recherche : les résultats se mettent à jour pendant la frappe */}
+          <div className="mt-5 flex gap-2">
+            <label className="relative flex-1">
+              <span className="sr-only">Rechercher un événement</span>
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="search"
+                placeholder="Artiste, événement, ville…"
+                className="w-full bg-slate-800/80 border border-white/10 rounded-2xl pl-11 pr-4 py-3.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 text-[15px]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </label>
+            <label className="relative w-[38%] sm:w-48 shrink-0">
+              <span className="sr-only">Ville</span>
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400" size={16} />
+              <select
+                className="w-full h-full bg-slate-800/80 border border-white/10 rounded-2xl pl-9 pr-3 py-3.5 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500 text-[15px]"
+                value={cityFilter}
+                onChange={(e) => setCityFilter(e.target.value)}
+              >
+                {uniqueCities.map(city => <option key={city} value={city}>{city === 'Tous' ? 'Toutes les villes' : city}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <button
+            onClick={() => setShowCountryPicker(true)}
+            title="Changer de pays"
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white"
+          >
+            <Globe size={13} />
+            {userCountry === 'Global' ? 'Tous les pays' : userCountry} · changer
+          </button>
+        </div>
       </section>
 
       {/* Control Bar */}
@@ -499,11 +546,14 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
       onClick={onClick}
       className="group relative bg-[#1e293b] rounded-2xl md:rounded-3xl overflow-hidden border border-slate-700/50 hover:border-orange-500/60 transition-colors duration-300 flex flex-col h-full cursor-pointer"
     >
-      <div className="relative aspect-[4/3] overflow-hidden">
+      <div className="relative aspect-square overflow-hidden bg-slate-900">
+        {/* Affiche entière : fond flouté tiré de l'affiche, jamais recadrée */}
+        <img src={event.image} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50" />
         <img
           src={event.image}
           alt={event.title}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+          loading="lazy"
+          className="relative w-full h-full object-contain transition-transform duration-700 group-hover:scale-[1.02]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1e293b] via-transparent to-transparent opacity-60" />
 
