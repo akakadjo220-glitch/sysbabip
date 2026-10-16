@@ -16,6 +16,20 @@ import { VideoUploadField } from '../components/LazyVideo';
 import { CRMPushService, PushCampaign } from '../services/CRMPushService';
 import { getUniqueSlug } from '../utils/slugUtils';
 import { getCountryDialCode } from '../utils/countryCodes';
+import { detectCountry } from '../utils/detectCountry';
+
+// Indicatifs proposés pour le numéro de support (Afrique, diaspora).
+const SUPPORT_DIAL_CODES = ['+225', '+221', '+237', '+226', '+223', '+228', '+229', '+241', '+224', '+227', '+243', '+242',
+  '+234', '+233', '+212', '+216', '+213', '+33', '+32', '+41', '+44', '+49', '+1'];
+
+/** « +225 07 99… » → { dialCode: '+225', supportPhone: '07 99…' } ; ancien numéro sans indicatif conservé tel quel. */
+const splitSupportPhone = (raw: string) => {
+  const value = String(raw || '').trim();
+  const compact = value.replace(/\s/g, '');
+  const dial = [...SUPPORT_DIAL_CODES].sort((a, b) => b.length - a.length).find(d => compact.startsWith(d));
+  if (!dial) return { dialCode: '', supportPhone: value };
+  return { dialCode: dial, supportPhone: value.replace(/^\s*\+\d+\s*/, '') || compact.slice(dial.length) };
+};
 import { CheckoutService } from '../services/CheckoutService';
 import { PaymentMethodPicker, usePaymentOptions, paymentRequest } from '../components/PaymentMethodPicker';
 import { uploadFile } from '../services/uploadService';
@@ -230,7 +244,7 @@ export const OrganizerDashboard: React.FC = () => {
         ? Math.min(...ticketTypes.map((t: any) => Number(t.price) || 0))
         : eventPayload.price || 0;
 
-      const payload: any = { ...eventPayload, capacity: totalCapacity, price: minPrice, practical_infos: practicalInfos, support_phone: supportPhone, organizer_name: user?.name, organizer_id: user?.id, video_url: video, sport_type: sport_type || null, home_team: home_team || null, away_team: away_team || null, competition: competition || null };
+      const payload: any = { ...eventPayload, capacity: totalCapacity, price: minPrice, practical_infos: practicalInfos, support_phone: supportPhone?.trim() ? (supportPhone.trim().startsWith('+') ? supportPhone.trim() : `${dialCode} ${supportPhone.trim()}`) : null, organizer_name: user?.name, organizer_id: user?.id, video_url: video, sport_type: sport_type || null, home_team: home_team || null, away_team: away_team || null, competition: competition || null };
 
       if (payload.title) {
         payload.slug = await getUniqueSlug(payload.title, 'events', id);
@@ -2086,8 +2100,8 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
       : [{ id: 't1', name: 'Standard', price: 5000, capacity: 500, features: ['Accès standard'] }],
     program: initialData.program || [],
     practicalInfos: initialData.practicalInfos || [],
-    supportPhone: initialData.supportPhone || '',
-    dialCode: initialData.dialCode || '+225',
+    supportPhone: splitSupportPhone(initialData.supportPhone).supportPhone,
+    dialCode: splitSupportPhone(initialData.supportPhone).dialCode || initialData.dialCode || '+225',
     ambassador_enabled: initialData.ambassador_enabled || false,
     ambassador_commission_type: initialData.ambassador_commission_type || 'percentage',
     ambassador_commission_value: initialData.ambassador_commission_value || 10,
@@ -2144,8 +2158,11 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
           setCountries(data);
 
           if (!form.isEdit) {
-            getCountryDialCode(data[0].name).then(dial => {
-              setForm(f => ({ ...f, country: data[0].name, dialCode: dial || '+225' }));
+            detectCountry().then(detected => {
+              const pick = data.find(c => c.name === detected)
+                || data.find(c => /ivoire/i.test(c.name))
+                || data[0];
+              setForm(f => (f.country ? f : { ...f, country: pick.name }));
             });
           }
         }
@@ -2160,13 +2177,14 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
       });
   }, []);
 
+  const [dialTouched, setDialTouched] = useState(Boolean(form.isEdit && form.dialCode));
   useEffect(() => {
-    if (form.country) {
+    if (form.country && !dialTouched) {
       getCountryDialCode(form.country).then(dial => {
         if (dial) setForm(f => ({ ...f, dialCode: dial }));
       });
     }
-  }, [form.country]);
+  }, [form.country, dialTouched]);
 
   const addGalleryImage = () => setForm({ ...form, gallery: [...form.gallery, ''] });
   const updateGalleryImage = (index: number, url: string) => {
@@ -2303,9 +2321,16 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
               <label className="block mt-4">
                 <span className="text-slate-400 font-semibold mb-1 block">Téléphone Support / Infoline (Affiché sur le billet)</span>
                 <div className="relative flex items-center">
-                  <div className="absolute left-0 top-0 bottom-0 flex items-center justify-center bg-slate-800/80 border-y border-l border-white/10 rounded-l-xl px-3 text-slate-300 font-mono font-bold text-sm">
-                    {form.dialCode}
-                  </div>
+                  <select
+                    aria-label="Indicatif du numéro de support"
+                    value={form.dialCode}
+                    onChange={e => { setDialTouched(true); setForm({ ...form, dialCode: e.target.value }); }}
+                    className="absolute left-0 top-0 bottom-0 w-[4.5rem] bg-slate-800/80 border-y border-l border-white/10 rounded-l-xl pl-2 text-slate-300 font-mono font-bold text-sm outline-none appearance-none cursor-pointer"
+                  >
+                    {(SUPPORT_DIAL_CODES.includes(form.dialCode) ? SUPPORT_DIAL_CODES : [form.dialCode, ...SUPPORT_DIAL_CODES]).map(code => (
+                      <option key={code} value={code}>{code}</option>
+                    ))}
+                  </select>
                   <input
                     type="tel"
                     required
@@ -2315,7 +2340,7 @@ const CreateEventWizard = ({ onCancel, onSave, initialData }: any) => {
                     placeholder="Ex: 01 23 45 67 89"
                   />
                 </div>
-                <p className="text-xs text-emerald-400 mt-1 italic">L'indicatif est déduit automatiquement de votre algorithme international lié au "{form.country}".</p>
+                <p className="text-xs text-slate-500 mt-1">Indicatif proposé selon le pays de l'événement ; vous pouvez le changer.</p>
               </label>
 
               {/* Ambassador Program Setup */}
