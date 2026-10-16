@@ -213,8 +213,8 @@ export const Marketplace: React.FC = () => {
         structuredData={marketplaceSeo.structuredData}
       />
       {/* Accroche + événement « À la une » (à droite sur ordinateur, sous l'accroche sur mobile) */}
-      <section className="pt-4 md:pt-10 pb-2 flex flex-col gap-5 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,400px)] md:gap-x-10 md:gap-y-5 animate-in fade-in duration-500">
-        <div className="md:col-start-1 md:row-start-1">
+      <section className="pt-4 md:pt-10 pb-2 flex flex-col gap-5 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,400px)] md:grid-rows-[1fr_auto_auto_1fr] md:gap-x-10 md:gap-y-0 animate-in fade-in duration-500">
+        <div className="md:col-start-1 md:row-start-2">
           <h1 className="text-[28px] leading-[1.15] md:text-5xl font-black text-white max-w-3xl">
             Vos prochaines sorties, <span className="text-orange-400">réservées en quelques clics.</span>
           </h1>
@@ -226,7 +226,7 @@ export const Marketplace: React.FC = () => {
         {featured && (
           <button
             onClick={() => { incrementLocalView(featured.id); navigate(`/event/${featured.slug || featured.id}`); }}
-            className="md:col-start-2 md:row-start-1 md:row-span-2 group text-left rounded-3xl overflow-hidden border border-white/10 bg-[#1e293b] hover:border-orange-500/60 transition-colors"
+            className="md:col-start-2 md:row-start-1 md:row-span-4 group text-left rounded-3xl overflow-hidden border border-white/10 bg-[#1e293b] hover:border-orange-500/60 transition-colors"
           >
             {/* Affiche entière : fond flouté tiré de l'affiche, jamais recadrée */}
             <div className="relative aspect-[4/5] max-h-[460px] w-full overflow-hidden bg-slate-900">
@@ -253,7 +253,7 @@ export const Marketplace: React.FC = () => {
           </button>
         )}
 
-        <div className="md:col-start-1 md:row-start-2">
+        <div className="md:col-start-1 md:row-start-3 md:mt-6">
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
             {ticketsIssued >= 1000 && (
               <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis</li>
