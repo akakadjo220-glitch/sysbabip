@@ -77,10 +77,7 @@ export const HeroPhoneDemo: React.FC = () => (
 
       {/* 1. Choisir l'événement */}
       <div className="hm-scene hm-a p-4 pt-9 flex flex-col">
-        <div className="rounded-2xl h-36 bg-gradient-to-br from-orange-500 via-rose-500 to-purple-600 p-3 flex flex-col justify-between">
-          <span className="self-start text-[9px] font-black uppercase tracking-widest bg-black/30 text-white px-2 py-0.5 rounded">Concert</span>
-          <span className="text-white font-black text-base leading-tight">Le concert<br />de l'année</span>
-        </div>
+        <img src="/hero-concert.webp" alt="" width={360} height={480} decoding="async" className="rounded-2xl h-36 w-full object-cover object-top bg-slate-800" />
         <p className="text-slate-300 text-[11px] mt-3">Sam. 30 nov. · Abidjan</p>
         <p className="text-white font-black text-sm">Dès 5 000 FCFA</p>
         <div className="hm-press mt-auto flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-orange-600 text-white text-xs font-black">
@@ -136,10 +133,7 @@ export const HeroCardDemo: React.FC<{ ticketsIssued: number }> = ({ ticketsIssue
 
     {/* 1. Choisir l'événement */}
     <div className="hm-scene hm-a p-3 flex gap-3">
-      <div className="w-[88px] shrink-0 rounded-xl bg-gradient-to-br from-orange-500 via-rose-500 to-purple-600 p-2 flex flex-col justify-between">
-        <span className="self-start text-[8px] font-black uppercase tracking-widest bg-black/30 text-white px-1.5 py-0.5 rounded">Concert</span>
-        <span className="text-white font-black text-[11px] leading-tight">Le concert de l'année</span>
-      </div>
+      <img src="/hero-concert.webp" alt="" width={360} height={480} decoding="async" className="w-[88px] shrink-0 rounded-xl object-cover object-top bg-slate-800" />
       <div className="flex-1 min-w-0 flex flex-col pt-4">
         <p className="text-slate-300 text-[11px]">Sam. 30 nov. · Abidjan</p>
         <p className="text-white font-black text-sm">Dès 5 000 FCFA</p>
