@@ -16,7 +16,14 @@ DECLARE
   v_src  public.events%ROWTYPE;
   v_new  uuid := gen_random_uuid();
   v_slug text := 'la-fouine-fait-vibrer-abidjan-test';
+  v_org  uuid;
 BEGIN
+  -- Organisateur : le compte akakadjo220@gmail.com (arrêt si introuvable).
+  SELECT id INTO v_org FROM public.profiles WHERE lower(email) = 'akakadjo220@gmail.com' LIMIT 1;
+  IF v_org IS NULL THEN
+    RAISE EXCEPTION 'Compte organisateur akakadjo220@gmail.com introuvable : rien n''a été créé';
+  END IF;
+
   SELECT * INTO v_src FROM public.events WHERE slug = 'la-fouine-fait-vibrer-yamoussoukro';
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Événement source introuvable (la-fouine-fait-vibrer-yamoussoukro)';
@@ -29,6 +36,7 @@ BEGIN
   SELECT (jsonb_populate_record(NULL::public.events, to_jsonb(v_src) || jsonb_build_object(
     'id', v_new,
     'slug', v_slug,
+    'organizer_id', v_org,
     'title', '🎤 La Fouine fait vibrer Abidjan ! (test)',
     'date', '2026-11-30T16:00:00+00:00',
     'end_date', NULL,
@@ -57,7 +65,7 @@ BEGIN
   VALUES (v_new, 'Standard', 100, 100, 0),
          (v_new, 'VIP', 500, 100, 0);
 
-  RAISE NOTICE 'Événement créé : https://babipass.com/event/%', v_slug;
+  RAISE NOTICE 'Événement créé pour akakadjo220@gmail.com : https://babipass.com/event/%', v_slug;
 END $$;
 
 COMMIT;
