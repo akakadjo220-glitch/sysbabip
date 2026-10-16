@@ -38,18 +38,13 @@ const STYLES = `
 }
 `;
 
-/** Petit QR code décoratif (motif fixe, pas un vrai code). */
-const QrMark: React.FC = () => {
-  const cells = '1110111100101101011111011010000101101111101110101'.split('');
-  return (
-    <div className="grid grid-cols-7 gap-[2px] w-14 h-14 p-1 bg-white rounded-md">
-      {cells.map((c, i) => <span key={i} className={c === '1' ? 'bg-slate-900 rounded-[1px]' : ''} />)}
-    </div>
-  );
-};
+/** Vrai QR code (public/hero-qr.svg, généré avec `qrcode`) : scanné, il ouvre babipass.com. */
+const QrMark: React.FC = () => (
+  <img src="/hero-qr.svg" alt="" width={56} height={56} className="w-14 h-14 rounded-md bg-white" />
+);
 
-// Logos officiels à déposer dans public/logos/. Tant qu'un fichier manque, la
-// pastille (point de couleur + nom) s'affiche : jamais d'image cassée.
+// Logos officiels (ronds) dans public/logos/. Si un fichier manque, la pastille
+// (point de couleur + nom) s'affiche : jamais d'image cassée.
 const NETWORKS = [
   { key: 'wave', name: 'Wave', src: '/logos/wave.png', dot: 'bg-sky-400' },
   { key: 'orange', name: 'Orange', src: '/logos/orange-money.png', dot: 'bg-orange-500' },
@@ -61,11 +56,11 @@ const NetworkLogo: React.FC<{ network: typeof NETWORKS[number]; index: number; c
   const [failed, setFailed] = useState(false);
   return (
     <span className={`hm-logo-${index} block`}>
-      <span className={`${network.key === 'wave' ? 'hm-pick ' : ''}flex items-center justify-center gap-1 rounded-lg ${compact ? 'h-8' : 'h-10'} ${failed ? 'bg-slate-800 text-white font-bold ' + (compact ? 'text-[10px]' : 'text-[11px]') : 'bg-white p-1'}`}>
+      <span className={`${network.key === 'wave' ? 'hm-pick ' : ''}flex items-center justify-center gap-1 rounded-lg ${compact ? 'h-10' : 'h-12'} bg-slate-800 ${failed ? 'text-white font-bold ' + (compact ? 'text-[10px]' : 'text-[11px]') : 'p-0.5'}`}>
         {failed ? (
           <><i className={`${compact ? 'w-2 h-2' : 'w-2.5 h-2.5'} rounded-full ${network.dot}`} />{network.name}</>
         ) : (
-          <img src={network.src} alt={network.name} onError={() => setFailed(true)} className="h-full w-auto max-w-full object-contain" />
+          <img src={network.src} alt={network.name} onError={() => setFailed(true)} className="h-full aspect-square rounded-full object-contain" />
         )}
       </span>
     </span>
