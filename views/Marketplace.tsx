@@ -217,7 +217,7 @@ export const Marketplace: React.FC = () => {
             {userCountry === 'Global' ? 'Monde Entier' : userCountry}
           </button>
           <button
-            onClick={() => navigate('/organizer/login')}
+            onClick={() => navigate('/organisateurs')}
             className="inline-flex items-center gap-1.5 md:gap-2 px-4 py-1.5 rounded-full bg-orange-600 hover:bg-orange-500 border border-orange-400 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-all shadow-lg shadow-orange-500/30"
           >
             Créer votre événement
@@ -354,6 +354,12 @@ export const Marketplace: React.FC = () => {
                 <p className="text-slate-400 mt-2">
                   En attendant, revivez les derniers temps forts vécus avec Babipass.
                 </p>
+                <button
+                  onClick={() => navigate('/organisateurs')}
+                  className="mt-4 text-sm font-bold text-orange-400 hover:text-orange-300"
+                >
+                  Vous organisez un événement ? Vendez vos billets sur Babipass →
+                </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                 {highlights.map(event => (

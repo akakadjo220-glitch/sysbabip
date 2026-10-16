@@ -226,6 +226,7 @@ async function sitemap(env, ctx) {
     })),
     ...(campaigns || []).filter(c => c.slug).map(c => ({ loc: `${SITE}/collecte/${encodeURIComponent(c.slug)}`, changefreq: 'daily', priority: '0.7' })),
     ...(tournaments || []).filter(t => t.slug).map(t => ({ loc: `${SITE}/tournoi/${encodeURIComponent(t.slug)}`, changefreq: 'weekly', priority: '0.7' })),
+    { loc: `${SITE}/organisateurs`, changefreq: 'monthly', priority: '0.8' },
     ...['/faq', '/about', '/tickets', '/terms', '/privacy'].map(p => ({ loc: `${SITE}${p}`, changefreq: 'monthly', priority: '0.5' })),
   ];
 
