@@ -158,36 +158,61 @@ export const Marketplace: React.FC = () => {
   // Événement « à la une » du pays du visiteur (choisi dans l'admin) : il remplace
   // l'exemple de l'animation, qui devient cliquable. Passé, complet ou dépublié :
   // retour automatique à l'exemple. « Tous les pays » : la une la plus récente.
-  const [featured, setFeatured] = useState<HeroDemoEvent | null>(null);
+  // undefined = en cours de chargement : l'animation attend (emplacement neutre) au lieu
+  // de montrer l'exemple puis de basculer. La dernière une connue est gardée dans le
+  // navigateur pour s'afficher tout de suite aux visites suivantes, puis revérifiée.
+  const [featured, setFeatured] = useState<HeroDemoEvent | null | undefined>(undefined);
   useEffect(() => {
     if (!userCountry) return;
     let cancelled = false;
-    setFeatured(null);
+    const cacheKey = `bp_featured_${userCountry}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      setFeatured(cached ? (JSON.parse(cached).demo ?? null) : undefined);
+    } catch { setFeatured(undefined); }
+
+    const resolve = async (): Promise<HeroDemoEvent | null> => {
+      const setting = await getPlatformSetting<{ countries?: Record<string, { event_id: string; set_at?: string }> }>('featured_event');
+      const entries = setting?.countries || {};
+      const entry = userCountry === 'Global'
+        ? Object.values(entries).sort((a, b) => String(b.set_at || '').localeCompare(String(a.set_at || '')))[0]
+        : entries[userCountry];
+      if (!entry?.event_id) return null;
+      const e = await CatalogService.getEvent(entry.event_id);
+      if (!e || e.status !== 'published' || !e.image) return null;
+      if (new Date(e.end_date || e.date) < new Date()) return null;
+      if (Number(e.capacity) > 0 && Number(e.sold) >= Number(e.capacity)) return null;
+      const prices = (e.ticket_types || []).map((t: any) => Number(t.price)).filter((p: number) => p > 0);
+      const min = prices.length ? Math.min(...prices) : Number(e.price) || 0;
+      const date = new Date(e.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+      return {
+        title: e.title,
+        image: mediumPoster(e.image),
+        imageFallback: e.image,
+        meta: [date, e.city || e.location].filter(Boolean).join(' · '),
+        price: min > 0 ? formatCurrency(min, e.currency) : '',
+        href: `/event/${e.slug || e.id}`,
+      };
+    };
+
     (async () => {
-      try {
-        const setting = await getPlatformSetting<{ countries?: Record<string, { event_id: string; set_at?: string }> }>('featured_event');
-        const entries = setting?.countries || {};
-        const entry = userCountry === 'Global'
-          ? Object.values(entries).sort((a, b) => String(b.set_at || '').localeCompare(String(a.set_at || '')))[0]
-          : entries[userCountry];
-        if (!entry?.event_id) return;
-        const e = await CatalogService.getEvent(entry.event_id);
-        if (!e || e.status !== 'published' || !e.image) return;
-        if (new Date(e.end_date || e.date) < new Date()) return;
-        if (Number(e.capacity) > 0 && Number(e.sold) >= Number(e.capacity)) return;
-        const prices = (e.ticket_types || []).map((t: any) => Number(t.price)).filter((p: number) => p > 0);
-        const min = prices.length ? Math.min(...prices) : Number(e.price) || 0;
-        const date = new Date(e.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-        if (cancelled) return;
-        setFeatured({
-          title: e.title,
-          image: mediumPoster(e.image),
-          imageFallback: e.image,
-          meta: [date, e.city || e.location].filter(Boolean).join(' · '),
-          price: min > 0 ? formatCurrency(min, e.currency) : '',
-          href: `/event/${e.slug || e.id}`,
+      let demo: HeroDemoEvent | null = null;
+      let ok = true;
+      try { demo = await resolve(); } catch { ok = false; /* l'exemple s'affiche */ }
+      // L'affiche est téléchargée avant d'être montrée (3 s max) : pas de cadre vide.
+      if (demo) {
+        const src = demo.image;
+        await new Promise<void>(done => {
+          const img = new Image();
+          img.onload = img.onerror = () => done();
+          img.src = src;
+          setTimeout(done, 3000);
         });
-      } catch { /* l'exemple reste affiché */ }
+      }
+      if (cancelled) return;
+      setFeatured(demo);
+      // Erreur réseau : on ne mémorise rien (sinon « pas de une » resterait affiché).
+      if (ok) { try { localStorage.setItem(cacheKey, JSON.stringify({ demo })); } catch { /* navigation privée */ } }
     })();
     return () => { cancelled = true; };
   }, [userCountry]);

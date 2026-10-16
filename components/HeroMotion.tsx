@@ -116,6 +116,18 @@ const Frame: React.FC<{ demo: HeroDemoEvent; className: string; children: React.
 
 /** Ordinateur : téléphone animé (choisir → payer → billet sur WhatsApp). */
 export const HeroPhoneDemo: React.FC<{ featured?: HeroDemoEvent | null }> = ({ featured }) => {
+  // undefined : la une est en cours de chargement → téléphone vide, sans l'exemple.
+  if (featured === undefined) {
+    return (
+      <div className="relative w-[230px] h-[340px] mx-auto" aria-hidden>
+        <div className="w-full h-full rounded-[2.2rem] border-[6px] border-slate-700 bg-slate-950 p-4 pt-9">
+          <div className="h-36 rounded-2xl bg-slate-800/70 animate-pulse" />
+          <div className="mt-3 h-3 w-3/4 rounded bg-slate-800/70 animate-pulse" />
+          <div className="mt-2 h-3 w-1/2 rounded bg-slate-800/70 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
   const demo = featured || DEFAULT_DEMO;
   return (
   <Frame demo={demo} className="relative w-[230px] h-[340px] mx-auto select-none">
@@ -174,6 +186,18 @@ export const HeroPhoneDemo: React.FC<{ featured?: HeroDemoEvent | null }> = ({ f
 
 /** Mobile : carte paysage compacte (~140 px), mêmes scènes que le téléphone. */
 export const HeroCardDemo: React.FC<{ featured?: HeroDemoEvent | null }> = ({ featured }) => {
+  // undefined : la une est en cours de chargement → carte vide, sans l'exemple.
+  if (featured === undefined) {
+    return (
+      <div className="h-[140px] rounded-2xl border border-white/10 bg-slate-900/80 p-3 flex gap-3" aria-hidden>
+        <div className="w-[88px] shrink-0 rounded-xl bg-slate-800/70 animate-pulse" />
+        <div className="flex-1 pt-1 space-y-2">
+          <div className="h-3 w-3/4 rounded bg-slate-800/70 animate-pulse" />
+          <div className="h-3 w-1/2 rounded bg-slate-800/70 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
   const demo = featured || DEFAULT_DEMO;
   return (
   <Frame demo={demo} className="relative h-[140px] rounded-2xl border border-white/10 bg-slate-900/80 overflow-hidden select-none">
