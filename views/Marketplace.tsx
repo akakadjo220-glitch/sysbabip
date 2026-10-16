@@ -251,7 +251,7 @@ export const Marketplace: React.FC = () => {
 
         {/* Mobile : la carte animée (mêmes scènes que le téléphone) remplace la ligne de preuves */}
         <div className="mt-4 md:hidden">
-          <HeroCardDemo ticketsIssued={ticketsIssued} featured={featured} />
+          <HeroCardDemo featured={featured} />
         </div>
         <ul className="mt-4 hidden md:flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
           {ticketsIssued >= 1000 && (

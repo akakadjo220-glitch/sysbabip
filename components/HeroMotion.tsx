@@ -173,16 +173,11 @@ export const HeroPhoneDemo: React.FC<{ featured?: HeroDemoEvent | null }> = ({ f
 };
 
 /** Mobile : carte paysage compacte (~140 px), mêmes scènes que le téléphone. */
-export const HeroCardDemo: React.FC<{ ticketsIssued: number; featured?: HeroDemoEvent | null }> = ({ ticketsIssued, featured }) => {
+export const HeroCardDemo: React.FC<{ featured?: HeroDemoEvent | null }> = ({ featured }) => {
   const demo = featured || DEFAULT_DEMO;
   return (
   <Frame demo={demo} className="relative h-[140px] rounded-2xl border border-white/10 bg-slate-900/80 overflow-hidden select-none">
     <style>{STYLES}</style>
-    {ticketsIssued >= 1000 && (
-      <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full bg-black/50 border border-white/10 text-[10px] font-bold text-emerald-300">
-        ✓ +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis
-      </span>
-    )}
 
     {/* 1. Choisir l'événement */}
     <div className="hm-scene hm-a p-3 flex gap-3">
