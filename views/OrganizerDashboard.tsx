@@ -17,6 +17,7 @@ import { CRMPushService, PushCampaign } from '../services/CRMPushService';
 import { getUniqueSlug } from '../utils/slugUtils';
 import { getCountryDialCode } from '../utils/countryCodes';
 import { detectCountry } from '../utils/detectCountry';
+import { ProfileMenu } from '../components/ProfileMenu';
 
 // Indicatifs proposés pour le numéro de support (Afrique, diaspora).
 const SUPPORT_DIAL_CODES = ['+225', '+221', '+237', '+226', '+223', '+228', '+229', '+241', '+224', '+227', '+243', '+242',
@@ -413,16 +414,26 @@ export const OrganizerDashboard: React.FC = () => {
             {profile?.name || user?.email} • Gérant {events.length} événement{events.length > 1 ? 's' : ''}
           </p>
         </div>
-        <button onClick={() => {
-          if (!profile?.is_verified) {
-            addToast('Veuillez vérifier votre identité dans Mon Compte pour créer un événement.', 'error');
-            setActiveTab('account');
-            return;
-          }
-          setShowWizard(true);
-        }} className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-amber-500 hover:scale-105 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-orange-500/25">
-          <Plus size={18} /> Nouvel Événement
-        </button>
+        <div className="flex items-center gap-3 self-end md:self-auto">
+          <button onClick={() => {
+            if (!profile?.is_verified) {
+              addToast('Veuillez vérifier votre identité dans Mon Compte pour créer un événement.', 'error');
+              setActiveTab('account');
+              return;
+            }
+            setShowWizard(true);
+          }} className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-amber-500 hover:scale-105 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-orange-500/25">
+            <Plus size={18} /> Nouvel Événement
+          </button>
+          {/* Compte : photo de profil → Mon compte, page publique, déconnexion */}
+          <ProfileMenu
+            name={profile?.company || profile?.name}
+            email={user?.email}
+            avatar={profile?.avatar}
+            onAccount={() => setActiveTab('account')}
+            publicPageUrl={user?.id ? `/organisateur/${user.id}` : undefined}
+          />
+        </div>
       </div>
 
       {/* Identity Verification Banner */}
