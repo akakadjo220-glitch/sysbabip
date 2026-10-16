@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, MousePointerClick } from 'lucide-react';
 
@@ -78,6 +78,8 @@ export interface HeroDemoEvent {
   price: string;
   /** Page de l'événement (absente pour l'exemple, qui n'est pas cliquable). */
   href?: string;
+  /** Affiche originale, si `image` est une version réduite qui pourrait manquer. */
+  imageFallback?: string;
 }
 
 const DEFAULT_DEMO: HeroDemoEvent = {
@@ -88,15 +90,19 @@ const DEFAULT_DEMO: HeroDemoEvent = {
 };
 
 /** Affiche : l'exemple est recadré par le haut ; une vraie affiche est montrée entière sur un fond flou. */
-const Poster: React.FC<{ demo: HeroDemoEvent; className: string }> = ({ demo, className }) =>
-  demo.href ? (
+const Poster: React.FC<{ demo: HeroDemoEvent; className: string }> = ({ demo, className }) => {
+  const [src, setSrc] = useState(demo.image);
+  useEffect(() => setSrc(demo.image), [demo.image]);
+  const fallback = () => { if (demo.imageFallback && src !== demo.imageFallback) setSrc(demo.imageFallback); };
+  return demo.href ? (
     <div className={`relative overflow-hidden bg-slate-800 ${className}`}>
-      <img src={demo.image} alt="" decoding="async" className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60" />
-      <img src={demo.image} alt="" decoding="async" className="relative w-full h-full object-contain" />
+      <img src={src} alt="" decoding="async" onError={fallback} className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60" />
+      <img src={src} alt="" decoding="async" onError={fallback} className="relative w-full h-full object-contain" />
     </div>
   ) : (
-    <img src={demo.image} alt="" width={360} height={480} decoding="async" className={`object-cover object-top bg-slate-800 ${className}`} />
+    <img src={src} alt="" width={360} height={480} decoding="async" className={`object-cover object-top bg-slate-800 ${className}`} />
   );
+};
 
 /** Avec un événement à la une, toute l'animation mène à sa page ; sinon c'est un simple décor. */
 const Frame: React.FC<{ demo: HeroDemoEvent; className: string; children: React.ReactNode }> = ({ demo, className, children }) =>

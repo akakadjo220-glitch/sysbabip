@@ -1,6 +1,7 @@
 -- 20261016_featured_event_public.sql
 -- Rend lisible par les visiteurs le réglage « featured_event » (événement à la une
--- de l'accueil : {"event_id": "...", "set_at": "..."}). Il ne contient aucun secret.
+-- de l'accueil, un par pays : {"countries": {"Côte d'Ivoire": {"event_id": "...", "set_at": "..."}}}).
+-- Il ne contient aucun secret.
 --
 -- Même fonction que dans 20261011_phase0_security_hardening.sql, avec une seule
 -- différence : 'featured_event' ajouté à public_keys. Sans risque, rejouable.

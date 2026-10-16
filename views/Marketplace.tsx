@@ -13,6 +13,7 @@ import { lazyNamed } from '../utils/lazyPage';
 import { detectCountry } from '../utils/detectCountry';
 import { HeroPhoneDemo, HeroCardDemo, HeroDemoEvent } from '../components/HeroMotion';
 import { getPlatformSetting } from '../utils/platformSettings';
+import { mediumPoster } from '../utils/posterVariant';
 
 // La carte (Mapbox, ~460 Ko) n'est téléchargée que si le visiteur ouvre la vue « Carte ».
 const PublicMap = lazyNamed(() => import('../components/PublicMap'), 'PublicMap');
@@ -154,16 +155,23 @@ export const Marketplace: React.FC = () => {
     CatalogService.ticketsIssued().then(setTicketsIssued).catch(() => setTicketsIssued(0));
   }, []);
 
-  // Événement « à la une » (choisi dans l'admin) : il remplace l'exemple de l'animation,
-  // qui devient cliquable. Passé, complet ou dépublié : retour automatique à l'exemple.
+  // Événement « à la une » du pays du visiteur (choisi dans l'admin) : il remplace
+  // l'exemple de l'animation, qui devient cliquable. Passé, complet ou dépublié :
+  // retour automatique à l'exemple. « Tous les pays » : la une la plus récente.
   const [featured, setFeatured] = useState<HeroDemoEvent | null>(null);
   useEffect(() => {
+    if (!userCountry) return;
     let cancelled = false;
+    setFeatured(null);
     (async () => {
       try {
-        const setting = await getPlatformSetting<{ event_id?: string | null; until?: string | null }>('featured_event');
-        if (!setting?.event_id || (setting.until && new Date(setting.until) < new Date())) return;
-        const e = await CatalogService.getEvent(setting.event_id);
+        const setting = await getPlatformSetting<{ countries?: Record<string, { event_id: string; set_at?: string }> }>('featured_event');
+        const entries = setting?.countries || {};
+        const entry = userCountry === 'Global'
+          ? Object.values(entries).sort((a, b) => String(b.set_at || '').localeCompare(String(a.set_at || '')))[0]
+          : entries[userCountry];
+        if (!entry?.event_id) return;
+        const e = await CatalogService.getEvent(entry.event_id);
         if (!e || e.status !== 'published' || !e.image) return;
         if (new Date(e.end_date || e.date) < new Date()) return;
         if (Number(e.capacity) > 0 && Number(e.sold) >= Number(e.capacity)) return;
@@ -173,7 +181,8 @@ export const Marketplace: React.FC = () => {
         if (cancelled) return;
         setFeatured({
           title: e.title,
-          image: e.image,
+          image: mediumPoster(e.image),
+          imageFallback: e.image,
           meta: [date, e.city || e.location].filter(Boolean).join(' · '),
           price: min > 0 ? formatCurrency(min, e.currency) : '',
           href: `/event/${e.slug || e.id}`,
@@ -181,7 +190,7 @@ export const Marketplace: React.FC = () => {
       } catch { /* l'exemple reste affiché */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userCountry]);
 
   // Accueil jamais vide : sans événement à venir, on montre les derniers temps forts.
   const [highlights, setHighlights] = useState<Event[]>([]);
