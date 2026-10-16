@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CheckCircle2, MousePointerClick } from 'lucide-react';
 
 // Motion design de l'accueil : la promesse « réservé en quelques clics, billet sur
@@ -10,8 +10,12 @@ const STYLES = `
 @keyframes hmSceneB { 0%, 25% { opacity: 0; transform: translateY(8px); } 30%, 49% { opacity: 1; transform: none; } 54%, 100% { opacity: 0; transform: translateY(-8px); } }
 @keyframes hmSceneC { 0%, 50% { opacity: 0; transform: translateY(8px); } 55%, 94% { opacity: 1; transform: none; } 99%, 100% { opacity: 0; } }
 @keyframes hmPress { 0%, 12% { transform: scale(1); } 16% { transform: scale(0.94); } 20%, 100% { transform: scale(1); } }
-@keyframes hmPick { 0%, 33% { box-shadow: none; } 37%, 100% { box-shadow: 0 0 0 2px #38bdf8; } }
-@keyframes hmCheck { 0%, 40% { opacity: 0; transform: scale(0.6); } 44%, 100% { opacity: 1; transform: scale(1); } }
+@keyframes hmPick { 0%, 39% { box-shadow: none; } 42%, 100% { box-shadow: 0 0 0 3px #38bdf8; } }
+@keyframes hmLogo0 { 0%, 27% { opacity: 0; transform: translateY(6px) scale(0.8); } 30% { opacity: 1; transform: scale(1.08); } 32%, 100% { opacity: 1; transform: none; } }
+@keyframes hmLogo1 { 0%, 30% { opacity: 0; transform: translateY(6px) scale(0.8); } 33% { opacity: 1; transform: scale(1.08); } 35%, 100% { opacity: 1; transform: none; } }
+@keyframes hmLogo2 { 0%, 33% { opacity: 0; transform: translateY(6px) scale(0.8); } 36% { opacity: 1; transform: scale(1.08); } 38%, 100% { opacity: 1; transform: none; } }
+@keyframes hmLogo3 { 0%, 36% { opacity: 0; transform: translateY(6px) scale(0.8); } 39% { opacity: 1; transform: scale(1.08); } 41%, 100% { opacity: 1; transform: none; } }
+@keyframes hmCheck { 0%, 44% { opacity: 0; transform: scale(0.6); } 47%, 100% { opacity: 1; transform: scale(1); } }
 @keyframes hmBubble { 0%, 57% { opacity: 0; transform: translateY(10px) scale(0.96); } 61%, 100% { opacity: 1; transform: none; } }
 @keyframes hmQr { 0%, 64% { opacity: 0; } 70%, 100% { opacity: 1; } }
 .hm-scene { position: absolute; inset: 0; opacity: 0; animation-duration: 9s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
@@ -20,11 +24,15 @@ const STYLES = `
 .hm-c { animation-name: hmSceneC; }
 .hm-press { animation: hmPress 9s ease-in-out infinite; }
 .hm-pick { animation: hmPick 9s ease-in-out infinite; }
+.hm-logo-0 { animation: hmLogo0 9s ease-out infinite; }
+.hm-logo-1 { animation: hmLogo1 9s ease-out infinite; }
+.hm-logo-2 { animation: hmLogo2 9s ease-out infinite; }
+.hm-logo-3 { animation: hmLogo3 9s ease-out infinite; }
 .hm-check { animation: hmCheck 9s ease-in-out infinite; }
 .hm-bubble { animation: hmBubble 9s ease-in-out infinite; }
 .hm-qr { animation: hmQr 9s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .hm-scene, .hm-press, .hm-pick, .hm-check, .hm-bubble, .hm-qr { animation: none !important; }
+  .hm-scene, .hm-press, .hm-pick, .hm-check, .hm-bubble, .hm-qr, .hm-logo-0, .hm-logo-1, .hm-logo-2, .hm-logo-3 { animation: none !important; }
   .hm-scene { opacity: 0; }
   .hm-c, .hm-bubble, .hm-qr { opacity: 1 !important; transform: none !important; }
 }
@@ -37,6 +45,30 @@ const QrMark: React.FC = () => {
     <div className="grid grid-cols-7 gap-[2px] w-14 h-14 p-1 bg-white rounded-md">
       {cells.map((c, i) => <span key={i} className={c === '1' ? 'bg-slate-900 rounded-[1px]' : ''} />)}
     </div>
+  );
+};
+
+// Logos officiels à déposer dans public/logos/. Tant qu'un fichier manque, la
+// pastille (point de couleur + nom) s'affiche : jamais d'image cassée.
+const NETWORKS = [
+  { key: 'wave', name: 'Wave', src: '/logos/wave.png', dot: 'bg-sky-400' },
+  { key: 'orange', name: 'Orange', src: '/logos/orange-money.png', dot: 'bg-orange-500' },
+  { key: 'mtn', name: 'MTN', src: '/logos/mtn-momo.png', dot: 'bg-yellow-400' },
+  { key: 'moov', name: 'Moov', src: '/logos/moov-money.png', dot: 'bg-blue-600' },
+];
+
+const NetworkLogo: React.FC<{ network: typeof NETWORKS[number]; index: number; compact?: boolean }> = ({ network, index, compact }) => {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className={`hm-logo-${index} block`}>
+      <span className={`${network.key === 'wave' ? 'hm-pick ' : ''}flex items-center justify-center gap-1 rounded-lg ${compact ? 'h-8' : 'h-10'} ${failed ? 'bg-slate-800 text-white font-bold ' + (compact ? 'text-[10px]' : 'text-[11px]') : 'bg-white p-1'}`}>
+        {failed ? (
+          <><i className={`${compact ? 'w-2 h-2' : 'w-2.5 h-2.5'} rounded-full ${network.dot}`} />{network.name}</>
+        ) : (
+          <img src={network.src} alt={network.name} onError={() => setFailed(true)} className="h-full w-auto max-w-full object-contain" />
+        )}
+      </span>
+    </span>
   );
 };
 
@@ -66,10 +98,7 @@ export const HeroPhoneDemo: React.FC = () => (
         <p className="text-white font-black text-sm">Paiement</p>
         <p className="text-slate-400 text-[11px] mb-3">Total : 5 000 FCFA</p>
         <div className="grid grid-cols-2 gap-2">
-          <span className="hm-pick flex items-center gap-1.5 p-2 rounded-lg bg-slate-800 text-white text-[11px] font-bold"><i className="w-2.5 h-2.5 rounded-full bg-sky-400" />Wave</span>
-          <span className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-800 text-white text-[11px] font-bold"><i className="w-2.5 h-2.5 rounded-full bg-orange-500" />Orange</span>
-          <span className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-800 text-white text-[11px] font-bold"><i className="w-2.5 h-2.5 rounded-full bg-yellow-400" />MTN</span>
-          <span className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-800 text-white text-[11px] font-bold"><i className="w-2.5 h-2.5 rounded-full bg-blue-600" />Moov</span>
+          {NETWORKS.map((n, i) => <NetworkLogo key={n.key} network={n} index={i} />)}
         </div>
         <div className="hm-check mt-auto flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black">
           <CheckCircle2 size={14} /> Paiement vérifié
@@ -129,10 +158,7 @@ export const HeroCardDemo: React.FC<{ ticketsIssued: number }> = ({ ticketsIssue
     <div className="hm-scene hm-b p-3 flex flex-col">
       <p className="text-white font-black text-sm">Paiement <span className="text-slate-400 font-semibold text-[11px]">· 5 000 FCFA</span></p>
       <div className="mt-2 grid grid-cols-4 gap-1.5">
-        <span className="hm-pick flex items-center justify-center gap-1 py-2 rounded-lg bg-slate-800 text-white text-[10px] font-bold"><i className="w-2 h-2 rounded-full bg-sky-400" />Wave</span>
-        <span className="flex items-center justify-center gap-1 py-2 rounded-lg bg-slate-800 text-white text-[10px] font-bold"><i className="w-2 h-2 rounded-full bg-orange-500" />Orange</span>
-        <span className="flex items-center justify-center gap-1 py-2 rounded-lg bg-slate-800 text-white text-[10px] font-bold"><i className="w-2 h-2 rounded-full bg-yellow-400" />MTN</span>
-        <span className="flex items-center justify-center gap-1 py-2 rounded-lg bg-slate-800 text-white text-[10px] font-bold"><i className="w-2 h-2 rounded-full bg-blue-600" />Moov</span>
+        {NETWORKS.map((n, i) => <NetworkLogo key={n.key} network={n} index={i} compact />)}
       </div>
       <div className="hm-check mt-auto flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black">
         <CheckCircle2 size={14} /> Paiement vérifié
