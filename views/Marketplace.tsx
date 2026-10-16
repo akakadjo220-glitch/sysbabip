@@ -11,7 +11,8 @@ import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, Lis
 import { Link } from 'react-router-dom';
 import { lazyNamed } from '../utils/lazyPage';
 import { detectCountry } from '../utils/detectCountry';
-import { HeroPhoneDemo, HeroCardDemo } from '../components/HeroMotion';
+import { HeroPhoneDemo, HeroCardDemo, HeroDemoEvent } from '../components/HeroMotion';
+import { getPlatformSetting } from '../utils/platformSettings';
 
 // La carte (Mapbox, ~460 Ko) n'est téléchargée que si le visiteur ouvre la vue « Carte ».
 const PublicMap = lazyNamed(() => import('../components/PublicMap'), 'PublicMap');
@@ -153,6 +154,35 @@ export const Marketplace: React.FC = () => {
     CatalogService.ticketsIssued().then(setTicketsIssued).catch(() => setTicketsIssued(0));
   }, []);
 
+  // Événement « à la une » (choisi dans l'admin) : il remplace l'exemple de l'animation,
+  // qui devient cliquable. Passé, complet ou dépublié : retour automatique à l'exemple.
+  const [featured, setFeatured] = useState<HeroDemoEvent | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const setting = await getPlatformSetting<{ event_id?: string | null; until?: string | null }>('featured_event');
+        if (!setting?.event_id || (setting.until && new Date(setting.until) < new Date())) return;
+        const e = await CatalogService.getEvent(setting.event_id);
+        if (!e || e.status !== 'published' || !e.image) return;
+        if (new Date(e.end_date || e.date) < new Date()) return;
+        if (Number(e.capacity) > 0 && Number(e.sold) >= Number(e.capacity)) return;
+        const prices = (e.ticket_types || []).map((t: any) => Number(t.price)).filter((p: number) => p > 0);
+        const min = prices.length ? Math.min(...prices) : Number(e.price) || 0;
+        const date = new Date(e.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+        if (cancelled) return;
+        setFeatured({
+          title: e.title,
+          image: e.image,
+          meta: [date, e.city || e.location].filter(Boolean).join(' · '),
+          price: min > 0 ? formatCurrency(min, e.currency) : '',
+          href: `/event/${e.slug || e.id}`,
+        });
+      } catch { /* l'exemple reste affiché */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Accueil jamais vide : sans événement à venir, on montre les derniers temps forts.
   const [highlights, setHighlights] = useState<Event[]>([]);
   const noFilters = selectedCategory === 'Tous' && cityFilter === 'Tous' && !debouncedSearch;
@@ -206,13 +236,13 @@ export const Marketplace: React.FC = () => {
         <h1 className="text-[28px] leading-[1.15] md:text-5xl font-black text-white max-w-3xl">
           Vos prochaines sorties, <span className="text-orange-400">réservées en quelques clics.</span>
         </h1>
-        <p className="text-slate-300 mt-3 text-[15px] md:text-lg max-w-2xl">
+        <p className="text-slate-300 mt-2 text-[13px] leading-snug md:text-lg md:leading-normal max-w-2xl">
           Concerts, festivals, matchs et soirées. Payez avec Mobile Money ou carte, recevez votre billet sur WhatsApp.
         </p>
 
         {/* Mobile : la carte animée (mêmes scènes que le téléphone) remplace la ligne de preuves */}
         <div className="mt-4 md:hidden">
-          <HeroCardDemo ticketsIssued={ticketsIssued} />
+          <HeroCardDemo ticketsIssued={ticketsIssued} featured={featured} />
         </div>
         <ul className="mt-4 hidden md:flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
           {ticketsIssued >= 1000 && (
@@ -260,7 +290,7 @@ export const Marketplace: React.FC = () => {
 
         {/* Ordinateur : le téléphone animé occupe l'espace à droite de l'accroche */}
         <div className="hidden md:block">
-          <HeroPhoneDemo />
+          <HeroPhoneDemo featured={featured} />
         </div>
       </section>
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CheckCircle2, MousePointerClick } from 'lucide-react';
 
 // Motion design de l'accueil : la promesse « réservé en quelques clics, billet sur
@@ -67,19 +68,62 @@ const NetworkLogo: React.FC<{ network: typeof NETWORKS[number]; index: number; c
   );
 };
 
+/** Événement montré dans l'animation : l'exemple par défaut ou l'événement « à la une ». */
+export interface HeroDemoEvent {
+  title: string;
+  image: string;
+  /** ex. « sam. 30 nov. · Abidjan » */
+  meta: string;
+  /** ex. « 5 000 FCFA » ; vide si gratuit ou inconnu */
+  price: string;
+  /** Page de l'événement (absente pour l'exemple, qui n'est pas cliquable). */
+  href?: string;
+}
+
+const DEFAULT_DEMO: HeroDemoEvent = {
+  title: "Le concert de l'année",
+  image: '/hero-concert.webp',
+  meta: 'Sam. 30 nov. · Abidjan',
+  price: '5 000 FCFA',
+};
+
+/** Affiche : l'exemple est recadré par le haut ; une vraie affiche est montrée entière sur un fond flou. */
+const Poster: React.FC<{ demo: HeroDemoEvent; className: string }> = ({ demo, className }) =>
+  demo.href ? (
+    <div className={`relative overflow-hidden bg-slate-800 ${className}`}>
+      <img src={demo.image} alt="" decoding="async" className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60" />
+      <img src={demo.image} alt="" decoding="async" className="relative w-full h-full object-contain" />
+    </div>
+  ) : (
+    <img src={demo.image} alt="" width={360} height={480} decoding="async" className={`object-cover object-top bg-slate-800 ${className}`} />
+  );
+
+/** Avec un événement à la une, toute l'animation mène à sa page ; sinon c'est un simple décor. */
+const Frame: React.FC<{ demo: HeroDemoEvent; className: string; children: React.ReactNode }> = ({ demo, className, children }) =>
+  demo.href ? (
+    <Link to={demo.href} aria-label={`Réserver : ${demo.title}`} className={`${className} block group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
+      {children}
+    </Link>
+  ) : (
+    <div className={className} aria-hidden>{children}</div>
+  );
+
 /** Ordinateur : téléphone animé (choisir → payer → billet sur WhatsApp). */
-export const HeroPhoneDemo: React.FC = () => (
-  <div className="relative w-[230px] h-[340px] mx-auto select-none" aria-hidden>
+export const HeroPhoneDemo: React.FC<{ featured?: HeroDemoEvent | null }> = ({ featured }) => {
+  const demo = featured || DEFAULT_DEMO;
+  return (
+  <Frame demo={demo} className="relative w-[230px] h-[340px] mx-auto select-none">
     <style>{STYLES}</style>
     <div className="absolute -inset-10 bg-orange-500/10 blur-3xl rounded-full pointer-events-none" />
-    <div className="relative w-full h-full rounded-[2.2rem] border-[6px] border-slate-700 bg-slate-950 shadow-2xl overflow-hidden">
+    <div className="relative w-full h-full rounded-[2.2rem] border-[6px] border-slate-700 group-hover:border-orange-500/60 transition-colors bg-slate-950 shadow-2xl overflow-hidden">
       <div className="absolute top-2 left-1/2 -translate-x-1/2 w-16 h-4 rounded-full bg-slate-800 z-10" />
 
       {/* 1. Choisir l'événement */}
       <div className="hm-scene hm-a p-4 pt-9 flex flex-col">
-        <img src="/hero-concert.webp" alt="" width={360} height={480} decoding="async" className="rounded-2xl h-36 w-full object-cover object-top bg-slate-800" />
-        <p className="text-slate-300 text-[11px] mt-3">Sam. 30 nov. · Abidjan</p>
-        <p className="text-white font-black text-sm">Dès 5 000 FCFA</p>
+        <Poster demo={demo} className="rounded-2xl h-36 w-full" />
+        <p className="text-white font-bold text-xs mt-2 truncate">{demo.title}</p>
+        <p className="text-slate-300 text-[11px] truncate">{demo.meta}</p>
+        {demo.price && <p className="text-white font-black text-sm">Dès {demo.price}</p>}
         <div className="hm-press mt-auto flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-orange-600 text-white text-xs font-black">
           <MousePointerClick size={14} /> Réserver
         </div>
@@ -88,7 +132,7 @@ export const HeroPhoneDemo: React.FC = () => (
       {/* 2. Payer en Mobile Money */}
       <div className="hm-scene hm-b p-4 pt-9 flex flex-col">
         <p className="text-white font-black text-sm">Paiement</p>
-        <p className="text-slate-400 text-[11px] mb-3">Total : 5 000 FCFA</p>
+        <p className="text-slate-400 text-[11px] mb-3">{demo.price ? `Total : ${demo.price}` : 'Mobile Money ou carte'}</p>
         <div className="grid grid-cols-2 gap-2">
           {NETWORKS.map((n, i) => <NetworkLogo key={n.key} network={n} index={i} />)}
         </div>
@@ -107,9 +151,9 @@ export const HeroPhoneDemo: React.FC = () => (
           <div className="hm-bubble max-w-[85%] rounded-xl rounded-tl-sm bg-[#202c33] p-2.5">
             <p className="text-white text-[11px] font-bold">🎟️ Votre billet est arrivé !</p>
             <div className="mt-2 flex items-center gap-2 rounded-lg bg-slate-900 p-2">
-              <div className="hm-qr"><QrMark /></div>
-              <div className="text-[10px] leading-tight text-slate-300">
-                <p className="text-white font-bold">Le concert de l'année</p>
+              <div className="hm-qr shrink-0"><QrMark /></div>
+              <div className="min-w-0 text-[10px] leading-tight text-slate-300">
+                <p className="text-white font-bold line-clamp-2">{demo.title}</p>
                 <p>1 billet · Standard</p>
                 <p className="text-emerald-400 font-bold mt-1">✓ Valide</p>
               </div>
@@ -118,12 +162,15 @@ export const HeroPhoneDemo: React.FC = () => (
         </div>
       </div>
     </div>
-  </div>
-);
+  </Frame>
+  );
+};
 
 /** Mobile : carte paysage compacte (~140 px), mêmes scènes que le téléphone. */
-export const HeroCardDemo: React.FC<{ ticketsIssued: number }> = ({ ticketsIssued }) => (
-  <div className="relative h-[140px] rounded-2xl border border-white/10 bg-slate-900/80 overflow-hidden select-none" aria-hidden>
+export const HeroCardDemo: React.FC<{ ticketsIssued: number; featured?: HeroDemoEvent | null }> = ({ ticketsIssued, featured }) => {
+  const demo = featured || DEFAULT_DEMO;
+  return (
+  <Frame demo={demo} className="relative h-[140px] rounded-2xl border border-white/10 bg-slate-900/80 overflow-hidden select-none">
     <style>{STYLES}</style>
     {ticketsIssued >= 1000 && (
       <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full bg-black/50 border border-white/10 text-[10px] font-bold text-emerald-300">
@@ -133,10 +180,11 @@ export const HeroCardDemo: React.FC<{ ticketsIssued: number }> = ({ ticketsIssue
 
     {/* 1. Choisir l'événement */}
     <div className="hm-scene hm-a p-3 flex gap-3">
-      <img src="/hero-concert.webp" alt="" width={360} height={480} decoding="async" className="w-[88px] shrink-0 rounded-xl object-cover object-top bg-slate-800" />
-      <div className="flex-1 min-w-0 flex flex-col pt-4">
-        <p className="text-slate-300 text-[11px]">Sam. 30 nov. · Abidjan</p>
-        <p className="text-white font-black text-sm">Dès 5 000 FCFA</p>
+      <Poster demo={demo} className="w-[88px] shrink-0 rounded-xl" />
+      <div className="flex-1 min-w-0 flex flex-col pt-1">
+        <p className="text-white font-bold text-xs truncate">{demo.title}</p>
+        <p className="text-slate-300 text-[11px] truncate">{demo.meta}</p>
+        {demo.price && <p className="text-white font-black text-sm">Dès {demo.price}</p>}
         <div className="hm-press mt-auto flex items-center justify-center gap-1.5 py-2 rounded-xl bg-orange-600 text-white text-xs font-black">
           <MousePointerClick size={14} /> Réserver
         </div>
@@ -145,7 +193,7 @@ export const HeroCardDemo: React.FC<{ ticketsIssued: number }> = ({ ticketsIssue
 
     {/* 2. Payer en Mobile Money */}
     <div className="hm-scene hm-b p-3 flex flex-col">
-      <p className="text-white font-black text-sm">Paiement <span className="text-slate-400 font-semibold text-[11px]">· 5 000 FCFA</span></p>
+      <p className="text-white font-black text-sm">Paiement {demo.price && <span className="text-slate-400 font-semibold text-[11px]">· {demo.price}</span>}</p>
       <div className="mt-2 grid grid-cols-4 gap-1.5">
         {NETWORKS.map((n, i) => <NetworkLogo key={n.key} network={n} index={i} compact />)}
       </div>
@@ -161,15 +209,16 @@ export const HeroCardDemo: React.FC<{ ticketsIssued: number }> = ({ ticketsIssue
         <span className="text-white text-xs font-bold">Babipass</span>
       </div>
       <div className="flex-1 px-3 py-2 bg-[#0b141a]">
-        <div className="hm-bubble inline-flex items-center gap-2.5 rounded-xl rounded-tl-sm bg-[#202c33] p-2">
-          <div className="hm-qr"><QrMark /></div>
-          <div className="text-[10px] leading-tight text-slate-300">
+        <div className="hm-bubble inline-flex max-w-full items-center gap-2.5 rounded-xl rounded-tl-sm bg-[#202c33] p-2">
+          <div className="hm-qr shrink-0"><QrMark /></div>
+          <div className="min-w-0 text-[10px] leading-tight text-slate-300">
             <p className="text-white text-[11px] font-bold">🎟️ Votre billet est arrivé !</p>
-            <p className="mt-0.5">Le concert de l'année · 1 billet</p>
+            <p className="mt-0.5 truncate">{demo.title} · 1 billet</p>
             <p className="text-emerald-400 font-bold mt-1">✓ Valide</p>
           </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  </Frame>
+  );
+};

@@ -459,6 +459,26 @@ const EventsTab = ({ onAction, onSave, addToast }: any) => {
 
   useEffect(() => { fetchEvents(); }, [currentPage, debouncedSearch, filter]);
 
+  // Événement « à la une » : affiché dans l'animation de l'accueil, cliquable vers sa page.
+  const [featuredId, setFeaturedId] = useState<string | null>(null);
+  const [savingFeatured, setSavingFeatured] = useState(false);
+  useEffect(() => {
+    getPlatformSettings(['featured_event']).then(s => setFeaturedId(s.featured_event?.event_id || null)).catch(() => {});
+  }, []);
+
+  const toggleFeatured = async (event: Event) => {
+    const nextId = featuredId === event.id ? null : event.id;
+    setSavingFeatured(true);
+    const { error } = await supabase
+      .from('platform_settings')
+      .upsert({ key: 'featured_event', value: { event_id: nextId, set_at: new Date().toISOString() } as any }, { onConflict: 'key' });
+    setSavingFeatured(false);
+    if (error) { addToast?.(`Erreur : ${error.message}`, 'error'); return; }
+    clearSettingsCache();
+    setFeaturedId(nextId);
+    addToast?.(nextId ? `« ${event.title} » est à la une de l'accueil.` : "Plus d'événement à la une : l'accueil montre l'exemple.", 'success');
+  };
+
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   const performAction = async (id: string, action: 'approve' | 'reject' | 'delete') => {
@@ -530,6 +550,16 @@ const EventsTab = ({ onAction, onSave, addToast }: any) => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 relative z-30 pointer-events-auto">
+                        {(event.status === 'published' || featuredId === event.id) && (
+                          <button
+                            onClick={() => toggleFeatured(event)}
+                            disabled={savingFeatured}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 border transition-all disabled:opacity-50 ${featuredId === event.id ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'text-slate-400 border-white/10 hover:text-amber-300 hover:border-amber-500/40'}`}
+                            title={featuredId === event.id ? "Retirer de la une de l'accueil" : "Mettre à la une de l'accueil"}
+                          >
+                            <Star size={14} className={featuredId === event.id ? 'fill-amber-300' : ''} /> {featuredId === event.id ? 'À la une' : 'Mettre à la une'}
+                          </button>
+                        )}
                         <button onClick={() => performAction(event.id, 'delete')} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Supprimer">
                           {loadingActions[event.id] ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                         </button>
