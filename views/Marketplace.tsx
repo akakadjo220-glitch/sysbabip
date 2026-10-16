@@ -176,17 +176,6 @@ export const Marketplace: React.FC = () => {
   // Catégories : les 5 premières visibles, les autres derrière « Plus ».
   const [showAllCategories, setShowAllCategories] = useState(false);
 
-  // Seules les catégories qui ont des événements, avec leur nombre (comptés sur la
-  // liste légère de la carte). Si ce comptage manque, toutes restent visibles.
-  const categoryCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    mapEvents.forEach((e: any) => { if (e.category) counts[e.category] = (counts[e.category] || 0) + 1; });
-    return counts;
-  }, [mapEvents]);
-  const shownCategories = mapEvents.length > 0
-    ? categories.filter(c => c === 'Tous' || c === selectedCategory || (categoryCounts[c] || 0) > 0)
-    : categories;
-
   if (showCountryPicker) {
     return <CountrySelector onSelect={(country) => { setUserCountry(country); setShowCountryPicker(false); }} />;
   }
@@ -314,8 +303,8 @@ export const Marketplace: React.FC = () => {
       <div className="sticky top-0 z-30 py-3 md:py-4 bg-[#0f172a]/95 backdrop-blur-xl border-b border-white/10 -mx-4 px-4 md:mx-0 md:px-0 md:rounded-xl md:border-none md:bg-transparent md:backdrop-blur-none flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl md:shadow-none">
         <nav aria-label="Catégories d'événements" className="flex overflow-x-auto pb-2 md:pb-0 gap-2 w-full md:w-auto no-scrollbar mask-gradient snap-x">
         {(showAllCategories
-            ? shownCategories
-            : [...shownCategories.slice(0, 6), ...(shownCategories.indexOf(selectedCategory) >= 6 ? [selectedCategory] : [])]
+            ? categories
+            : [...categories.slice(0, 6), ...(categories.indexOf(selectedCategory) >= 6 ? [selectedCategory] : [])]
           ).map((cat) => {
             const SPORT_ICONS: Record<string, string> = {
               'Football': '⚽', 'Basketball': '🏀', 'Rugby': '🏉',
@@ -335,24 +324,23 @@ export const Marketplace: React.FC = () => {
                   }`}
               >
                 {icon && <span className="mr-1">{icon}</span>}{cat}
-                {cat !== 'Tous' && categoryCounts[cat] > 0 && <span className="ml-1 opacity-70">({categoryCounts[cat]})</span>}
               </button>
             );
           })}
-          {shownCategories.length > 6 && (
+          {categories.length > 6 && (
             <button
               onClick={() => setShowAllCategories(v => !v)}
               className="snap-start px-4 md:px-5 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-bold whitespace-nowrap bg-slate-800/50 text-orange-300 hover:bg-slate-700 hover:text-white border border-slate-700 transition-all"
             >
-              {showAllCategories ? 'Moins' : `Plus (${shownCategories.length - 6})`}
+              {showAllCategories ? 'Moins' : `Plus (${categories.length - 6})`}
             </button>
           )}
         </nav>
 
-        <div className="flex items-center gap-1 w-full md:w-auto bg-slate-800/40 p-1 rounded-xl border border-slate-700/70">
+        <div className="flex items-center gap-3 w-full md:w-auto bg-slate-800/50 p-1 rounded-xl border border-slate-700">
           <button
             onClick={() => setViewMode('grid')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
           >
             <List size={18} />
@@ -360,7 +348,7 @@ export const Marketplace: React.FC = () => {
           </button>
           <button
             onClick={() => setViewMode('map')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'map' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'map' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
           >
             <MapIcon size={18} />
