@@ -11,7 +11,7 @@ import { MapPin, Calendar, Users, Filter, Search, Eye, Star, Map as MapIcon, Lis
 import { Link } from 'react-router-dom';
 import { lazyNamed } from '../utils/lazyPage';
 import { detectCountry } from '../utils/detectCountry';
-import { HeroPhoneDemo, HeroStepsTicker } from '../components/HeroMotion';
+import { HeroPhoneDemo, HeroCardDemo } from '../components/HeroMotion';
 
 // La carte (Mapbox, ~460 Ko) n'est téléchargée que si le visiteur ouvre la vue « Carte ».
 const PublicMap = lazyNamed(() => import('../components/PublicMap'), 'PublicMap');
@@ -210,9 +210,9 @@ export const Marketplace: React.FC = () => {
           Concerts, festivals, matchs et soirées. Payez avec Mobile Money ou carte, recevez votre billet sur WhatsApp.
         </p>
 
-        {/* Mobile : les étapes animées remplacent la ligne de preuves (hauteur fixe) */}
+        {/* Mobile : la carte animée (mêmes scènes que le téléphone) remplace la ligne de preuves */}
         <div className="mt-4 md:hidden">
-          <HeroStepsTicker ticketsIssued={ticketsIssued} />
+          <HeroCardDemo ticketsIssued={ticketsIssued} />
         </div>
         <ul className="mt-4 hidden md:flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
           {ticketsIssued >= 1000 && (
