@@ -19,11 +19,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <span className="font-black text-xl tracking-tight text-white">Babipass</span>
           </Link>
           <nav className="flex items-center gap-2">
-            <Link to="/organisateurs" className="hidden sm:inline-flex px-3 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white">
-              Organisateurs
+            {/* Libellés courts sur mobile pour que tout tienne sur un petit écran */}
+            <Link to="/organisateurs" className="inline-flex px-2 sm:px-3 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white">
+              <span className="sm:hidden">Organiser</span>
+              <span className="hidden sm:inline">Organisateurs</span>
             </Link>
-            <Link to="/tickets" className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 border border-white/10 text-sm font-bold text-white hover:bg-white/15">
-              <Ticket size={16} className="text-orange-400" /> Mes billets
+            <Link to="/tickets" className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 rounded-xl bg-white/10 border border-white/10 text-sm font-bold text-white hover:bg-white/15">
+              <Ticket size={16} className="text-orange-400" />
+              <span className="sm:hidden">Billets</span>
+              <span className="hidden sm:inline">Mes billets</span>
             </Link>
           </nav>
         </div>
