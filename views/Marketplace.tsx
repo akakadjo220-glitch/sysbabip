@@ -199,67 +199,57 @@ export const Marketplace: React.FC = () => {
         canonicalUrl={marketplaceSeo.canonicalUrl}
         structuredData={marketplaceSeo.structuredData}
       />
-      {/* 📢 Main Hero Carousel Area */}
-      <section className="relative flex flex-col gap-4 animate-in slide-in-from-bottom-4 fade-in duration-700 mt-2">
-        {/* Top Pills */}
-        <div className="flex flex-wrap items-center gap-2 md:gap-3 px-2 z-20 pt-2 md:pt-8">
-          {ticketsIssued >= 1000 && (
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-300 text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md">
-              +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis
-            </div>
-          )}
-          <button
-            onClick={() => setShowCountryPicker(true)}
-            title="Changer de pays"
-            className="inline-flex items-center gap-1.5 md:gap-2 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-colors"
-          >
-            <Globe size={12} />
-            {userCountry === 'Global' ? 'Monde Entier' : userCountry}
-          </button>
-          <button
-            onClick={() => navigate('/organisateurs')}
-            className="inline-flex items-center gap-1.5 md:gap-2 px-4 py-1.5 rounded-full bg-orange-600 hover:bg-orange-500 border border-orange-400 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-all shadow-lg shadow-orange-500/30"
-          >
-            Créer votre événement
-          </button>
-          <button
-            onClick={() => navigate('/tickets')}
-            className="inline-flex items-center gap-1.5 md:gap-2 px-4 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 border border-rose-400 text-white text-[10px] md:text-xs font-bold uppercase tracking-widest backdrop-blur-md transition-all shadow-lg shadow-rose-500/30"
-          >
-            <Ticket size={12} />
-            Mes Billets
-          </button>
-        </div>
+      {/* Accroche : une promesse claire, des preuves réelles, une seule recherche */}
+      <section className="pt-4 md:pt-10 pb-2 animate-in fade-in duration-500">
+        <h1 className="text-[28px] leading-[1.15] md:text-5xl font-black text-white max-w-3xl">
+          Vos prochaines sorties, <span className="text-orange-400">réservées en quelques clics.</span>
+        </h1>
+        <p className="text-slate-300 mt-3 text-[15px] md:text-lg max-w-2xl">
+          Concerts, festivals, matchs et soirées. Payez avec Mobile Money ou carte, recevez votre billet sur WhatsApp.
+        </p>
 
-        {/* Floating Search Dock (Below Carousel) */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-2 rounded-2xl md:rounded-full flex flex-col sm:flex-row gap-2 mt-2 md:mt-4 z-30 mx-4 md:mx-auto md:w-11/12 lg:w-3/4 shadow-2xl relative">
-          <div className="flex-1 relative w-full sm:w-auto">
-            <Search className="absolute left-4 top-3.5 text-slate-300" size={20} />
+        <ul className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-400">
+          {ticketsIssued >= 1000 && (
+            <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> +{new Intl.NumberFormat('fr-FR').format(Math.floor(ticketsIssued / 1000) * 1000)} billets émis</li>
+          )}
+          <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> Paiement vérifié</li>
+          <li className="flex items-center gap-1.5"><span className="text-emerald-400">✓</span> Billet disponible même sans réseau</li>
+        </ul>
+
+        {/* Recherche : les résultats se mettent à jour pendant la frappe */}
+        <div className="mt-5 flex gap-2">
+          <label className="relative flex-1">
+            <span className="sr-only">Rechercher un événement</span>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
-              type="text"
-              placeholder="Quel événement cherchez-vous ?"
-              className="w-full bg-slate-900/60 border border-white/10 rounded-xl md:rounded-full pl-12 pr-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm md:text-base"
+              type="search"
+              placeholder="Artiste, événement, ville…"
+              className="w-full bg-slate-800/80 border border-white/10 rounded-2xl pl-11 pr-4 py-3.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 text-[15px]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <div className="relative min-w-[140px] w-full sm:w-auto">
-              <MapPin className="absolute left-3 top-3.5 text-slate-300" size={18} />
-              <select
-                className="w-full bg-slate-900/60 border border-white/10 rounded-xl md:rounded-full pl-10 pr-4 py-3 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm md:text-base"
-                value={cityFilter}
-                onChange={(e) => setCityFilter(e.target.value)}
-              >
-                {uniqueCities.map(city => <option key={city} value={city}>{city}</option>)}
-              </select>
-            </div>
-            <button className="w-full sm:w-auto bg-orange-600 text-white px-8 py-3 rounded-xl md:rounded-full font-bold transition-all flex items-center justify-center text-sm md:text-base hover:bg-orange-500 active:scale-[0.98] animate-glow-pulse">
-              Rechercher
-            </button>
-          </div>
+          </label>
+          <label className="relative w-[38%] sm:w-48 shrink-0">
+            <span className="sr-only">Ville</span>
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400" size={16} />
+            <select
+              className="w-full h-full bg-slate-800/80 border border-white/10 rounded-2xl pl-9 pr-3 py-3.5 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500 text-[15px]"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+            >
+              {uniqueCities.map(city => <option key={city} value={city}>{city === 'Tous' ? 'Toutes les villes' : city}</option>)}
+            </select>
+          </label>
         </div>
+
+        <button
+          onClick={() => setShowCountryPicker(true)}
+          title="Changer de pays"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white"
+        >
+          <Globe size={13} />
+          {userCountry === 'Global' ? 'Tous les pays' : userCountry} · changer
+        </button>
       </section>
 
       {/* Control Bar */}
@@ -507,7 +497,7 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
   return (
     <div
       onClick={onClick}
-      className="group hover-3d-tilt relative bg-[#1e293b] rounded-2xl md:rounded-3xl overflow-hidden border border-slate-700/50 hover:border-orange-500/80 transition-all duration-500 flex flex-col h-full cursor-pointer"
+      className="group relative bg-[#1e293b] rounded-2xl md:rounded-3xl overflow-hidden border border-slate-700/50 hover:border-orange-500/60 transition-colors duration-300 flex flex-col h-full cursor-pointer"
     >
       <div className="relative aspect-[4/3] overflow-hidden">
         <img
@@ -543,7 +533,7 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
           </h3>
           <div className="flex items-center text-slate-400 text-sm mb-2">
             <MapPin size={16} className="mr-1 text-orange-400" />
-            <span className="truncate">{event.location}, {event.city} <span className="text-slate-600">({event.country})</span></span>
+            <span className="truncate">{event.location}, {event.city}</span>
           </div>
 
           <div className="flex items-center justify-between mb-3">
@@ -558,28 +548,22 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
             ) : (
               <span className="text-[10px] font-bold uppercase tracking-widest text-sky-300 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded">Nouveau</span>
             )}
-            <div className="flex items-center text-slate-500 text-xs gap-1" title={`${viewCount} vues`}>
-              <Eye size={14} />
-              <span>{viewCount.toLocaleString()}</span>
-            </div>
+            {viewCount >= 50 && (
+              <div className="flex items-center text-slate-500 text-xs gap-1" title={`${viewCount} vues`}>
+                <Eye size={14} />
+                <span>{viewCount.toLocaleString('fr-FR')}</span>
+              </div>
+            )}
           </div>
 
           {ended ? (
             <p className="text-xs text-slate-500 mt-4 mb-4">Événement terminé{sold > 0 ? ` · ${sold} billets vendus` : ''}</p>
-          ) : capacity > 0 ? (
-            <>
-              <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2 mt-4 overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-orange-500 to-cyan-400 h-1.5 rounded-full"
-                  style={{ width: `${Math.min(100, (sold / capacity) * 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-slate-500 mb-4">
-                <span>{sold} vendus</span>
-                <span className="text-orange-400 font-medium">Reste {Math.max(0, capacity - sold)}</span>
-              </div>
-            </>
-          ) : <div className="mb-4" />}
+          ) : capacity > 0 && capacity - sold <= Math.max(20, capacity * 0.3) ? (
+            // La rareté ne s'affiche que si elle est réelle.
+            <p className="text-xs font-bold text-orange-400 mt-3 mb-3">
+              {capacity - sold <= 0 ? 'Complet' : `🔥 Plus que ${capacity - sold} place${capacity - sold > 1 ? 's' : ''}`}
+            </p>
+          ) : <div className="mb-3" />}
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t border-slate-700/50 mt-auto">
@@ -589,9 +573,9 @@ export const EventCard: React.FC<{ event: Event; onClick: () => void }> = ({ eve
               {formatCurrency(minPrice)}
             </div>
           </div>
-          <button className="px-4 py-2 bg-white/5 hover:bg-orange-600 border border-white/10 hover:border-orange-600 text-white rounded-lg text-sm font-medium transition-all group-hover:bg-orange-600 group-hover:border-orange-600">
+          <span className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${ended ? 'bg-white/5 border border-white/10 text-slate-300' : 'bg-orange-600 group-hover:bg-orange-500 text-white'}`}>
             {ended ? 'Voir' : 'Réserver'}
-          </button>
+          </span>
         </div>
       </div>
     </div>

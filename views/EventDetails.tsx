@@ -409,6 +409,14 @@ export const EventDetails: React.FC = () => {
   // Consider event sold out if sold >= capacity, or for demo purposes, if it has no capacity set yet but let's stick to true logic.
   // We'll add a demo check: if you want to test the resale, you can manually set capacity=sold in db.
   const isSoldOut = event.capacity > 0 && event.sold >= event.capacity;
+  const minTicketPrice = (() => {
+    const prices = ((event.ticketTypes || []) as any[]).map(t => Number(t.price)).filter(p => p > 0);
+    return prices.length ? Math.min(...prices) : Number(event.price) || 0;
+  })();
+  const scrollToTickets = () => {
+    const el = document.getElementById('ticket-section');
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 90, behavior: 'smooth' });
+  };
   // Stock réel : somme des catégories de billets (sinon les totaux de l'événement).
   const stock = (() => {
     const types = (event.ticketTypes || []) as any[];
@@ -445,32 +453,11 @@ export const EventDetails: React.FC = () => {
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}
-        className="fixed top-20 left-4 z-40 bg-black/40 backdrop-blur-md p-3 rounded-full text-white hover:bg-black/60 transition-colors border border-white/10"
+        className="fixed top-[4.5rem] left-4 z-40 bg-black/50 backdrop-blur-md p-2.5 rounded-full text-white hover:bg-black/70 transition-colors border border-white/10"
+        aria-label="Retour"
       >
-        <ArrowLeft size={24} />
+        <ArrowLeft size={22} />
       </button>
-
-      {/* Share Button */}
-      <button
-        onClick={handleShare}
-        className="fixed top-20 right-4 z-40 bg-black/40 backdrop-blur-md p-3 rounded-full text-white hover:bg-orange-600 transition-colors border border-white/10 shadow-lg"
-        title="Partager l'événement"
-      >
-        <Share2 size={24} />
-      </button>
-      {/* Partage WhatsApp direct : le canal n°1 pour faire venir ses amis */}
-      {event && (
-        <a
-          href={whatsappShareLink(event)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fixed top-36 right-4 z-40 bg-[#25D366] p-3 rounded-full text-white hover:scale-110 transition-transform shadow-lg shadow-black/40"
-          title="Partager sur WhatsApp"
-          aria-label="Partager sur WhatsApp"
-        >
-          <MessageCircle size={24} />
-        </a>
-      )}
 
       {/* Hero Section */}
       <div className="relative h-[60vh] w-full overflow-hidden bg-slate-900">
@@ -492,30 +479,19 @@ export const EventDetails: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/40 to-transparent pointer-events-none" />
 
         <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 max-w-7xl mx-auto">
-          {showAutoReleaseBadge && (
-            <div className="absolute -top-12 left-6 md:left-12 z-50 animate-in fade-in slide-in-from-bottom duration-500">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-rose-600 border border-rose-400 text-white text-xs md:text-sm font-bold uppercase tracking-widest shadow-[0_0_20px_rgba(225,29,72,0.6)] animate-pulse">
-                🔥 Des places viennent de se libérer !
-              </div>
-            </div>
-          )}
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-600/90 text-white text-xs font-bold uppercase mb-4 shadow-lg animate-in slide-in-from-bottom-4 duration-500">
             <Ticket size={14} /> {event.category}
           </div>
           <h1 className="text-4xl md:text-6xl font-black text-white mb-4 leading-tight drop-shadow-lg animate-in slide-in-from-bottom-4 duration-700 delay-100 fill-mode-both">
             {event.title}
           </h1>
-          <div className="flex flex-wrap gap-6 text-slate-200 text-sm md:text-base font-medium">
-            <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
-              <Calendar className="text-orange-400" size={20} />
+          <div className="flex flex-wrap gap-2 text-slate-100 text-sm md:text-base font-medium">
+            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10">
+              <Calendar className="text-orange-400 shrink-0" size={18} />
               <span>{formatDate(event.date)}</span>
             </div>
-            <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
-              <Clock className="text-orange-400" size={20} />
-              <span>{new Date(event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            </div>
-            <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
-              <MapPin className="text-orange-400" size={20} />
+            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10">
+              <MapPin className="text-orange-400 shrink-0" size={18} />
               <span>{event.location}, {event.city}</span>
             </div>
           </div>
@@ -528,9 +504,37 @@ export const EventDetails: React.FC = () => {
               {(event as any).profiles?.avatar
                 ? <img src={(event as any).profiles.avatar} alt="" className="w-7 h-7 rounded-full object-cover border border-white/20" />
                 : <Users size={18} className="text-orange-400" />}
-              <span>Organisé par <strong className="font-bold">{(event as any).profiles?.company || (event as any).profiles?.name}</strong> · voir ses événements →</span>
+              <span>Organisé par <strong className="font-bold">{(event as any).profiles?.company || (event as any).profiles?.name}</strong> →</span>
             </button>
           )}
+          <div className="mt-5 flex items-center gap-2">
+            {!isSoldOut && !isSalesClosed && (
+              <button
+                onClick={scrollToTickets}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-500 text-white font-black shadow-lg shadow-orange-900/40 active:scale-[0.98]"
+              >
+                <Ticket size={18} /> Réserver{minTicketPrice > 0 ? ` · dès ${formatCurrency(minTicketPrice)}` : ''}
+              </button>
+            )}
+            <a
+              href={whatsappShareLink(event)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#25D366] text-white shrink-0"
+              title="Partager sur WhatsApp"
+              aria-label="Partager sur WhatsApp"
+            >
+              <MessageCircle size={22} />
+            </a>
+            <button
+              onClick={handleShare}
+              className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-white/10 border border-white/15 text-white shrink-0"
+              title="Partager"
+              aria-label="Partager l'événement"
+            >
+              <Share2 size={20} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1006,23 +1010,31 @@ export const EventDetails: React.FC = () => {
               </h2>
               <p className="text-slate-400 mt-1">Les avis sont v&#233;rifi&#233;s et mod&#233;r&#233;s avant publication.</p>
             </div>
+            {Number((event as any).total_reviews || 0) > 0 && (
             <div className="text-right">
-              <div className="text-5xl font-black text-white">{Number((event as any).average_rating || 0) > 0 ? Number((event as any).average_rating).toFixed(1) : '—'}</div>
+              <div className="text-5xl font-black text-white">{Number((event as any).average_rating).toFixed(1)}</div>
               <div className="flex justify-end gap-0.5 my-1">
                 {[1,2,3,4,5].map(s => {
                   const avg = Number((event as any).average_rating || 0);
                   return <Star key={s} size={16} fill={avg >= s ? 'currentColor' : 'none'} className={avg >= s ? 'text-amber-400' : 'text-slate-600'} />;
                 })}
               </div>
-              <span className="text-slate-500 text-sm">{(event as any).total_reviews || 0} avis au total</span>
+              <span className="text-slate-500 text-sm">{(event as any).total_reviews} avis au total</span>
             </div>
+            )}
           </div>
 
-          {/* Approved reviews list - fetched from DB */}
-          <ReviewsList eventId={event.id} />
+          {/* Avis approuvés (masqués tant qu'il n'y en a aucun et que l'événement n'a pas eu lieu) */}
+          {(Number((event as any).total_reviews || 0) > 0 || new Date(event.date).getTime() < Date.now()) && (
+            <ReviewsList eventId={event.id} />
+          )}
 
-          {/* Submit Review Form */}
-          <ReviewForm eventId={event.id} eventTitle={event.title} />
+          {/* Avis : uniquement une fois l'événement passé (on ne note pas un concert à venir). */}
+          {new Date(event.date).getTime() < Date.now() ? (
+            <ReviewForm eventId={event.id} eventTitle={event.title} />
+          ) : Number((event as any).total_reviews || 0) === 0 && (
+            <p className="text-slate-400">Les avis s'ouvriront après l'événement. Vous y étiez ? Revenez donner le vôtre !</p>
+          )}
         </div>
       </div>
 
@@ -1067,24 +1079,16 @@ export const EventDetails: React.FC = () => {
               </>
             ) : (
               <div className="flex justify-between items-center gap-4">
-                <div className="flex flex-col pl-1">
-                  <span className="text-slate-400 font-bold text-[11px] uppercase tracking-widest shadow-sm">Total</span>
-                  <span className="text-slate-500 font-black text-2xl truncate">0 F</span>
+                <div className="flex flex-col pl-1 min-w-0">
+                  <span className="text-slate-400 font-bold text-[11px] uppercase tracking-widest">À partir de</span>
+                  <span className="text-white font-black text-xl truncate">{minTicketPrice > 0 ? formatCurrency(minTicketPrice) : 'Gratuit'}</span>
                 </div>
                 <button
-                  onClick={() => {
-                    const el = document.getElementById('ticket-section') || document.querySelector('.sticky.top-24');
-                    if (el) {
-                      const y = el.getBoundingClientRect().top + window.scrollY - 100;
-                      window.scrollTo({ top: y, behavior: 'smooth' });
-                    } else {
-                      window.scrollTo({ top: document.body.scrollHeight / 2, behavior: 'smooth' });
-                    }
-                  }}
-                  className="flex-1 bg-slate-800 text-slate-300 hover:text-white border border-slate-700 py-4 px-4 rounded-xl font-bold text-[15px] shadow-inner flex items-center justify-center gap-2 transition-colors active:scale-95"
+                  onClick={scrollToTickets}
+                  className="flex-1 bg-gradient-to-r from-orange-600 to-amber-500 text-white py-4 px-4 rounded-xl font-black text-[15px] flex items-center justify-center gap-2 active:scale-[0.98]"
                   title="Aller vers la section des billets"
                 >
-                  <Ticket className="text-orange-400" size={18} /> Obtenir mon accès
+                  <Ticket size={18} /> Choisir mes billets
                 </button>
               </div>
             )}

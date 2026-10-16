@@ -57,6 +57,11 @@ interface PickerProps {
 export const PaymentMethodPicker: React.FC<PickerProps> = ({ options, loading, selected, onSelect, phone, onPhoneChange }) => {
   const chosen = options.find(o => o.key === selected);
 
+  // Une seule option : choisie d'office, le bouton « Payer » apparaît sans geste en plus.
+  useEffect(() => {
+    if (!loading && options.length === 1 && selected !== options[0].key) onSelect(options[0].key);
+  }, [loading, options, selected, onSelect]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-6 text-slate-400 text-sm gap-2">

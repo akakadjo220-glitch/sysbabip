@@ -83,15 +83,17 @@ export const PublicChatWidget = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] font-sans">
-      {/* Bouton d'ouverture */}
+    // Sur une page événement, la bulle passe au-dessus de la barre d'achat (mobile).
+    <div className={`fixed right-4 md:right-6 z-[9999] font-sans ${location.pathname.startsWith('/event/') ? 'bottom-28 md:bottom-6' : 'bottom-6'}`}>
+      {/* Bouton d'ouverture : discret, il ne doit pas voler la vedette aux billets */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="group relative flex items-center justify-center w-14 h-14 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full shadow-2xl hover:scale-105 hover:shadow-purple-500/50 transition-all duration-300 animate-bounce hover:animate-none"
+          aria-label="Ouvrir l'assistant Babipass"
+          title="Une question ? L'assistant Babipass vous répond"
+          className="flex items-center justify-center w-12 h-12 bg-slate-800/95 border border-white/15 text-white rounded-full shadow-xl hover:bg-slate-700 transition-colors"
         >
-          <Sparkles className="absolute -top-1 -right-1 text-amber-300 w-5 h-5 animate-pulse" />
-          <MessageCircle size={28} className="group-hover:rotate-12 transition-transform duration-300" />
+          <MessageCircle size={22} />
         </button>
       )}
 
